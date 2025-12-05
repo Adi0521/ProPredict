@@ -1,0 +1,107 @@
+services:
+  postgres:
+    image: postgres:14
+    container_name: propredict-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: propredict
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - propredict-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: propredict-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - propredict-network
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: propredict-api
+    command: uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"
+    environment:
+      - DB_HOST=postgres
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_NAME=propredict
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - API_DEBUG=True
+      - LOG_LEVEL=INFO
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    networks:
+      - propredict-network
+
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.celery
+    container_name: propredict-celery
+    command: celery -A orchestrator.tasks worker --loglevel=info
+    environment:
+      - DB_HOST=postgres
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_NAME=propredict
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - ALPHAFOLD_API_URL=https://alphafold.ebi.ac.uk/api/prediction
+      - LOG_LEVEL=INFO
+    depends_on:
+      - redis
+      - postgres
+    volumes:
+      - .:/app
+    networks:
+      - propredict-network
+
+  celery_flower:
+    image: mher/flower:2.0
+    container_name: propredict-flower
+    command: celery -A orchestrator.tasks flower --port=5555
+    ports:
+      - "5555:5555"
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      - redis
+      - celery_worker
+    networks:
+      - propredict-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  propredict-network:
+    driver: bridge
