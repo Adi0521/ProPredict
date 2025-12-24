@@ -11,34 +11,34 @@ Below is a compact, runnable design for an agentic protein-modeling service that
 ```mermaid
 flowchart TB
   subgraph Ingest
-    U[User / Lab / LIMS] -->|sequence + context| API[API Gateway]
-    Sensors[Lab Sensors] -->|env params| API
+    U["User / Lab / LIMS"] -->|sequence + context| API["API Gateway"]
+    Sensors["Lab Sensors"] -->|env params| API
   end
 
-  API --> Agent[Agent Layer (Planner / Policy)]
-  Agent --> Orchestrator[Orchestrator / Workflow Engine]
-  Orchestrator --> Featurizer[Featurizer / MSA & Template Prep]
-  Featurizer --> StoreFeatures[(Features Cache / DB)]
-  Orchestrator --> AF[AlphaFold Service]
-  Orchestrator --> RS[Rosetta / Relax]
-  Orchestrator --> MD[MD (OpenMM / GROMACS)]
-  AF --> Post[Post-process & Scoring]
+  API["API Gateway"] --> Agent["Agent Layer (Planner / Policy)"]
+  Agent --> Orchestrator["Orchestrator / Workflow Engine"]
+  Orchestrator --> Featurizer["Featurizer / MSA & Template Prep"]
+  Featurizer --> StoreFeatures["Features Cache / DB"]
+  Orchestrator --> AF["AlphaFold Service"]
+  Orchestrator --> RS["Rosetta / Relax"]
+  Orchestrator --> MD["MD (OpenMM / GROMACS)"]
+  AF --> Post["Post-process & Scoring"]
   RS --> Post
   MD --> Post
-  Post --> Ensemble[Ensemble / Uncertainty Estimator]
-  Ensemble --> Evaluator[Constraint & Score Evaluator]
-  Evaluator --> Decision[Agent Decision: accept / refine / escalate]
+  Post --> Ensemble["Ensemble / Uncertainty Estimator"]
+  Ensemble --> Evaluator["Constraint & Score Evaluator"]
+  Evaluator --> Decision["Agent Decision: accept / refine / escalate"]
   Decision -->|refine| Orchestrator
-  Decision -->|notify| UI[Dashboard / Reports]
-  Decision --> Artifacts[(Object Store)]
+  Decision -->|notify| UI["Dashboard / Reports"]
+  Decision --> Artifacts["Object Store"]
   Artifacts --> API
 
   subgraph Infra
-    Orchestrator --> Queue[Job Queue (Argo/Celery)]
-    AF --> GPU[GPU Pool]
-    MD --> CPU_GPU[CPU/GPU Pool]
-    Artifacts --> S3[(S3 / MinIO)]
-    DB[(Postgres / Metadata)] --> Agent
+    Orchestrator --> Queue["Job Queue (Argo/Celery)"]
+    AF --> GPU["GPU Pool"]
+    MD --> CPU_GPU["CPU/GPU Pool"]
+    Artifacts --> S3["S3 / MinIO"]
+    DB["Postgres / Metadata"] --> Agent
   end
 ```
 
