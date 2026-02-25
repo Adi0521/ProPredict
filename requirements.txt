@@ -7,6 +7,11 @@ psycopg2-binary==2.9.9
 requests==2.31.0
 python-dotenv==1.0.0
 flower==2.0.1
+sqlalchemy==2.0.23
 pytest==7.4.3
 pytest-asyncio==0.21.1
 httpx==0.25.2
+
+# Tools not available on PyPI — install separately:
+# PyRosetta:  conda install -c rosettacommons pyrosetta   (free academic license at rosettacommons.org)
+# GROMACS:    brew install gromacs  (M3 Mac host)  or  see Dockerfile.celery for Docker

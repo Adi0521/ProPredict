@@ -1,7 +1,9 @@
 # ProPredict
 Protein Modeling Service implementing Agentic AI Framework
 
-...existing code...
+Using AlphaFold, PyRosetta, and GROMACS with an orchestrator for more accurate protein structure prediction. 
+
+Code currently optimized for Apple Mac M3, change Dockerfile if working with different system. Ideally will migrate to cloud based service
 
 # Architecture & Implementation Diagram — ProPredict
 
@@ -103,17 +105,18 @@ flowchart TB
 
 ## Roadmap / milestones
 1. MVP: API + orchestrator + remote AlphaFold API integration + caching + basic agent policy.
+2. Migrate to ESMFold to work on local CPU (AlphaFold only works for NVIDIA GPU [will revert to ALphaFold when migrating to cloud])
 2. Add Rosetta relax integration, simple scoring pipeline.
 3. Add ensemble + basic MD (OpenMM) trigger logic.
 4. Implement UI with NGL, run history, and webhooks.
 5. Implement surrogate gating model and active learning with experimental data.
 
-## Next actionable steps
+## TODO
 - Scaffold API endpoint + orchestrator skeleton (I can generate a Python Flask/FastAPI + Celery scaffold).
 - Create container spec for AlphaFold inference or integrate EBI AF API with retries.
 - Implement feature hashing & cache table in Postgres.
 
-Checklist for me to scaffold next (select one):
+Checklist for me to scaffold next:
 - Scaffold FastAPI + Celery orchestrator
 - Generate example feature hashing + cache implementation
 - Create minimal AlphaFold-call adapter with retries

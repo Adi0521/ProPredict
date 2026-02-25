@@ -8,10 +8,10 @@ API_HOST = os.getenv("API_HOST", "0.0.0.0")
 API_PORT = int(os.getenv("API_PORT", 8000))
 API_DEBUG = os.getenv("API_DEBUG", "False") == "True"
 
-# AlphaFold API Configuration
-ALPHAFOLD_API_URL = os.getenv("ALPHAFOLD_API_URL", "https://alphafold.ebi.ac.uk/api/prediction")
-ALPHAFOLD_TIMEOUT = int(os.getenv("ALPHAFOLD_TIMEOUT", 300))
-ALPHAFOLD_RETRIES = int(os.getenv("ALPHAFOLD_RETRIES", 3))
+# ESMFold API Configuration
+ESMFOLD_API_URL = os.getenv("ESMFOLD_API_URL", "https://api.esmatlas.com/foldSequence/v1/pdb/")
+ESMFOLD_TIMEOUT = int(os.getenv("ESMFOLD_TIMEOUT", 300))
+ESMFOLD_RETRIES = int(os.getenv("ESMFOLD_RETRIES", 3))
 
 # Database Configuration
 DB_HOST = os.getenv("DB_HOST", "localhost")
@@ -46,6 +46,11 @@ VARIANCE_REGION_PERCENT = float(os.getenv("VARIANCE_REGION_PERCENT", 10.0))
 # Job Configuration
 JOB_TIMEOUT_SECONDS = int(os.getenv("JOB_TIMEOUT_SECONDS", 600))
 ENSEMBLE_NUM_SEEDS = int(os.getenv("ENSEMBLE_NUM_SEEDS", 1))
+
+# Tool Feature Flags (set to True only after installing the tool)
+ROSETTA_ENABLED = os.getenv("ROSETTA_ENABLED", "False") == "True"
+GROMACS_ENABLED = os.getenv("GROMACS_ENABLED", "False") == "True"
+GROMACS_BIN = os.getenv("GROMACS_BIN", "gmx")
 
 # Logging
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")

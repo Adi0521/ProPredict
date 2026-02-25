@@ -1,6 +1,7 @@
 services:
   postgres:
     image: postgres:14
+    platform: linux/arm64
     container_name: propredict-postgres
     environment:
       POSTGRES_USER: postgres
@@ -20,6 +21,7 @@ services:
 
   redis:
     image: redis:7-alpine
+    platform: linux/arm64
     container_name: propredict-redis
     ports:
       - "6379:6379"
@@ -37,6 +39,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.api
+    platform: linux/arm64
     container_name: propredict-api
     command: uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
     ports:
@@ -50,6 +53,8 @@ services:
       - REDIS_PORT=6379
       - API_DEBUG=True
       - LOG_LEVEL=INFO
+      - ROSETTA_ENABLED=False
+      - GROMACS_ENABLED=False
     depends_on:
       postgres:
         condition: service_healthy
@@ -64,6 +69,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.celery
+    platform: linux/arm64
     container_name: propredict-celery
     command: celery -A orchestrator.tasks worker --loglevel=info
     environment:
@@ -73,8 +79,11 @@ services:
       - DB_NAME=propredict
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - ALPHAFOLD_API_URL=https://alphafold.ebi.ac.uk/api/prediction
+      - ESMFOLD_API_URL=https://api.esmatlas.com/foldSequence/v1/pdb/
       - LOG_LEVEL=INFO
+      - ROSETTA_ENABLED=False
+      - GROMACS_ENABLED=True
+      - GROMACS_BIN=gmx
     depends_on:
       - redis
       - postgres
@@ -85,8 +94,9 @@ services:
 
   celery_flower:
     image: mher/flower:2.0
+    platform: linux/arm64
     container_name: propredict-flower
-    command: celery -A orchestrator.tasks flower --port=5555
+    command: celery flower --port=5555
     ports:
       - "5555:5555"
     environment:
