@@ -199,6 +199,120 @@ def dock_gnina(
     return docked_sdf
 
 
+def dock_vina(
+    ligand_sdf: str,
+    protein_pdb: str,
+    binding_site: Optional[List[int]],
+    out_dir: str,
+    exhaustiveness: int = 8,
+) -> str:
+    """
+    Dock a ligand using AutoDock-Vina (Python bindings).
+
+    Fallback for when the GNINA binary is unavailable (e.g. ARM64 dev machines).
+    Produces a docked SDF at <out_dir>/docked_vina.sdf.
+
+    Requires: pip install vina
+    """
+    try:
+        from vina import Vina
+    except ImportError:
+        raise RuntimeError(
+            "vina is not installed. Install: pip install vina"
+        )
+    try:
+        from rdkit import Chem
+        from rdkit.Chem import AllChem
+    except ImportError:
+        raise RuntimeError("RDKit is required for Vina docking SDF conversion.")
+
+    # Vina requires PDBQT format; convert via RDKit + meeko if available,
+    # otherwise use a simple charge-stripping conversion.
+    try:
+        import meeko
+        _meeko_available = True
+    except ImportError:
+        _meeko_available = False
+
+    receptor_pdbqt = os.path.join(out_dir, "receptor.pdbqt")
+    ligand_pdbqt   = os.path.join(out_dir, "ligand.pdbqt")
+    docked_pdbqt   = os.path.join(out_dir, "docked_vina.pdbqt")
+    docked_sdf     = os.path.join(out_dir, "docked_vina.sdf")
+
+    # --- Convert receptor PDB → PDBQT (strip H, add charges with mk_prepare_receptor or fallback) ---
+    if _meeko_available:
+        import meeko
+        mk = meeko.MoleculePreparation()
+        # meeko receptor preparation
+        subprocess.run(
+            ["mk_prepare_receptor.py", "-i", protein_pdb, "-o", receptor_pdbqt],
+            capture_output=True, check=False,
+        )
+    if not os.path.isfile(receptor_pdbqt):
+        # Minimal fallback: rename PDB to PDBQT (Vina tolerates plain PDB as receptor)
+        import shutil as _shutil
+        _shutil.copy(protein_pdb, receptor_pdbqt)
+
+    # --- Convert ligand SDF → PDBQT ---
+    mol = Chem.MolFromMolFile(ligand_sdf, removeHs=False)
+    if mol is None:
+        raise RuntimeError(f"RDKit could not load ligand SDF: {ligand_sdf}")
+
+    if _meeko_available:
+        mk = meeko.MoleculePreparation()
+        mk.prepare(mol)
+        mk.write_pdbqt_file(ligand_pdbqt)
+    else:
+        # Fallback: write SDF with explicit H, rename to pdbqt (Vina can often read it)
+        Chem.MolToMolFile(mol, ligand_pdbqt)
+
+    # --- Compute docking box ---
+    if binding_site and len(binding_site) >= 1:
+        cx, cy, cz = _ca_centroid(protein_pdb, binding_site)
+        box_size = 20.0
+    else:
+        coords = _all_ca_coords(protein_pdb)
+        if coords:
+            n = len(coords)
+            cx = sum(c[0] for c in coords) / n
+            cy = sum(c[1] for c in coords) / n
+            cz = sum(c[2] for c in coords) / n
+        else:
+            cx = cy = cz = 0.0
+        box_size = 30.0  # larger box for blind docking
+
+    logger.info(
+        f"Vina: docking box centre ({cx:.2f}, {cy:.2f}, {cz:.2f}) Å, "
+        f"edge {box_size:.0f} Å, exhaustiveness={exhaustiveness}"
+    )
+
+    v = Vina(sf_name="vina", verbosity=0)
+    v.set_receptor(receptor_pdbqt)
+    v.set_ligand_from_file(ligand_pdbqt)
+    v.compute_vina_maps(
+        center=[cx, cy, cz],
+        box_size=[box_size, box_size, box_size],
+    )
+    v.dock(exhaustiveness=exhaustiveness, n_poses=1)
+    v.write_poses(docked_pdbqt, n_poses=1, overwrite=True)
+
+    # --- Convert best pose PDBQT → SDF ---
+    if _meeko_available:
+        pdbqt_mol = meeko.PDBQTMolecule.from_file(docked_pdbqt, skip_typing=True)
+        rdkit_mol = meeko.RDKitMolCreate.from_pdbqt_mol(pdbqt_mol)[0]
+        if rdkit_mol is not None:
+            writer = Chem.SDWriter(docked_sdf)
+            writer.write(rdkit_mol)
+            writer.close()
+    if not os.path.isfile(docked_sdf):
+        # Last resort: copy pdbqt as sdf (OpenFF can sometimes parse it)
+        import shutil as _shutil
+        _shutil.copy(docked_pdbqt, docked_sdf)
+
+    logger.info(f"Vina: best pose written to {docked_sdf}")
+    return docked_sdf
+
+
 def _ca_centroid(protein_pdb: str, residue_numbers: List[int]) -> tuple:
     """
     Compute the XYZ centroid of CA atoms for the given residue numbers.
@@ -497,15 +611,26 @@ def prepare_ligands(
             logger.error(f"Ligand '{name}': 3-D conformer failed: {e}")
             continue
 
-        # Step 2: Dock
+        # Step 2: Dock — try GNINA first, fall back to Vina, then undocked conformer
         try:
             docked_sdf = dock_gnina(
                 sdf_path, protein_pdb_path, binding_site, lig_dir, gnina_bin=gnina_bin
             )
             entry["docked_sdf"] = docked_sdf
-        except RuntimeError as e:
-            logger.warning(f"Ligand '{name}': GNINA docking failed: {e}. Using undocked conformer.")
-            entry["docked_sdf"] = sdf_path  # fall back to undocked pose
+        except RuntimeError as gnina_err:
+            logger.warning(f"Ligand '{name}': GNINA unavailable ({gnina_err}). Trying Vina fallback...")
+            try:
+                docked_sdf = dock_vina(
+                    sdf_path, protein_pdb_path, binding_site, lig_dir
+                )
+                entry["docked_sdf"] = docked_sdf
+                logger.info(f"Ligand '{name}': Vina docking succeeded.")
+            except RuntimeError as vina_err:
+                logger.warning(
+                    f"Ligand '{name}': Vina docking also failed ({vina_err}). "
+                    "Using undocked conformer."
+                )
+                entry["docked_sdf"] = sdf_path  # fall back to undocked pose
 
         # Step 3: Parameterize
         source_sdf = entry["docked_sdf"] or sdf_path

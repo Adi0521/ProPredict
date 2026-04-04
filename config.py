@@ -66,7 +66,7 @@ MD_PRODUCTION_NS = float(os.getenv("MD_PRODUCTION_NS", 0.1))   # production run 
 # insane.py: download from http://cgmartini.nl — set path here or place on PATH
 INSANE_PATH = os.getenv("INSANE_PATH", "")
 # GROMACS force field for membrane runs (must be installed in GROMACS data dir)
-MEMBRANE_FF = os.getenv("MEMBRANE_FF", "charmm36m-ildn")
+MEMBRANE_FF = os.getenv("MEMBRANE_FF", "charmm36-feb2026_cgenff-5.0")
 # GNINA docking binary: https://github.com/gnina/gnina/releases
 GNINA_BIN = os.getenv("GNINA_BIN", "gnina")
 

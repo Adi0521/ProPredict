@@ -111,6 +111,7 @@ class PredictionResponse(BaseModel):
     created_at: datetime
     completed_at: Optional[datetime] = None
     error_message: Optional[str] = None
+    simulation_pdb: Optional[str] = None  # post-solvation/docking system PDB (includes ligands/membrane)
     # Multi-model ensemble fields (Stage E)
     n_models_used: Optional[int] = None
     inter_model_disagreement: Optional[List[float]] = None  # per-residue CA RMSD across models (nm)

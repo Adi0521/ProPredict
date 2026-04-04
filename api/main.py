@@ -199,6 +199,45 @@ async def get_pdb(run_id: str):
     )
 
 
+@app.get("/predict/{run_id}/simulation-pdb")
+async def get_simulation_pdb(run_id: str):
+    """
+    Download the full simulation-ready PDB (post-solvation / post-docking).
+
+    Unlike /pdb (which returns the raw ESMFold output), this endpoint returns
+    the prepared OpenMM system: protein + explicit water + ions, and any docked
+    ligands or membrane included in the context.  Only available when OpenMM
+    ran successfully (OPENMM_ENABLED=True and a membrane/ligand context was
+    provided, or MD was triggered).
+    """
+    task = predict_protein_structure.AsyncResult(run_id)
+
+    if task.state != "SUCCESS" or not task.result:
+        status = task.state.lower()
+        raise HTTPException(
+            status_code=404 if status == "pending" else 400,
+            detail=f"Simulation PDB not available — job status is '{status}'",
+        )
+
+    pdb_string = task.result.get("simulation_pdb")
+    if not pdb_string:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "No simulation PDB found. Either OpenMM did not run for this job "
+                "(requires OPENMM_ENABLED=True and a membrane/ligand context), "
+                "or the PDB capture failed."
+            ),
+        )
+
+    filename = f"propredict_{run_id[:8]}_simulation.pdb"
+    return PlainTextResponse(
+        content=pdb_string,
+        media_type="chemical/x-pdb",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request, exc):
     logger.warning(f"HTTP exception: {exc.detail}")

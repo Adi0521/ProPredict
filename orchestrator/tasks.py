@@ -1106,14 +1106,29 @@ def run_openmm_simulation(
 
     import numpy as np
 
-    temperature = temperature_c * unit.celsius
+    temperature = (temperature_c + 273.15) * unit.kelvin
     dt = 0.002 * unit.picoseconds
     production_steps = int(production_ns * 1_000_000 / 2)   # ns → 2-fs steps
     report_interval = max(1, production_steps // 100)         # ~100 trajectory frames
 
+    # --- Fix missing terminal atoms (OXT etc.) before OpenMM sees the structure ---
+    logger.info("OpenMM: fixing PDB (missing terminals, heavy atoms)...")
+    try:
+        from pdbfixer import PDBFixer
+        fixer = PDBFixer(pdbfile=io.StringIO(pdb_string))
+        fixer.findMissingResidues()
+        fixer.findMissingAtoms()
+        fixer.addMissingAtoms()
+        fixed_pdb_io = io.StringIO()
+        PDBFile.writeFile(fixer.topology, fixer.positions, fixed_pdb_io)
+        fixed_pdb_io.seek(0)
+        pdb = PDBFile(fixed_pdb_io)
+    except ImportError:
+        logger.warning("pdbfixer not installed — skipping PDB fixing (pip install pdbfixer)")
+        pdb = PDBFile(io.StringIO(pdb_string))
+
     # --- Load structure and add hydrogens at requested pH ---
     logger.info(f"OpenMM: adding hydrogens at pH {pH:.1f}...")
-    pdb = PDBFile(io.StringIO(pdb_string))
 
     # Choose force field: CHARMM36m for membrane runs, AMBER14 otherwise
     if membrane_context:
@@ -1193,6 +1208,16 @@ def run_openmm_simulation(
     n_atoms = modeller.topology.getNumAtoms()
     logger.info(f"OpenMM: {n_atoms} atoms after solvation/membrane setup")
 
+    # --- Capture pre-simulation PDB (full solvated system including ligands) ---
+    sim_system_pdb_str: Optional[str] = None
+    try:
+        _sim_pdb_io = io.StringIO()
+        PDBFile.writeFile(modeller.topology, modeller.positions, _sim_pdb_io)
+        sim_system_pdb_str = _sim_pdb_io.getvalue()
+        logger.info("OpenMM: pre-simulation system PDB captured")
+    except Exception as _e:
+        logger.warning(f"OpenMM: could not capture pre-simulation PDB: {_e}")
+
     # --- Build system ---
     system = ff.createSystem(
         modeller.topology,
@@ -1259,6 +1284,7 @@ def run_openmm_simulation(
         "pH": pH,
         "temperature_c": temperature_c,
         "backend": "openmm",
+        "simulation_pdb": sim_system_pdb_str,
         **membrane_meta,
         **({"ligands": ligand_meta} if ligand_meta else {}),
     }
@@ -1639,9 +1665,7 @@ def run_agent_refinement(
 
     if state["sim_result"]:
         post_proc.gromacs_potential_energy = state["sim_result"].get("potential_energy")
-        post_proc.simulation_metrics = {
-            k: v for k, v in state["sim_result"].items() if k != "potential_energy"
-        }
+        post_proc.simulation_metrics = state["sim_result"]
 
     updated_pdb = state["current_pdb"] if state["current_pdb"] != prediction.structure_pdb else None
     return post_proc, updated_pdb
@@ -1810,11 +1834,16 @@ def predict_protein_structure(self, request_data: Dict[str, Any]) -> Dict[str, A
                             ligand_contexts=ligand_ctx if ligand_ctx else None,
                         )
                     post_proc.gromacs_potential_energy = sim_result["potential_energy"]
-                    post_proc.simulation_metrics = {
-                        k: v for k, v in sim_result.items() if k != "potential_energy"
-                    }
+                    post_proc.simulation_metrics = sim_result
                 except RuntimeError as e:
                     logger.warning(f"MD simulation skipped: {e}")
+
+        # Extract simulation_pdb from sim metrics (present when OpenMM ran);
+        # keep it out of simulation_metrics so the metrics dict stays compact.
+        sim_metrics = post_proc.simulation_metrics or {}
+        simulation_pdb_out: Optional[str] = sim_metrics.pop("simulation_pdb", None)
+        if not sim_metrics:
+            post_proc.simulation_metrics = None
 
         result = {
             "run_id": run_id,
@@ -1827,6 +1856,7 @@ def predict_protein_structure(self, request_data: Dict[str, Any]) -> Dict[str, A
             "created_at": datetime.utcnow().isoformat(),
             "completed_at": datetime.utcnow().isoformat(),
             "error_message": None,
+            "simulation_pdb": simulation_pdb_out,
             # Multi-model ensemble (Stage E)
             "n_models_used": len(models_used),
             "inter_model_disagreement": inter_model_data.get("per_residue_disagreement_nm"),

@@ -1,13 +1,22 @@
-FROM python:3.10-slim
+FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install GROMACS (ARM64-compatible via Debian apt)
+# Install GROMACS (ARM64-compatible via Debian apt) + curl to fetch force fields
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     build-essential \
     gromacs \
+    curl \
     && rm -rf /var/lib/apt/lists/*
+
+# Install CHARMM36m force field (Feb 2026, CGenFF 5.0) into the GROMACS data directory.
+# Required for membrane simulations (Stage F). Source: MacKerell lab, UMaryland.
+RUN curl -sL "http://mackerell.umaryland.edu/download.php?filename=CHARMM_ff_params_files/charmm36-feb2026_cgenff-5.0.ff.tgz" \
+    | tar -xz -C /usr/share/gromacs/top/
+
+# Install RDKit via pip (python:3.10-slim has no conda)
+RUN pip install --no-cache-dir rdkit
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

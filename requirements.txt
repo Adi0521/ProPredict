@@ -15,6 +15,16 @@ biopython==1.83
 propka==3.5.0
 anthropic>=0.40.0
 
+openmm
+pdbfixer
+openmmforcefields
+rdkit
+openff-toolkit
+openff-forcefields
+vina
+meeko
+openff-interchange
+
 # Tools not available on PyPI — install separately:
 # PyRosetta:  conda install -c rosettacommons pyrosetta   (free academic license at rosettacommons.org)
 # GROMACS:    brew install gromacs  (M3 Mac host)  or  see Dockerfile.celery for Docker

@@ -84,6 +84,7 @@ services:
       - ROSETTA_ENABLED=False
       - GROMACS_ENABLED=True
       - GROMACS_BIN=gmx
+      - OPENMM_ENABLED=True
     depends_on:
       - redis
       - postgres
