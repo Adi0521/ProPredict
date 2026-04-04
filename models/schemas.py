@@ -85,6 +85,7 @@ class StructurePrediction(BaseModel):
     mean_plddt: float
     pae_scores: Optional[List[List[float]]] = None  # Predicted aligned error (not returned by ESMFold)
     seed: int
+    model_name: str = "esmfold"  # which backend produced this prediction
 
 
 class PostProcessingResult(BaseModel):
@@ -92,6 +93,8 @@ class PostProcessingResult(BaseModel):
     num_clashes: int
     rosetta_energy: Optional[float] = None
     gromacs_potential_energy: Optional[float] = None
+    simulation_metrics: Optional[Dict[str, Any]] = None  # RMSD, Rg, n_frames, pH, backend, etc.
+    agent_reasoning: Optional[str] = None               # Claude agent explanation (Stage D)
     score: float
     decision: str  # "accept", "refine", "escalate"
 
@@ -108,6 +111,10 @@ class PredictionResponse(BaseModel):
     created_at: datetime
     completed_at: Optional[datetime] = None
     error_message: Optional[str] = None
+    # Multi-model ensemble fields (Stage E)
+    n_models_used: Optional[int] = None
+    inter_model_disagreement: Optional[List[float]] = None  # per-residue CA RMSD across models (nm)
+    disagreement_regions: Optional[List[Dict[str, Any]]] = None  # high-disagreement stretches
 
     model_config = ConfigDict(json_schema_extra={
         "example": {

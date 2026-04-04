@@ -47,10 +47,34 @@ VARIANCE_REGION_PERCENT = float(os.getenv("VARIANCE_REGION_PERCENT", 10.0))
 JOB_TIMEOUT_SECONDS = int(os.getenv("JOB_TIMEOUT_SECONDS", 600))
 ENSEMBLE_NUM_SEEDS = int(os.getenv("ENSEMBLE_NUM_SEEDS", 1))
 
+# Structure result cache (Redis)
+CACHE_TTL = int(os.getenv("CACHE_TTL", 86400))           # seconds; default 24 h
+REDIS_CACHE_PREFIX = os.getenv("REDIS_CACHE_PREFIX", "propredict:structure:")
+
 # Tool Feature Flags (set to True only after installing the tool)
 ROSETTA_ENABLED = os.getenv("ROSETTA_ENABLED", "False") == "True"
 GROMACS_ENABLED = os.getenv("GROMACS_ENABLED", "False") == "True"
 GROMACS_BIN = os.getenv("GROMACS_BIN", "gmx")
+OPENMM_ENABLED = os.getenv("OPENMM_ENABLED", "False") == "True"         # conda install -c conda-forge openmm
+ROSETTAFOLD_ENABLED = os.getenv("ROSETTAFOLD_ENABLED", "False") == "True"  # see github.com/baker-lab/RoseTTAFold2
+OPENFOLD_ENABLED = os.getenv("OPENFOLD_ENABLED", "False") == "True"        # see github.com/aqlaboratory/openfold
+
+# MD Simulation parameters
+MD_PRODUCTION_NS = float(os.getenv("MD_PRODUCTION_NS", 0.1))   # production run length (nanoseconds)
+
+# Stage F — Membrane & Ligand environments
+# insane.py: download from http://cgmartini.nl — set path here or place on PATH
+INSANE_PATH = os.getenv("INSANE_PATH", "")
+# GROMACS force field for membrane runs (must be installed in GROMACS data dir)
+MEMBRANE_FF = os.getenv("MEMBRANE_FF", "charmm36m-ildn")
+# GNINA docking binary: https://github.com/gnina/gnina/releases
+GNINA_BIN = os.getenv("GNINA_BIN", "gnina")
+
+# Agentic refinement loop (Stage D — requires ANTHROPIC_API_KEY)
+AGENT_ENABLED = os.getenv("AGENT_ENABLED", "False") == "True"
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+AGENT_MODEL = os.getenv("AGENT_MODEL", "claude-opus-4-6")
+AGENT_MAX_ITERATIONS = int(os.getenv("AGENT_MAX_ITERATIONS", 5))
 
 # Logging
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
