@@ -1,9 +1,27 @@
 # ProPredict
 Protein Modeling Service implementing Agentic AI Framework
 
-Using AlphaFold, PyRosetta, and GROMACS with an orchestrator for more accurate protein structure prediction. 
+Uses ESMFold (local, CPU-friendly), PyRosetta, and GROMACS with an agentic orchestrator for accurate protein structure prediction.
+Runs on any platform (ARM64 or x86). Docker images auto-detect the host architecture.
 
-Code currently optimized for Apple Mac M3, change Dockerfile if working with different system. Ideally will migrate to cloud based service
+## Local ESMFold Setup
+
+By default ProPredict runs ESMFold locally via HuggingFace Transformers — no external API key required.
+
+```bash
+# Install Python deps (includes torch + transformers)
+pip install -r requirements.txt
+
+# Copy and configure env
+cp .env.example .env
+# ESMFOLD_LOCAL=True is the default — no changes needed for local inference
+
+# Start all services
+docker compose up
+```
+
+On first run the worker downloads the `facebook/esmfold_v1` weights (~2 GB) and caches them.
+Set `ESMFOLD_LOCAL=False` to fall back to the public `api.esmatlas.com` endpoint instead.
 
 # Architecture & Implementation Diagram — ProPredict
 
@@ -104,12 +122,12 @@ flowchart TB
 - Production: K8s autoscaling for GPUs, S3, Prometheus + Grafana, RBAC, audit logs.
 
 ## Roadmap / milestones
-1. MVP: API + orchestrator + remote AlphaFold API integration + caching + basic agent policy.
-2. Migrate to ESMFold to work on local CPU (AlphaFold only works for NVIDIA GPU [will revert to ALphaFold when migrating to cloud])
-2. Add Rosetta relax integration, simple scoring pipeline.
-3. Add ensemble + basic MD (OpenMM) trigger logic.
-4. Implement UI with NGL, run history, and webhooks.
-5. Implement surrogate gating model and active learning with experimental data.
+1. ~~MVP: API + orchestrator + remote ESMFold API + caching + basic agent policy.~~ DONE
+2. ~~Migrate to local ESMFold inference (CPU/MPS/CUDA, no external API required).~~ DONE
+3. Add Boltz-2 as high-accuracy GPU backend.
+4. Add Chai-1 specialist backend for experimental constraints.
+5. Implement UI with NGL, run history, and webhooks.
+6. Implement surrogate gating model and active learning with experimental data.
 
 ## TODO
 - Scaffold API endpoint + orchestrator skeleton (I can generate a Python Flask/FastAPI + Celery scaffold).

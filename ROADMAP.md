@@ -13,6 +13,7 @@ adaptive agent loop, with support for multi-model ensemble prediction.
 
 ## What's Working
 
+- **Local ESMFold inference** via HuggingFace Transformers (`facebook/esmfold_v1`); MPS/CUDA/CPU auto-detected; remote API kept as opt-in fallback (`ESMFOLD_LOCAL=False`)
 - ESMFold integration: retry logic, B-factor pLDDT extraction, caching key
 - Celery task orchestration with webhook callbacks
 - PostgreSQL job persistence and result storage

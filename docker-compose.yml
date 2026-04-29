@@ -1,7 +1,6 @@
 services:
   postgres:
     image: postgres:14
-    platform: linux/arm64
     container_name: propredict-postgres
     environment:
       POSTGRES_USER: postgres
@@ -21,7 +20,6 @@ services:
 
   redis:
     image: redis:7-alpine
-    platform: linux/arm64
     container_name: propredict-redis
     ports:
       - "6379:6379"
@@ -39,7 +37,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.api
-    platform: linux/arm64
     container_name: propredict-api
     command: uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
     ports:
@@ -69,7 +66,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.celery
-    platform: linux/arm64
     container_name: propredict-celery
     command: celery -A orchestrator.tasks worker --loglevel=info
     environment:
@@ -79,7 +75,8 @@ services:
       - DB_NAME=propredict
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - ESMFOLD_API_URL=https://api.esmatlas.com/foldSequence/v1/pdb/
+      - ESMFOLD_LOCAL=True
+      - ESMFOLD_MODEL_NAME=facebook/esmfold_v1
       - LOG_LEVEL=INFO
       - ROSETTA_ENABLED=False
       - GROMACS_ENABLED=True
@@ -95,7 +92,6 @@ services:
 
   celery_flower:
     image: mher/flower:2.0
-    platform: linux/arm64
     container_name: propredict-flower
     command: celery flower --port=5555
     ports:

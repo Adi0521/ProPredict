@@ -8,7 +8,10 @@ API_HOST = os.getenv("API_HOST", "0.0.0.0")
 API_PORT = int(os.getenv("API_PORT", 8000))
 API_DEBUG = os.getenv("API_DEBUG", "False") == "True"
 
-# ESMFold API Configuration
+# ESMFold Configuration
+ESMFOLD_LOCAL = os.getenv("ESMFOLD_LOCAL", "True") == "True"
+ESMFOLD_MODEL_NAME = os.getenv("ESMFOLD_MODEL_NAME", "facebook/esmfold_v1")
+# Remote API fallback (used when ESMFOLD_LOCAL=False)
 ESMFOLD_API_URL = os.getenv("ESMFOLD_API_URL", "https://api.esmatlas.com/foldSequence/v1/pdb/")
 ESMFOLD_TIMEOUT = int(os.getenv("ESMFOLD_TIMEOUT", 300))
 ESMFOLD_RETRIES = int(os.getenv("ESMFOLD_RETRIES", 3))
@@ -58,6 +61,13 @@ GROMACS_BIN = os.getenv("GROMACS_BIN", "gmx")
 OPENMM_ENABLED = os.getenv("OPENMM_ENABLED", "False") == "True"         # conda install -c conda-forge openmm
 ROSETTAFOLD_ENABLED = os.getenv("ROSETTAFOLD_ENABLED", "False") == "True"  # see github.com/baker-lab/RoseTTAFold2
 OPENFOLD_ENABLED = os.getenv("OPENFOLD_ENABLED", "False") == "True"        # see github.com/aqlaboratory/openfold
+
+# Boltz-2: high-accuracy GPU backend (install from source: pip install git+https://github.com/jwohlwend/boltz)
+BOLTZ_ENABLED = os.getenv("BOLTZ_ENABLED", "False") == "True"
+BOLTZ_SAMPLES = int(os.getenv("BOLTZ_SAMPLES", 1))
+BOLTZ_STEPS = int(os.getenv("BOLTZ_STEPS", 200))
+# False = fully local (msa: empty); True = use ColabFold MSA server (better accuracy, requires network)
+BOLTZ_USE_MSA = os.getenv("BOLTZ_USE_MSA", "False") == "True"
 
 # MD Simulation parameters
 MD_PRODUCTION_NS = float(os.getenv("MD_PRODUCTION_NS", 0.1))   # production run length (nanoseconds)

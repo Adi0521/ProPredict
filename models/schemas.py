@@ -79,13 +79,14 @@ class PredictionRequest(BaseModel):
 
 
 class StructurePrediction(BaseModel):
-    """Structure prediction result (from ESMFold or similar)."""
+    """Structure prediction result (from ESMFold, Boltz-2, or similar)."""
     structure_pdb: str
     plddt_scores: List[float]
     mean_plddt: float
     pae_scores: Optional[List[List[float]]] = None  # Predicted aligned error (not returned by ESMFold)
     seed: int
     model_name: str = "esmfold"  # which backend produced this prediction
+    affinity_score: Optional[float] = None  # Boltz-2 binding affinity (kcal/mol); None for non-Boltz or no ligand
 
 
 class PostProcessingResult(BaseModel):

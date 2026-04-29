@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -12,7 +13,14 @@ from sqlalchemy.orm import Session
 from config import API_DEBUG, LOG_LEVEL
 from models.database import Job, SessionLocal, get_db, init_db
 from models.schemas import PredictionRequest, PredictionResponse, JobStatus, StructurePrediction
-from orchestrator.tasks import predict_protein_structure
+
+MODAL_ENABLED = os.getenv("MODAL_ENABLED", "False") == "True"
+
+if MODAL_ENABLED:
+    import modal
+    _modal_predict = modal.Function.from_name("propredict", "run_prediction")
+else:
+    from orchestrator.tasks import predict_protein_structure
 
 # Configure logging
 logging.basicConfig(level=LOG_LEVEL)
@@ -69,15 +77,21 @@ async def predict(request: PredictionRequest, db: Session = Depends(get_db)):
         db.add(job)
         db.commit()
 
-        # Prepare and submit async Celery task
+        # Dispatch the prediction task
         request_data = request.model_dump()
         request_data["run_id"] = run_id
-        task = predict_protein_structure.apply_async(
-            args=(request_data,),
-            task_id=run_id,
-            expires=request.job_timeout_seconds,
-        )
-        logger.info(f"Task {run_id} submitted with Celery task ID: {task.id}")
+        if MODAL_ENABLED:
+            fc = _modal_predict.spawn(request_data)
+            job.modal_call_id = fc.object_id
+            db.commit()
+            logger.info(f"Task {run_id} submitted as Modal call {fc.object_id}")
+        else:
+            task = predict_protein_structure.apply_async(
+                args=(request_data,),
+                task_id=run_id,
+                expires=request.job_timeout_seconds,
+            )
+            logger.info(f"Task {run_id} submitted with Celery task ID: {task.id}")
 
         return JobStatus(
             run_id=run_id,
@@ -101,42 +115,77 @@ async def get_prediction(run_id: str, db: Session = Depends(get_db)):
         logger.info(f"Fetching results for run ID: {run_id}")
         job = db.get(Job, run_id)
 
-        task = predict_protein_structure.AsyncResult(run_id)
+        if MODAL_ENABLED:
+            if not job or not job.modal_call_id:
+                raise HTTPException(status_code=404, detail=f"Job {run_id} not found")
+            fc = modal.functions.FunctionCall.from_id(job.modal_call_id)
+            try:
+                result = fc.get(timeout=0)
+                if job:
+                    job.status = "completed"
+                    job.result_json = json.dumps(result)
+                    job.updated_at = datetime.utcnow()
+                    db.commit()
+                return PredictionResponse(**result)
+            except TimeoutError:
+                return PredictionResponse(
+                    run_id=run_id,
+                    sequence=job.sequence if job else "",
+                    status="started",
+                    context={},
+                    created_at=job.created_at if job else datetime.utcnow(),
+                )
+            except Exception as exc:
+                if job:
+                    job.status = "failed"
+                    job.error_message = str(exc)
+                    job.updated_at = datetime.utcnow()
+                    db.commit()
+                return PredictionResponse(
+                    run_id=run_id,
+                    sequence=job.sequence if job else "",
+                    status="failed",
+                    error_message=str(exc),
+                    context={},
+                    created_at=job.created_at if job else datetime.utcnow(),
+                )
+        else:
+            task = predict_protein_structure.AsyncResult(run_id)
 
-        if task.state == "SUCCESS" and task.result:
-            result = task.result
-            # Update DB record with completed result
-            if job:
-                job.status = "completed"
-                job.result_json = json.dumps(result)
-                job.updated_at = datetime.utcnow()
-                db.commit()
-            return PredictionResponse(**result)
+            if task.state == "SUCCESS" and task.result:
+                result = task.result
+                if job:
+                    job.status = "completed"
+                    job.result_json = json.dumps(result)
+                    job.updated_at = datetime.utcnow()
+                    db.commit()
+                return PredictionResponse(**result)
 
-        if task.state == "FAILURE":
-            if job:
-                job.status = "failed"
-                job.error_message = str(task.info)
-                job.updated_at = datetime.utcnow()
-                db.commit()
+            if task.state == "FAILURE":
+                if job:
+                    job.status = "failed"
+                    job.error_message = str(task.info)
+                    job.updated_at = datetime.utcnow()
+                    db.commit()
+                return PredictionResponse(
+                    run_id=run_id,
+                    sequence=job.sequence if job else "",
+                    status="failed",
+                    error_message=str(task.info),
+                    context={},
+                    created_at=job.created_at if job else datetime.utcnow(),
+                )
+
             return PredictionResponse(
                 run_id=run_id,
                 sequence=job.sequence if job else "",
-                status="failed",
-                error_message=str(task.info),
+                status=task.state.lower(),
                 context={},
                 created_at=job.created_at if job else datetime.utcnow(),
             )
 
-        # PENDING or STARTED
-        return PredictionResponse(
-            run_id=run_id,
-            sequence=job.sequence if job else "",
-            status=task.state.lower(),
-            context={},
-            created_at=job.created_at if job else datetime.utcnow(),
-        )
-
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error retrieving results for {run_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to retrieve results: {str(e)}")
@@ -147,17 +196,24 @@ async def get_job_status(run_id: str, db: Session = Depends(get_db)):
     """Get job status without full results."""
     try:
         job = db.get(Job, run_id)
-        task = predict_protein_structure.AsyncResult(run_id)
-
-        state = task.state.lower() if task.state != "PENDING" else "pending"
-        if state == "started":
-            progress = 50
-        elif state in ("success", "completed"):
-            progress = 100
-        else:
-            progress = 0
-
         now = datetime.utcnow()
+
+        if MODAL_ENABLED:
+            if not job or not job.modal_call_id:
+                raise HTTPException(status_code=404, detail=f"Job {run_id} not found")
+            fc = modal.functions.FunctionCall.from_id(job.modal_call_id)
+            try:
+                fc.get(timeout=0)
+                state, progress = "completed", 100
+            except TimeoutError:
+                state, progress = "started", 50
+            except Exception:
+                state, progress = "failed", 0
+        else:
+            task = predict_protein_structure.AsyncResult(run_id)
+            state = task.state.lower() if task.state != "PENDING" else "pending"
+            progress = 100 if state in ("success", "completed") else (50 if state == "started" else 0)
+
         return JobStatus(
             run_id=run_id,
             status=state,
@@ -167,6 +223,8 @@ async def get_job_status(run_id: str, db: Session = Depends(get_db)):
             updated_at=job.updated_at if job else now,
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error getting status for {run_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to get job status: {str(e)}")

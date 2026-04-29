@@ -14,19 +14,24 @@ httpx==0.25.2
 biopython==1.83
 propka==3.5.0
 anthropic>=0.40.0
+modal>=0.73.0
+# Local ESMFold inference (Celery worker only — ~2 GB download on first run)
+transformers>=4.36.0
+torch>=2.1.0
+pyyaml>=6.0
 
-openmm
-pdbfixer
-openmmforcefields
-rdkit
-openff-toolkit
-openff-forcefields
-vina
 meeko
-openff-interchange
 
-# Tools not available on PyPI — install separately:
-# PyRosetta:  conda install -c rosettacommons pyrosetta   (free academic license at rosettacommons.org)
-# GROMACS:    brew install gromacs  (M3 Mac host)  or  see Dockerfile.celery for Docker
-# OpenMM:     conda install -c conda-forge openmm          (Stage C — set OPENMM_ENABLED=True)
-# MDAnalysis: conda install -c conda-forge mdanalysis      (optional trajectory analysis)
+# Boltz-2 (GPU required — install from source, not PyPI):
+#   pip install git+https://github.com/jwohlwend/boltz
+# Then set BOLTZ_ENABLED=True in .env
+
+# Conda-managed (no ARM64 PyPI wheel) — installed in Dockerfiles via micromamba:
+#   openmm, pdbfixer, openmmforcefields, rdkit
+#   openff-toolkit, openff-forcefields, openff-interchange
+#   vina
+#
+# Local install (outside Docker):
+#   PyRosetta:  conda install -c rosettacommons pyrosetta
+#   GROMACS:    brew install gromacs  (M3 Mac) / apt-get in Dockerfile.celery
+#   MDAnalysis: conda install -c conda-forge mdanalysis

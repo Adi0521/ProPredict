@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import tempfile
 import time
+import uuid
 from typing import Optional, Dict, Any, List, Tuple
 from celery import Celery, Task
 from datetime import datetime
@@ -15,6 +16,8 @@ import requests
 from config import (
     CELERY_BROKER_URL,
     CELERY_RESULT_BACKEND,
+    ESMFOLD_LOCAL,
+    ESMFOLD_MODEL_NAME,
     ESMFOLD_API_URL,
     ESMFOLD_TIMEOUT,
     ESMFOLD_RETRIES,
@@ -26,6 +29,10 @@ from config import (
     OPENMM_ENABLED,
     ROSETTAFOLD_ENABLED,
     OPENFOLD_ENABLED,
+    BOLTZ_ENABLED,
+    BOLTZ_SAMPLES,
+    BOLTZ_STEPS,
+    BOLTZ_USE_MSA,
     MD_PRODUCTION_NS,
     AGENT_ENABLED,
     ANTHROPIC_API_KEY,
@@ -121,6 +128,28 @@ def send_webhook(webhook_url: str, payload: Dict[str, Any]) -> None:
 # ESMFold inference
 # ---------------------------------------------------------------------------
 
+_esmfold_model = None
+_esmfold_tokenizer = None
+
+
+def _get_esmfold_local():
+    """Lazy-load the ESMFold model and tokenizer (heavy — only once per worker)."""
+    global _esmfold_model, _esmfold_tokenizer
+    if _esmfold_model is None:
+        from transformers import EsmForProteinFolding, AutoTokenizer  # type: ignore
+        import torch
+        logger.info(f"Loading ESMFold model: {ESMFOLD_MODEL_NAME}")
+        _esmfold_tokenizer = AutoTokenizer.from_pretrained(ESMFOLD_MODEL_NAME)
+        _esmfold_model = EsmForProteinFolding.from_pretrained(ESMFOLD_MODEL_NAME)
+        _esmfold_model.eval()
+        if torch.cuda.is_available():
+            _esmfold_model = _esmfold_model.cuda()
+        elif torch.backends.mps.is_available():
+            _esmfold_model = _esmfold_model.to("mps")
+        logger.info("ESMFold model loaded.")
+    return _esmfold_model, _esmfold_tokenizer
+
+
 def _parse_plddt_from_pdb(pdb_string: str) -> List[float]:
     """
     Extract per-residue pLDDT from ESMFold PDB output.
@@ -137,9 +166,9 @@ def _parse_plddt_from_pdb(pdb_string: str) -> List[float]:
     return scores
 
 
-def call_esmfold_api(sequence: str, seed: int = 0) -> StructurePrediction:
+def _call_esmfold_remote(sequence: str, seed: int = 0) -> StructurePrediction:
     """
-    Call ESMFold REST API with retries.
+    Call the ESMFold REST API with retries (fallback when ESMFOLD_LOCAL=False).
 
     ESMFold endpoint accepts a raw amino acid sequence as the POST body
     (application/x-www-form-urlencoded) and returns a PDB string.
@@ -163,7 +192,7 @@ def call_esmfold_api(sequence: str, seed: int = 0) -> StructurePrediction:
                 raise ValueError("No CA atoms found in ESMFold PDB output — response may be malformed")
 
             mean_plddt = sum(plddt_scores) / len(plddt_scores)
-            logger.info(f"ESMFold call succeeded. Mean pLDDT: {mean_plddt:.2f}")
+            logger.info(f"ESMFold remote call succeeded. Mean pLDDT: {mean_plddt:.2f}")
 
             return StructurePrediction(
                 structure_pdb=pdb_string,
@@ -180,6 +209,51 @@ def call_esmfold_api(sequence: str, seed: int = 0) -> StructurePrediction:
             else:
                 logger.error(f"ESMFold API failed after {ESMFOLD_RETRIES} attempts")
                 raise
+
+
+def call_esmfold_local(sequence: str, seed: int = 0) -> StructurePrediction:
+    """
+    Run ESMFold locally via HuggingFace Transformers.
+
+    ESMFold is deterministic — the seed parameter does not affect output. When
+    ENSEMBLE_NUM_SEEDS > 1, the ensemble loop will call this N times but receive
+    identical structures. This is a known limitation of ESMFold, not a ProPredict bug.
+    """
+    import torch
+    model, tokenizer = _get_esmfold_local()
+
+    logger.info(f"ESMFold local inference on sequence of length {len(sequence)}")
+    inputs = tokenizer(sequence, return_tensors="pt", add_special_tokens=False)
+
+    device = next(model.parameters()).device
+    inputs = {k: v.to(device) for k, v in inputs.items()}
+
+    with torch.no_grad():
+        output = model(**inputs)
+
+    pdb_string = model.output_to_pdb(output)[0]
+    plddt_scores = _parse_plddt_from_pdb(pdb_string)
+
+    if not plddt_scores:
+        raise ValueError("No CA atoms found in ESMFold local output — model output may be malformed")
+
+    mean_plddt = sum(plddt_scores) / len(plddt_scores)
+    logger.info(f"ESMFold local inference succeeded. Mean pLDDT: {mean_plddt:.2f}")
+
+    return StructurePrediction(
+        structure_pdb=pdb_string,
+        plddt_scores=plddt_scores,
+        mean_plddt=mean_plddt,
+        seed=seed,
+        model_name="esmfold_local",
+    )
+
+
+def call_esmfold_api(sequence: str, seed: int = 0) -> StructurePrediction:
+    """Dispatch to local model or remote API based on ESMFOLD_LOCAL flag."""
+    if ESMFOLD_LOCAL:
+        return call_esmfold_local(sequence, seed)
+    return _call_esmfold_remote(sequence, seed)
 
 
 # ---------------------------------------------------------------------------
@@ -227,6 +301,9 @@ def call_rosettafold2(sequence: str, seed: int = 0) -> StructurePrediction:
     """
     Run RoseTTAFold2 locally and return a StructurePrediction.
 
+    DEPRECATED: Boltz-2 supersedes RoseTTAFold2 in accuracy and ease of install.
+    Prefer BOLTZ_ENABLED=True. This stub is kept for future completion if needed.
+
     Installation:
         git clone https://github.com/baker-lab/RoseTTAFold2
         cd RoseTTAFold2 && conda env create -f environment.yaml
@@ -257,6 +334,9 @@ def call_openfold(sequence: str, seed: int = 0) -> StructurePrediction:
     """
     Run OpenFold locally and return a StructurePrediction.
 
+    DEPRECATED: Boltz-2 supersedes OpenFold in accuracy and ease of install.
+    Prefer BOLTZ_ENABLED=True. This stub is kept for future completion if needed.
+
     Installation:
         pip install 'openfold @ git+https://github.com/aqlaboratory/openfold'
         # Requires CUDA for full performance; CPU mode works for short sequences.
@@ -281,6 +361,140 @@ def call_openfold(sequence: str, seed: int = 0) -> StructurePrediction:
     raise NotImplementedError(
         "OpenFold stub — fill in using the openfold.data and openfold.model APIs."
     )
+
+
+def _cif_to_pdb(cif_path: str) -> str:
+    """Convert a Boltz-2 CIF output file to a PDB string via BioPython."""
+    from Bio.PDB import MMCIFParser, PDBIO  # type: ignore
+    parser = MMCIFParser(QUIET=True)
+    structure = parser.get_structure("boltz", cif_path)
+    pdbio = PDBIO()
+    pdbio.set_structure(structure)
+    out = io.StringIO()
+    pdbio.save(out)
+    return out.getvalue()
+
+
+def call_boltz(
+    sequence: str,
+    context: Optional[Dict[str, Any]] = None,
+    seed: int = 0,
+) -> StructurePrediction:
+    """
+    Run Boltz-2 prediction via CLI subprocess.
+
+    Writes a YAML input, calls `boltz predict`, parses the CIF output with
+    BioPython, reads pLDDT from the confidence JSON, and optionally reads
+    binding affinity when ligands are present.
+
+    Install: pip install git+https://github.com/jwohlwend/boltz
+    Then set BOLTZ_ENABLED=True.
+    """
+    import yaml  # pyyaml — guaranteed by requirements.txt
+
+    ctx = context or {}
+    ligands = ctx.get("ligands") or []
+
+    # Validate SMILES before doing any work — surface the error early.
+    for lig in ligands:
+        lig_name = lig.get("name", "unknown") if isinstance(lig, dict) else lig.name
+        lig_smiles = lig.get("smiles") if isinstance(lig, dict) else lig.smiles
+        if not lig_smiles:
+            raise ValueError(
+                f"Ligand '{lig_name}' has no SMILES string. "
+                "Boltz-2 requires SMILES for all ligands. "
+                "Add smiles to the LigandContext or remove the ligand from context."
+            )
+
+    # Build YAML input — protein on chain A, ligands on B, C, ...
+    sequences: list = [{
+        "protein": {
+            "id": "A",
+            "sequence": sequence,
+            "msa": "server" if BOLTZ_USE_MSA else "empty",
+        }
+    }]
+
+    affinity_binder: Optional[str] = None
+    for i, lig in enumerate(ligands):
+        chain_id = chr(ord("B") + i)
+        smiles = lig.get("smiles") if isinstance(lig, dict) else lig.smiles
+        sequences.append({"ligand": {"id": chain_id, "smiles": smiles}})
+        if affinity_binder is None:
+            affinity_binder = chain_id  # predict affinity for first ligand
+
+    boltz_input: Dict[str, Any] = {"version": 1, "sequences": sequences}
+    if affinity_binder:
+        boltz_input["properties"] = [{"affinity": {"binder": affinity_binder}}]
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        yaml_path = os.path.join(tmpdir, "input.yaml")
+        out_dir = os.path.join(tmpdir, "output")
+        os.makedirs(out_dir)
+
+        with open(yaml_path, "w") as fh:
+            yaml.dump(boltz_input, fh, default_flow_style=False)
+
+        cmd = [
+            "boltz", "predict", yaml_path,
+            "--out_dir", out_dir,
+            "--samples", str(BOLTZ_SAMPLES),
+            "--steps", str(BOLTZ_STEPS),
+            "--seed", str(seed),
+        ]
+        logger.info(f"Running Boltz-2: {' '.join(cmd)}")
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
+        if proc.returncode != 0:
+            raise RuntimeError(f"Boltz-2 failed (exit {proc.returncode}): {proc.stderr[-2000:]}")
+
+        # Boltz names its output dir after the input file stem ("input")
+        results_dir = os.path.join(out_dir, "boltz_results_input", "predictions")
+
+        # CIF → PDB
+        cif_path = os.path.join(results_dir, "input_model_0.cif")
+        if not os.path.exists(cif_path):
+            raise FileNotFoundError(f"Boltz-2 CIF output not found: {cif_path}")
+        pdb_string = _cif_to_pdb(cif_path)
+
+        # pLDDT from confidence JSON (0–1 scale → multiply by 100)
+        plddt_scores: List[float] = []
+        conf_path = os.path.join(results_dir, "input_confidence_model_0.json")
+        if os.path.exists(conf_path):
+            with open(conf_path) as fh:
+                conf = json.load(fh)
+            plddt_scores = [v * 100.0 for v in conf.get("plddt", [])]
+
+        if not plddt_scores:
+            # Fallback: parse from PDB B-factor column (Boltz stores pLDDT there too)
+            plddt_scores = _parse_plddt_from_pdb(pdb_string)
+
+        if not plddt_scores:
+            raise ValueError("No pLDDT scores found in Boltz-2 output")
+
+        mean_plddt = sum(plddt_scores) / len(plddt_scores)
+
+        # Binding affinity (kcal/mol) — only present when ligands were provided
+        affinity_score: Optional[float] = None
+        if affinity_binder:
+            aff_path = os.path.join(results_dir, "input_affinity_0.json")
+            if os.path.exists(aff_path):
+                with open(aff_path) as fh:
+                    aff_data = json.load(fh)
+                affinity_score = aff_data.get("affinity")
+
+        logger.info(
+            f"Boltz-2 succeeded. Mean pLDDT: {mean_plddt:.2f}"
+            + (f", affinity: {affinity_score:.3f} kcal/mol" if affinity_score is not None else "")
+        )
+
+        return StructurePrediction(
+            structure_pdb=pdb_string,
+            plddt_scores=plddt_scores,
+            mean_plddt=mean_plddt,
+            seed=seed,
+            model_name="boltz2",
+            affinity_score=affinity_score,
+        )
 
 
 def _align_and_compare_structures(pdb_strings: List[str]) -> Dict[str, Any]:
@@ -1404,6 +1618,16 @@ _AGENT_TOOLS = [
         },
     },
     {
+        "name": "run_boltz_prediction",
+        "description": (
+            "Re-predict the structure using Boltz-2, which gives AlphaFold3-class accuracy and "
+            "supports ligand co-folding with binding affinity estimation. Use when ESMFold pLDDT "
+            "is low, inter-model disagreement is high, or ligands are present. "
+            "Requires BOLTZ_ENABLED=True."
+        ),
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
         "name": "accept_structure",
         "description": "Accept the current structure. Final decision — call when quality is sufficient.",
         "input_schema": {
@@ -1434,10 +1658,17 @@ _AGENT_SYSTEM = """\
 You are a protein structure quality-control agent. You assess a predicted protein structure, \
 optionally refine it with available tools, then make a final decision.
 
+Available prediction backends:
+- ESMFold (fast, CPU-friendly, deterministic) — always available
+- Boltz-2 (AlphaFold3-class accuracy, GPU, supports ligand co-folding and binding affinity) — when BOLTZ_ENABLED=True
+If Boltz-2 produced the current prediction, prefer its structure for downstream refinement.
+If ESMFold produced the current prediction and quality is poor, consider run_boltz_prediction before escalating.
+When ligands are present and Boltz-2 predicted an affinity score, include it in your reasoning.
+
 Guidelines:
 - mean_pLDDT ≥ 75 AND ≤ 2 clashes → accept unless context requires simulation
 - mean_pLDDT 60–74 → run Rosetta relax if enabled, then reassess
-- mean_pLDDT < 60 → escalate unless refinement meaningfully improves quality
+- mean_pLDDT < 60 → try run_boltz_prediction if BOLTZ_ENABLED, else escalate
 - Membrane or ligand context present → run simulation before accepting
 - If a required backend is disabled → escalate and explain
 
@@ -1525,6 +1756,27 @@ def _execute_agent_tool(
         except Exception as e:
             return json.dumps({"error": str(e)})
 
+    if tool_name == "run_boltz_prediction":
+        if not BOLTZ_ENABLED:
+            return json.dumps({"error": "BOLTZ_ENABLED=False — cannot run Boltz-2"})
+        try:
+            boltz_pred = call_boltz(
+                state["sequence"], context=state["context"], seed=0
+            )
+            state["current_pdb"] = boltz_pred.structure_pdb
+            state["plddt_scores"] = boltz_pred.plddt_scores
+            state["mean_plddt"] = boltz_pred.mean_plddt
+            result: Dict[str, Any] = {
+                "status": "completed",
+                "model_name": "boltz2",
+                "mean_plddt": round(boltz_pred.mean_plddt, 2),
+            }
+            if boltz_pred.affinity_score is not None:
+                result["affinity_kcal_mol"] = round(boltz_pred.affinity_score, 3)
+            return json.dumps(result)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
     if tool_name in ("accept_structure", "escalate_structure"):
         state["terminal_tool"] = tool_name
         state["agent_reasoning"] = tool_input.get("reasoning", "")
@@ -1571,6 +1823,7 @@ def run_agent_refinement(
         "mean_plddt":     prediction.mean_plddt,
         "num_clashes":    num_clashes,
         "context":        context,
+        "sequence":       sequence,
         "rosetta_energy": None,
         "sim_result":     None,
         "terminal_tool":  None,
@@ -1586,12 +1839,18 @@ def run_agent_refinement(
         if inter_model_data.get("disagreement_regions"):
             disagreement_lines += f"\n  High-disagreement regions: {inter_model_data['disagreement_regions']}"
 
+    affinity_line = (
+        f"\nBinding affinity (Boltz-2): {prediction.affinity_score:.3f} kcal/mol"
+        if prediction.affinity_score is not None else ""
+    )
+
     user_msg = (
         f"Assess this predicted protein structure:\n\n"
         f"Sequence length: {len(sequence)} residues\n"
         f"Prediction model: {prediction.model_name}\n"
         f"Mean pLDDT: {prediction.mean_plddt:.1f}/100\n"
-        f"Steric clashes: {num_clashes}\n"
+        f"Steric clashes: {num_clashes}"
+        f"{affinity_line}\n"
         f"Per-residue pLDDT (first 20): "
         f"{[round(s, 1) for s in prediction.plddt_scores[:20]]}"
         f"{'...' if len(prediction.plddt_scores) > 20 else ''}"
@@ -1605,6 +1864,7 @@ def run_agent_refinement(
         f"Available backends: "
         f"Rosetta={'enabled' if ROSETTA_ENABLED else 'disabled'}, "
         f"OpenMM={'enabled' if OPENMM_ENABLED else 'disabled'}, "
+        f"Boltz-2={'enabled' if BOLTZ_ENABLED else 'disabled'}, "
         f"GROMACS={'enabled' if GROMACS_ENABLED else 'disabled'}"
     )
 
@@ -1675,18 +1935,12 @@ def run_agent_refinement(
 # Main Celery task
 # ---------------------------------------------------------------------------
 
-@app.task(bind=True, base=CallbackTask)
-def predict_protein_structure(self, request_data: Dict[str, Any]) -> Dict[str, Any]:
+def _run_prediction_core(request_data: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Main orchestration task: ESMFold → (optional) Rosetta relax → (optional) GROMACS EM.
-
-    Args:
-        request_data: Dictionary matching PredictionRequest schema.
-
-    Returns:
-        Dictionary with prediction results matching PredictionResponse schema.
+    Core prediction logic: ESMFold → (optional) Rosetta relax → (optional) GROMACS/OpenMM.
+    Called by both the Celery task (local dev) and the Modal function (production).
     """
-    run_id = request_data.get("run_id", self.request.id)
+    run_id = request_data.get("run_id", str(uuid.uuid4()))
     sequence = request_data["sequence"]
     context = request_data.get("context", {})
     priority = request_data.get("priority", "fast")
@@ -1728,6 +1982,18 @@ def predict_protein_structure(self, request_data: Dict[str, Any]) -> Dict[str, A
                 logger.info(f"[openfold] mean pLDDT={of_pred.mean_plddt:.2f}")
             except (RuntimeError, NotImplementedError) as e:
                 logger.warning(f"OpenFold skipped: {e}")
+
+        if BOLTZ_ENABLED:
+            try:
+                boltz_pred = call_boltz(sequence, context=context, seed=0)
+                predictions.append(boltz_pred)
+                logger.info(
+                    f"[boltz2] mean pLDDT={boltz_pred.mean_plddt:.2f}"
+                    + (f", affinity={boltz_pred.affinity_score:.3f} kcal/mol"
+                       if boltz_pred.affinity_score is not None else "")
+                )
+            except (RuntimeError, FileNotFoundError, ValueError) as e:
+                logger.warning(f"Boltz-2 skipped: {e}")
 
         # Best prediction across all models
         best_prediction = max(predictions, key=lambda p: p.mean_plddt)
@@ -1886,3 +2152,10 @@ def predict_protein_structure(self, request_data: Dict[str, Any]) -> Dict[str, A
             "error_message": str(e),
             "created_at": datetime.utcnow().isoformat(),
         }
+
+
+@app.task(bind=True, base=CallbackTask)
+def predict_protein_structure(self, request_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Celery task wrapper around _run_prediction_core (used for local dev)."""
+    request_data.setdefault("run_id", self.request.id)
+    return _run_prediction_core(request_data)

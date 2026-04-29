@@ -1,5 +1,6 @@
-FROM python:3.11-slim
+FROM mambaorg/micromamba:1.5.10-noble
 
+USER root
 WORKDIR /app
 
 # Install GROMACS (ARM64-compatible via Debian apt) + curl to fetch force fields
@@ -15,8 +16,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN curl -sL "http://mackerell.umaryland.edu/download.php?filename=CHARMM_ff_params_files/charmm36-feb2026_cgenff-5.0.ff.tgz" \
     | tar -xz -C /usr/share/gromacs/top/
 
-# Install RDKit via pip (python:3.10-slim has no conda)
-RUN pip install --no-cache-dir rdkit
+# Install ARM64-incompatible-on-PyPI packages via conda-forge
+RUN micromamba install -y -n base -c conda-forge \
+    python=3.11 \
+    openmm \
+    pdbfixer \
+    openmmforcefields \
+    rdkit \
+    openff-toolkit \
+    openff-forcefields \
+    openff-interchange \
+    vina \
+    && micromamba clean --all --yes
+
+ENV PATH="/opt/conda/bin:$PATH"
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

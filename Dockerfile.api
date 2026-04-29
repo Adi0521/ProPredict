@@ -1,11 +1,27 @@
-FROM python:3.11-slim
+FROM mambaorg/micromamba:1.5.10-noble
 
+USER root
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
+
+# Install ARM64-incompatible-on-PyPI packages via conda-forge
+RUN micromamba install -y -n base -c conda-forge \
+    python=3.11 \
+    openmm \
+    pdbfixer \
+    openmmforcefields \
+    rdkit \
+    openff-toolkit \
+    openff-forcefields \
+    openff-interchange \
+    vina \
+    && micromamba clean --all --yes
+
+ENV PATH="/opt/conda/bin:$PATH"
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
