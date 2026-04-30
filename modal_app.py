@@ -1,6 +1,12 @@
 import modal
 from modal import App, Image, Secret
 
+# Mount local source files into the container at runtime.
+# This lets Modal pick up code changes without rebuilding the image.
+project_mount = modal.Mount.from_local_dir(".", remote_path="/root", condition=lambda p: (
+    p.endswith(".py") and "__pycache__" not in p
+))
+
 # x86_64 Linux — ambertools, openff-*, and all other conda packages build cleanly here
 image = (
     Image.micromamba()
@@ -44,7 +50,8 @@ secrets = [Secret.from_name("propredict-secrets")]
 @app.function(
     timeout=1800,
     secrets=secrets,
-    gpu=modal.gpu.A10G(),
+    gpu="A10G",
+    mounts=[project_mount],
 )
 def run_prediction(request_data: dict) -> dict:
     """Worker function — replaces the Celery worker in production."""
@@ -52,7 +59,7 @@ def run_prediction(request_data: dict) -> dict:
     return _run_prediction_core(request_data)
 
 
-@app.function(secrets=secrets)
+@app.function(secrets=secrets, mounts=[project_mount])
 @modal.asgi_app()
 def fastapi_endpoint():
     """Serves the FastAPI app. MODAL_ENABLED must be set in propredict-secrets."""
@@ -62,8 +69,8 @@ def fastapi_endpoint():
 
 @app.function(
     timeout=600,
-    gpu=modal.gpu.A10G(),
-    # No secrets needed — env vars passed inline via the call below
+    gpu="A10G",
+    mounts=[project_mount],
 )
 def test_boltz_gpu(sequence: str = "MKTAYIAKQRQISFVKSHFSRQDILDLWQYVQG") -> dict:
     """
