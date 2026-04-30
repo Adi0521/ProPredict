@@ -16,8 +16,10 @@ image = (
         "vina",
         channels=["conda-forge"],
     )
-    .apt_install("gromacs", "curl")
+    .apt_install("gromacs", "curl", "git")
     .pip_install_from_requirements("requirements.txt")
+    # Boltz-2 from source — not yet on PyPI as boltz-2, install from GitHub
+    .pip_install("git+https://github.com/jwohlwend/boltz.git")
 )
 
 app = App("propredict", image=image)
@@ -26,16 +28,24 @@ app = App("propredict", image=image)
 #   modal secret create propredict-secrets \
 #     DATABASE_URL=postgresql://user:pass@host/db \
 #     ANTHROPIC_API_KEY=sk-ant-... \
-#     ESMFOLD_API_URL=https://api.esmatlas.com/foldSequence/v1/pdb/ \
 #     ROSETTA_ENABLED=False \
 #     GROMACS_ENABLED=True \
 #     OPENMM_ENABLED=True \
+#     BOLTZ_ENABLED=True \
+#     BOLTZ_SAMPLES=1 \
+#     BOLTZ_STEPS=200 \
+#     BOLTZ_USE_MSA=False \
+#     ESMFOLD_LOCAL=True \
 #     MODAL_ENABLED=True \
 #     LOG_LEVEL=INFO
 secrets = [Secret.from_name("propredict-secrets")]
 
 
-@app.function(timeout=1800, secrets=secrets)
+@app.function(
+    timeout=1800,
+    secrets=secrets,
+    gpu=modal.gpu.A10G(),
+)
 def run_prediction(request_data: dict) -> dict:
     """Worker function — replaces the Celery worker in production."""
     from orchestrator.tasks import _run_prediction_core
