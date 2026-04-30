@@ -30,8 +30,8 @@ from config import (
     ROSETTAFOLD_ENABLED,
     OPENFOLD_ENABLED,
     BOLTZ_ENABLED,
-    BOLTZ_SAMPLES,
-    BOLTZ_STEPS,
+    BOLTZ_DIFFUSION_SAMPLES,
+    BOLTZ_SAMPLING_STEPS,
     BOLTZ_USE_MSA,
     MD_PRODUCTION_NS,
     AGENT_ENABLED,
@@ -438,8 +438,8 @@ def call_boltz(
         cmd = [
             "boltz", "predict", yaml_path,
             "--out_dir", out_dir,
-            "--samples", str(BOLTZ_SAMPLES),
-            "--steps", str(BOLTZ_STEPS),
+            "--diffusion_samples", str(BOLTZ_DIFFUSION_SAMPLES),
+            "--sampling_steps", str(BOLTZ_SAMPLING_STEPS),
             "--seed", str(seed),
         ]
         logger.info(f"Running Boltz-2: {' '.join(cmd)}")

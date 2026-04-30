@@ -64,8 +64,8 @@ OPENFOLD_ENABLED = os.getenv("OPENFOLD_ENABLED", "False") == "True"        # see
 
 # Boltz-2: high-accuracy GPU backend (install from source: pip install git+https://github.com/jwohlwend/boltz)
 BOLTZ_ENABLED = os.getenv("BOLTZ_ENABLED", "False") == "True"
-BOLTZ_SAMPLES = int(os.getenv("BOLTZ_SAMPLES", 1))
-BOLTZ_STEPS = int(os.getenv("BOLTZ_STEPS", 200))
+BOLTZ_DIFFUSION_SAMPLES = int(os.getenv("BOLTZ_DIFFUSION_SAMPLES", 1))   # --diffusion_samples
+BOLTZ_SAMPLING_STEPS = int(os.getenv("BOLTZ_SAMPLING_STEPS", 200))       # --sampling_steps
 # False = fully local (msa: empty); True = use ColabFold MSA server (better accuracy, requires network)
 BOLTZ_USE_MSA = os.getenv("BOLTZ_USE_MSA", "False") == "True"
 

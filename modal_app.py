@@ -1,17 +1,13 @@
 import modal
 from modal import App, Image, Secret
 
-# Mount local source files into the container at runtime.
-# This lets Modal pick up code changes without rebuilding the image.
-project_mount = modal.Mount.from_local_dir(".", remote_path="/root", condition=lambda p: (
-    p.endswith(".py") and "__pycache__" not in p
-))
-
 # x86_64 Linux — ambertools, openff-*, and all other conda packages build cleanly here
 image = (
     Image.micromamba()
     .micromamba_install(
         "python=3.11",
+        "numpy=1.26",
+        "scipy=1.13",
         "openmm",
         "pdbfixer",
         "openmmforcefields",
@@ -24,8 +20,27 @@ image = (
     )
     .apt_install("gromacs", "curl", "git")
     .pip_install_from_requirements("requirements.txt")
+
+    .pip_install(
+    "torch==2.6.0",
+    "torchvision==0.21.0",
+    "torchaudio==2.6.0",
+    extra_index_url="https://download.pytorch.org/whl/cu126",
+    )
+
+    .pip_install("cuequivariance-ops-torch-cu12")
+
+    .pip_install("cuequivariance-torch")
+
     # Boltz-2 from source — not yet on PyPI as boltz-2, install from GitHub
     .pip_install("git+https://github.com/jwohlwend/boltz.git")
+
+    #.run_commands("boltz download", timeout=1200)
+    # Ship local source packages into the image
+    .add_local_dir("orchestrator", remote_path="/root/orchestrator")
+    .add_local_dir("models", remote_path="/root/models")
+    .add_local_dir("api", remote_path="/root/api")
+    .add_local_file("config.py", remote_path="/root/config.py")
 )
 
 app = App("propredict", image=image)
@@ -51,7 +66,6 @@ secrets = [Secret.from_name("propredict-secrets")]
     timeout=1800,
     secrets=secrets,
     gpu="A10G",
-    mounts=[project_mount],
 )
 def run_prediction(request_data: dict) -> dict:
     """Worker function — replaces the Celery worker in production."""
@@ -59,7 +73,7 @@ def run_prediction(request_data: dict) -> dict:
     return _run_prediction_core(request_data)
 
 
-@app.function(secrets=secrets, mounts=[project_mount])
+@app.function(secrets=secrets)
 @modal.asgi_app()
 def fastapi_endpoint():
     """Serves the FastAPI app. MODAL_ENABLED must be set in propredict-secrets."""
@@ -70,7 +84,6 @@ def fastapi_endpoint():
 @app.function(
     timeout=600,
     gpu="A10G",
-    mounts=[project_mount],
 )
 def test_boltz_gpu(sequence: str = "MKTAYIAKQRQISFVKSHFSRQDILDLWQYVQG") -> dict:
     """
