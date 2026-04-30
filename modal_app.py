@@ -58,3 +58,41 @@ def fastapi_endpoint():
     """Serves the FastAPI app. MODAL_ENABLED must be set in propredict-secrets."""
     from api.main import app as fastapi_app
     return fastapi_app
+
+
+@app.function(
+    timeout=600,
+    gpu=modal.gpu.A10G(),
+    # No secrets needed — env vars passed inline via the call below
+)
+def test_boltz_gpu(sequence: str = "MKTAYIAKQRQISFVKSHFSRQDILDLWQYVQG") -> dict:
+    """
+    Standalone GPU smoke-test for Boltz-2. Does not require Postgres or Redis.
+
+    Run with:
+        modal run modal_app.py::test_boltz_gpu
+        modal run modal_app.py::test_boltz_gpu --sequence MKTAYIAK
+    """
+    import os
+    os.environ["BOLTZ_ENABLED"] = "True"
+    os.environ["BOLTZ_SAMPLES"] = "1"
+    os.environ["BOLTZ_STEPS"] = "200"
+    os.environ["BOLTZ_USE_MSA"] = "False"
+
+    # Import after env vars are set so config.py picks them up
+    from orchestrator.tasks import call_boltz
+
+    print(f"Running Boltz-2 on sequence of length {len(sequence)}...")
+    result = call_boltz(sequence, seed=0)
+
+    summary = {
+        "model_name": result.model_name,
+        "sequence_length": len(sequence),
+        "mean_plddt": round(result.mean_plddt, 2),
+        "num_residues_scored": len(result.plddt_scores),
+        "plddt_scores_first10": [round(s, 1) for s in result.plddt_scores[:10]],
+        "affinity_score": result.affinity_score,
+        "pdb_lines": result.structure_pdb.count("\n"),
+    }
+    print(summary)
+    return summary

@@ -80,6 +80,8 @@ class PredictionRequest(BaseModel):
 
 class StructurePrediction(BaseModel):
     """Structure prediction result (from ESMFold, Boltz-2, or similar)."""
+    model_config = ConfigDict(protected_namespaces=())
+
     structure_pdb: str
     plddt_scores: List[float]
     mean_plddt: float
