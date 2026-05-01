@@ -18,7 +18,7 @@ image = (
         "vina",
         channels=["conda-forge"],
     )
-    .apt_install("gromacs", "curl", "git")
+    .apt_install("gromacs", "curl", "git", "build-essential")
     .pip_install_from_requirements("requirements.txt")
 
     .pip_install(
@@ -41,6 +41,7 @@ image = (
     .add_local_dir("models", remote_path="/root/models")
     .add_local_dir("api", remote_path="/root/api")
     .add_local_file("config.py", remote_path="/root/config.py")
+    .add_local_file("modal_app.py", remote_path="/root/modal_app.py")
 )
 
 app = App("propredict", image=image)

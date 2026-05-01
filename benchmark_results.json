@@ -1,0 +1,743 @@
+{
+  "targets": [
+    {
+      "pdb_id": "7TY4",
+      "name": "CASP15/7TY4",
+      "length": 515,
+      "mean_plddt": 49.04,
+      "tm_score": 0.2232,
+      "rmsd": 24.752,
+      "n_aligned": 515
+    },
+    {
+      "pdb_id": "7TY5",
+      "error": "PDB fetch failed: 404 Client Error: Not Found for url: https://files.rcsb.org/download/7TY5.pdb"
+    },
+    {
+      "pdb_id": "7UL4",
+      "name": "CASP15/7UL4",
+      "length": 286,
+      "mean_plddt": 91.24,
+      "tm_score": 0.9613,
+      "rmsd": 1.36,
+      "n_aligned": 286
+    },
+    {
+      "pdb_id": "7UL5",
+      "name": "CASP15/7UL5",
+      "length": 285,
+      "mean_plddt": 90.5,
+      "tm_score": 0.9219,
+      "rmsd": 2.401,
+      "n_aligned": 285
+    },
+    {
+      "pdb_id": "7UXB",
+      "name": "CASP15/7UXB",
+      "length": 246,
+      "mean_plddt": 77.35,
+      "tm_score": 0.8779,
+      "rmsd": 2.916,
+      "n_aligned": 246
+    },
+    {
+      "pdb_id": "7UXC",
+      "length": 2188,
+      "error": "Boltz failed: Boltz-2 produced no *model_0.cif under /tmp/tmpf01exqxl/output. stderr: ason, `logger=True` will use `CSVLogger` as the default logger, unless the `tensorboard` or `tensorboardX` packages are found. Please `pip install lightning[extra]` or one of them to enable TensorBoard support by default\n/opt/conda/lib/python3.11/site-packages/pytorch_lightning/utilities/migration/utils.py:56: The loaded checkpoint was produced with Lightning v2.5.0.post0, which is newer than your current Lightning version: v2.5.0\nYou are using a CUDA device ('NVIDIA A10G') that has Tensor Cores. To properly utilize them, you should set `torch.set_float32_matmul_precision('medium' | 'high')` which will trade-off precision for performance. For more details, read https://pytorch.org/docs/stable/generated/torch.set_float32_matmul_precision.html#torch.set_float32_matmul_precision\nLOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]\n/opt/conda/lib/python3.11/tempfile.py:934: ResourceWarning: Implicitly cleaning up <TemporaryDirectory '/tmp/tmpcn1jr1ni'>\n  _warnings.warn(warn_message, ResourceWarning)\n"
+    },
+    {
+      "pdb_id": "7V3E",
+      "name": "CASP15/7V3E",
+      "length": 280,
+      "mean_plddt": 81.48,
+      "tm_score": 0.876,
+      "rmsd": 2.554,
+      "n_aligned": 280
+    },
+    {
+      "pdb_id": "7V3F",
+      "name": "CASP15/7V3F",
+      "length": 495,
+      "mean_plddt": 56.68,
+      "tm_score": 0.0975,
+      "rmsd": 33.445,
+      "n_aligned": 495
+    },
+    {
+      "pdb_id": "7VDL",
+      "name": "CASP15/7VDL",
+      "length": 215,
+      "mean_plddt": 77.37,
+      "tm_score": 0.3876,
+      "rmsd": 11.317,
+      "n_aligned": 215
+    },
+    {
+      "pdb_id": "7VDM",
+      "name": "CASP15/7VDM",
+      "length": 217,
+      "mean_plddt": 80.15,
+      "tm_score": 0.4235,
+      "rmsd": 9.672,
+      "n_aligned": 217
+    },
+    {
+      "pdb_id": "7VQ6",
+      "name": "CASP15/7VQ6",
+      "length": 175,
+      "mean_plddt": 36.92,
+      "tm_score": 0.2441,
+      "rmsd": 14.039,
+      "n_aligned": 175
+    },
+    {
+      "pdb_id": "7VQ7",
+      "name": "CASP15/7VQ7",
+      "length": 389,
+      "mean_plddt": 43.4,
+      "tm_score": 0.2011,
+      "rmsd": 19.85,
+      "n_aligned": 389
+    },
+    {
+      "pdb_id": "7WGP",
+      "name": "CASP15/7WGP",
+      "length": 269,
+      "mean_plddt": 87.45,
+      "tm_score": 0.9077,
+      "rmsd": 3.319,
+      "n_aligned": 269
+    },
+    {
+      "pdb_id": "7WGQ",
+      "name": "CASP15/7WGQ",
+      "length": 277,
+      "mean_plddt": 91.46,
+      "tm_score": 0.9485,
+      "rmsd": 1.807,
+      "n_aligned": 277
+    },
+    {
+      "pdb_id": "7WV6",
+      "error": "PDB fetch failed: 404 Client Error: Not Found for url: https://files.rcsb.org/download/7WV6.pdb"
+    },
+    {
+      "pdb_id": "7WV7",
+      "error": "PDB fetch failed: 404 Client Error: Not Found for url: https://files.rcsb.org/download/7WV7.pdb"
+    },
+    {
+      "pdb_id": "7X26",
+      "name": "CASP15/7X26",
+      "length": 221,
+      "mean_plddt": 91.33,
+      "tm_score": 0.8409,
+      "rmsd": 2.964,
+      "n_aligned": 221
+    },
+    {
+      "pdb_id": "7X27",
+      "name": "CASP15/7X27",
+      "length": 983,
+      "mean_plddt": 70.84,
+      "tm_score": 0.1504,
+      "rmsd": 38.971,
+      "n_aligned": 983
+    },
+    {
+      "pdb_id": "7XPT",
+      "name": "CASP15/7XPT",
+      "length": 375,
+      "mean_plddt": 40.4,
+      "tm_score": 0.2641,
+      "rmsd": 18.22,
+      "n_aligned": 375
+    },
+    {
+      "pdb_id": "7XPU",
+      "name": "CASP15/7XPU",
+      "length": 371,
+      "mean_plddt": 39.95,
+      "tm_score": 0.3834,
+      "rmsd": 16.361,
+      "n_aligned": 371
+    },
+    {
+      "pdb_id": "7YEK",
+      "name": "CASP15/7YEK",
+      "length": 456,
+      "mean_plddt": 40.92,
+      "tm_score": 0.1877,
+      "rmsd": 22.746,
+      "n_aligned": 456
+    },
+    {
+      "pdb_id": "7YEL",
+      "name": "CASP15/7YEL",
+      "length": 456,
+      "mean_plddt": 40.92,
+      "tm_score": 0.1876,
+      "rmsd": 22.717,
+      "n_aligned": 456
+    },
+    {
+      "pdb_id": "7YG3",
+      "name": "CASP15/7YG3",
+      "length": 276,
+      "mean_plddt": 96.32,
+      "tm_score": 0.9758,
+      "rmsd": 0.985,
+      "n_aligned": 276
+    },
+    {
+      "pdb_id": "7Z6M",
+      "name": "CASP15/7Z6M",
+      "length": 238,
+      "mean_plddt": 81.38,
+      "tm_score": 0.6168,
+      "rmsd": 5.294,
+      "n_aligned": 238
+    },
+    {
+      "pdb_id": "7Z6N",
+      "name": "CASP15/7Z6N",
+      "length": 275,
+      "mean_plddt": 79.9,
+      "tm_score": 0.7934,
+      "rmsd": 3.525,
+      "n_aligned": 275
+    },
+    {
+      "pdb_id": "7ZPD",
+      "name": "CASP15/7ZPD",
+      "length": 41,
+      "mean_plddt": 57.21,
+      "tm_score": 0.026,
+      "rmsd": 14.553,
+      "n_aligned": 41
+    },
+    {
+      "pdb_id": "7ZPE",
+      "name": "CASP15/7ZPE",
+      "length": 305,
+      "mean_plddt": 57.27,
+      "tm_score": 0.4079,
+      "rmsd": 15.427,
+      "n_aligned": 305
+    },
+    {
+      "pdb_id": "8A0N",
+      "name": "CASP15/8A0N",
+      "length": 212,
+      "mean_plddt": 70.27,
+      "tm_score": 0.4328,
+      "rmsd": 8.778,
+      "n_aligned": 212
+    },
+    {
+      "pdb_id": "8A0O",
+      "name": "CASP15/8A0O",
+      "length": 215,
+      "mean_plddt": 42.24,
+      "tm_score": 0.2523,
+      "rmsd": 15.555,
+      "n_aligned": 215
+    },
+    {
+      "pdb_id": "8A2O",
+      "name": "CASP15/8A2O",
+      "length": 386,
+      "mean_plddt": 97.33,
+      "tm_score": 0.7722,
+      "rmsd": 3.968,
+      "n_aligned": 386
+    },
+    {
+      "pdb_id": "8A2P",
+      "name": "CASP15/8A2P",
+      "length": 386,
+      "mean_plddt": 97.33,
+      "tm_score": 0.6962,
+      "rmsd": 4.903,
+      "n_aligned": 386
+    },
+    {
+      "pdb_id": "8ACS",
+      "name": "CASP15/8ACS",
+      "length": 598,
+      "mean_plddt": 43.36,
+      "tm_score": 0.3714,
+      "rmsd": 14.942,
+      "n_aligned": 598
+    },
+    {
+      "pdb_id": "8APC",
+      "error": "PDB fetch failed: 404 Client Error: Not Found for url: https://files.rcsb.org/download/8APC.pdb"
+    },
+    {
+      "pdb_id": "8APD",
+      "error": "PDB fetch failed: 404 Client Error: Not Found for url: https://files.rcsb.org/download/8APD.pdb"
+    },
+    {
+      "pdb_id": "8APE",
+      "error": "PDB fetch failed: 404 Client Error: Not Found for url: https://files.rcsb.org/download/8APE.pdb"
+    },
+    {
+      "pdb_id": "8APG",
+      "error": "PDB fetch failed: 404 Client Error: Not Found for url: https://files.rcsb.org/download/8APG.pdb"
+    },
+    {
+      "pdb_id": "8APH",
+      "error": "PDB fetch failed: 404 Client Error: Not Found for url: https://files.rcsb.org/download/8APH.pdb"
+    },
+    {
+      "pdb_id": "8B1J",
+      "name": "CASP15/8B1J",
+      "length": 451,
+      "mean_plddt": 40.68,
+      "tm_score": 0.2812,
+      "rmsd": 20.569,
+      "n_aligned": 451
+    },
+    {
+      "pdb_id": "8B8T",
+      "name": "CASP15/8B8T",
+      "length": 241,
+      "mean_plddt": 41.36,
+      "tm_score": 0.127,
+      "rmsd": 21.021,
+      "n_aligned": 241
+    },
+    {
+      "pdb_id": "8BCY",
+      "name": "CASP15/8BCY",
+      "length": 922,
+      "mean_plddt": 54.6,
+      "tm_score": 0.174,
+      "rmsd": 32.364,
+      "n_aligned": 922
+    },
+    {
+      "pdb_id": "8BCZ",
+      "name": "CASP15/8BCZ",
+      "length": 118,
+      "mean_plddt": 92.42,
+      "tm_score": 0.9792,
+      "rmsd": 0.634,
+      "n_aligned": 118
+    },
+    {
+      "pdb_id": "8BD0",
+      "name": "CASP15/8BD0",
+      "length": 170,
+      "mean_plddt": 45.14,
+      "tm_score": 0.1817,
+      "rmsd": 13.351,
+      "n_aligned": 170
+    },
+    {
+      "pdb_id": "8BDE",
+      "name": "CASP15/8BDE",
+      "length": 434,
+      "mean_plddt": 91.73,
+      "tm_score": 0.5145,
+      "rmsd": 9.227,
+      "n_aligned": 434
+    },
+    {
+      "pdb_id": "8BDF",
+      "name": "CASP15/8BDF",
+      "length": 441,
+      "mean_plddt": 80.7,
+      "tm_score": 0.2275,
+      "rmsd": 19.746,
+      "n_aligned": 441
+    },
+    {
+      "pdb_id": "8BDG",
+      "name": "CASP15/8BDG",
+      "length": 441,
+      "mean_plddt": 81.35,
+      "tm_score": 0.2273,
+      "rmsd": 19.767,
+      "n_aligned": 441
+    },
+    {
+      "pdb_id": "8BEP",
+      "name": "CASP15/8BEP",
+      "length": 450,
+      "mean_plddt": 41.26,
+      "tm_score": 0.2201,
+      "rmsd": 22.848,
+      "n_aligned": 450
+    },
+    {
+      "pdb_id": "8BG1",
+      "name": "CASP15/8BG1",
+      "length": 227,
+      "mean_plddt": 92.78,
+      "tm_score": 0.9399,
+      "rmsd": 1.912,
+      "n_aligned": 227
+    },
+    {
+      "pdb_id": "8BOZ",
+      "name": "CASP15/8BOZ",
+      "length": 541,
+      "mean_plddt": 37.03,
+      "tm_score": 0.3264,
+      "rmsd": 19.632,
+      "n_aligned": 541
+    },
+    {
+      "pdb_id": "8BP0",
+      "name": "CASP15/8BP0",
+      "length": 229,
+      "mean_plddt": 76.49,
+      "tm_score": 0.5214,
+      "rmsd": 6.536,
+      "n_aligned": 229
+    },
+    {
+      "pdb_id": "8BPP",
+      "name": "CASP15/8BPP",
+      "length": 362,
+      "mean_plddt": 68.7,
+      "tm_score": 0.7827,
+      "rmsd": 5.898,
+      "n_aligned": 362
+    },
+    {
+      "pdb_id": "8BPQ",
+      "name": "CASP15/8BPQ",
+      "length": 362,
+      "mean_plddt": 66.61,
+      "tm_score": 0.7986,
+      "rmsd": 5.922,
+      "n_aligned": 362
+    },
+    {
+      "pdb_id": "8C7B",
+      "error": "Sequence too short (0 aa)"
+    },
+    {
+      "pdb_id": "8C7C",
+      "name": "CASP15/8C7C",
+      "length": 250,
+      "mean_plddt": 36.75,
+      "tm_score": 0.1264,
+      "rmsd": 22.016,
+      "n_aligned": 250
+    },
+    {
+      "pdb_id": "8CBN",
+      "name": "CASP15/8CBN",
+      "length": 99,
+      "mean_plddt": 60.31,
+      "tm_score": 0.251,
+      "rmsd": 12.425,
+      "n_aligned": 99
+    },
+    {
+      "pdb_id": "8CBO",
+      "name": "CASP15/8CBO",
+      "length": 255,
+      "mean_plddt": 75.25,
+      "tm_score": 0.6893,
+      "rmsd": 8.993,
+      "n_aligned": 255
+    },
+    {
+      "pdb_id": "8CGU",
+      "error": "Sequence too short (0 aa)"
+    },
+    {
+      "pdb_id": "8CGV",
+      "name": "CASP15/8CGV",
+      "length": 51,
+      "mean_plddt": 60.56,
+      "tm_score": 0.1881,
+      "rmsd": 6.638,
+      "n_aligned": 51
+    },
+    {
+      "pdb_id": "8CIQ",
+      "name": "CASP15/8CIQ",
+      "length": 35,
+      "mean_plddt": 84.46,
+      "tm_score": 0.5204,
+      "rmsd": 2.784,
+      "n_aligned": 35
+    },
+    {
+      "pdb_id": "8CIR",
+      "name": "CASP15/8CIR",
+      "length": 339,
+      "mean_plddt": 64.53,
+      "tm_score": 0.2404,
+      "rmsd": 21.343,
+      "n_aligned": 339
+    },
+    {
+      "pdb_id": "8CMJ",
+      "error": "PDB fetch failed: 404 Client Error: Not Found for url: https://files.rcsb.org/download/8CMJ.pdb"
+    },
+    {
+      "pdb_id": "8CMK",
+      "name": "CASP15/8CMK",
+      "length": 913,
+      "mean_plddt": 73.11,
+      "tm_score": 0.4528,
+      "rmsd": 17.95,
+      "n_aligned": 913
+    },
+    {
+      "pdb_id": "8D40",
+      "name": "CASP15/8D40",
+      "length": 422,
+      "mean_plddt": 92.55,
+      "tm_score": 0.877,
+      "rmsd": 3.044,
+      "n_aligned": 422
+    },
+    {
+      "pdb_id": "8D41",
+      "name": "CASP15/8D41",
+      "length": 307,
+      "mean_plddt": 88.32,
+      "tm_score": 0.5461,
+      "rmsd": 6.438,
+      "n_aligned": 307
+    },
+    {
+      "pdb_id": "8D8C",
+      "name": "CASP15/8D8C",
+      "length": 129,
+      "mean_plddt": 97.97,
+      "tm_score": 0.9886,
+      "rmsd": 0.457,
+      "n_aligned": 129
+    },
+    {
+      "pdb_id": "8D8D",
+      "name": "CASP15/8D8D",
+      "length": 129,
+      "mean_plddt": 97.96,
+      "tm_score": 0.9923,
+      "rmsd": 0.374,
+      "n_aligned": 129
+    },
+    {
+      "pdb_id": "8DGS",
+      "name": "CASP15/8DGS",
+      "length": 425,
+      "mean_plddt": 73.8,
+      "tm_score": 0.1171,
+      "rmsd": 28.022,
+      "n_aligned": 425
+    },
+    {
+      "pdb_id": "8DGT",
+      "name": "CASP15/8DGT",
+      "length": 429,
+      "mean_plddt": 72.06,
+      "tm_score": 0.2015,
+      "rmsd": 20.052,
+      "n_aligned": 429
+    },
+    {
+      "pdb_id": "8DPN",
+      "name": "CASP15/8DPN",
+      "length": 477,
+      "mean_plddt": 50.19,
+      "tm_score": 0.3442,
+      "rmsd": 17.512,
+      "n_aligned": 477
+    },
+    {
+      "pdb_id": "8DPO",
+      "name": "CASP15/8DPO",
+      "length": 222,
+      "mean_plddt": 54.3,
+      "tm_score": 0.7701,
+      "rmsd": 5.609,
+      "n_aligned": 222
+    },
+    {
+      "pdb_id": "8DPP",
+      "error": "PDB fetch failed: 404 Client Error: Not Found for url: https://files.rcsb.org/download/8DPP.pdb"
+    },
+    {
+      "pdb_id": "8DPQ",
+      "name": "CASP15/8DPQ",
+      "length": 262,
+      "mean_plddt": 95.86,
+      "tm_score": 0.9743,
+      "rmsd": 1.074,
+      "n_aligned": 262
+    },
+    {
+      "pdb_id": "8DPR",
+      "name": "CASP15/8DPR",
+      "length": 303,
+      "mean_plddt": 92.12,
+      "tm_score": 0.4344,
+      "rmsd": 8.976,
+      "n_aligned": 303
+    },
+    {
+      "pdb_id": "8DPS",
+      "name": "CASP15/8DPS",
+      "length": 297,
+      "mean_plddt": 92.03,
+      "tm_score": 0.9055,
+      "rmsd": 2.193,
+      "n_aligned": 297
+    },
+    {
+      "pdb_id": "8DPT",
+      "name": "CASP15/8DPT",
+      "length": 398,
+      "mean_plddt": 90.16,
+      "tm_score": 0.8191,
+      "rmsd": 3.864,
+      "n_aligned": 398
+    },
+    {
+      "pdb_id": "8DPU",
+      "name": "CASP15/8DPU",
+      "length": 298,
+      "mean_plddt": 91.77,
+      "tm_score": 0.8902,
+      "rmsd": 2.447,
+      "n_aligned": 298
+    },
+    {
+      "pdb_id": "8FLY",
+      "name": "CASP15/8FLY",
+      "length": 335,
+      "mean_plddt": 94.66,
+      "tm_score": 0.9883,
+      "rmsd": 0.898,
+      "n_aligned": 335
+    },
+    {
+      "pdb_id": "8FLZ",
+      "name": "CASP15/8FLZ",
+      "length": 335,
+      "mean_plddt": 94.66,
+      "tm_score": 0.9882,
+      "rmsd": 0.901,
+      "n_aligned": 335
+    },
+    {
+      "pdb_id": "8FM0",
+      "name": "CASP15/8FM0",
+      "length": 335,
+      "mean_plddt": 94.66,
+      "tm_score": 0.9876,
+      "rmsd": 0.915,
+      "n_aligned": 335
+    },
+    {
+      "pdb_id": "8FM1",
+      "name": "CASP15/8FM1",
+      "length": 353,
+      "mean_plddt": 47.67,
+      "tm_score": 0.1837,
+      "rmsd": 20.448,
+      "n_aligned": 353
+    },
+    {
+      "pdb_id": "8GEO",
+      "name": "CASP15/8GEO",
+      "length": 581,
+      "mean_plddt": 40.33,
+      "tm_score": 0.3025,
+      "rmsd": 18.499,
+      "n_aligned": 581
+    },
+    {
+      "pdb_id": "8GEP",
+      "name": "CASP15/8GEP",
+      "length": 456,
+      "mean_plddt": 39.87,
+      "tm_score": 0.2799,
+      "rmsd": 21.35,
+      "n_aligned": 456
+    },
+    {
+      "pdb_id": "8GEQ",
+      "name": "CASP15/8GEQ",
+      "length": 591,
+      "mean_plddt": 42.98,
+      "tm_score": 0.3049,
+      "rmsd": 18.633,
+      "n_aligned": 591
+    },
+    {
+      "pdb_id": "8H8J",
+      "name": "CASP15/8H8J",
+      "length": 225,
+      "mean_plddt": 56.23,
+      "tm_score": 0.2335,
+      "rmsd": 17.606,
+      "n_aligned": 225
+    },
+    {
+      "pdb_id": "8H8K",
+      "error": "PDB fetch failed: 404 Client Error: Not Found for url: https://files.rcsb.org/download/8H8K.pdb"
+    },
+    {
+      "pdb_id": "8HAK",
+      "name": "CASP15/8HAK",
+      "length": 96,
+      "mean_plddt": 51.24,
+      "tm_score": 0.2813,
+      "rmsd": 9.963,
+      "n_aligned": 96
+    },
+    {
+      "pdb_id": "8HAL",
+      "name": "CASP15/8HAL",
+      "length": 99,
+      "mean_plddt": 51.76,
+      "tm_score": 0.1605,
+      "rmsd": 12.169,
+      "n_aligned": 99
+    },
+    {
+      "pdb_id": "8HAM",
+      "name": "CASP15/8HAM",
+      "length": 99,
+      "mean_plddt": 51.76,
+      "tm_score": 0.1617,
+      "rmsd": 12.183,
+      "n_aligned": 99
+    },
+    {
+      "pdb_id": "8HAN",
+      "name": "CASP15/8HAN",
+      "length": 99,
+      "mean_plddt": 57.83,
+      "tm_score": 0.1726,
+      "rmsd": 12.185,
+      "n_aligned": 99
+    }
+  ],
+  "errors": [
+    "PDB fetch failed: 404 Client Error: Not Found for url: https://files.rcsb.org/download/7TY5.pdb",
+    "Boltz failed: Boltz-2 produced no *model_0.cif under /tmp/tmpf01exqxl/output. stderr: ason, `logger=True` will use `CSVLogger` as the default logger, unless the `tensorboard` or `tensorboardX` packages are found. Please `pip install lightning[extra]` or one of them to enable TensorBoard support by default\n/opt/conda/lib/python3.11/site-packages/pytorch_lightning/utilities/migration/utils.py:56: The loaded checkpoint was produced with Lightning v2.5.0.post0, which is newer than your current Lightning version: v2.5.0\nYou are using a CUDA device ('NVIDIA A10G') that has Tensor Cores. To properly utilize them, you should set `torch.set_float32_matmul_precision('medium' | 'high')` which will trade-off precision for performance. For more details, read https://pytorch.org/docs/stable/generated/torch.set_float32_matmul_precision.html#torch.set_float32_matmul_precision\nLOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]\n/opt/conda/lib/python3.11/tempfile.py:934: ResourceWarning: Implicitly cleaning up <TemporaryDirectory '/tmp/tmpcn1jr1ni'>\n  _warnings.warn(warn_message, ResourceWarning)\n",
+    "PDB fetch failed: 404 Client Error: Not Found for url: https://files.rcsb.org/download/7WV6.pdb",
+    "PDB fetch failed: 404 Client Error: Not Found for url: https://files.rcsb.org/download/7WV7.pdb",
+    "PDB fetch failed: 404 Client Error: Not Found for url: https://files.rcsb.org/download/8APC.pdb",
+    "PDB fetch failed: 404 Client Error: Not Found for url: https://files.rcsb.org/download/8APD.pdb",
+    "PDB fetch failed: 404 Client Error: Not Found for url: https://files.rcsb.org/download/8APE.pdb",
+    "PDB fetch failed: 404 Client Error: Not Found for url: https://files.rcsb.org/download/8APG.pdb",
+    "PDB fetch failed: 404 Client Error: Not Found for url: https://files.rcsb.org/download/8APH.pdb",
+    "Sequence too short (0 aa)",
+    "Sequence too short (0 aa)",
+    "PDB fetch failed: 404 Client Error: Not Found for url: https://files.rcsb.org/download/8CMJ.pdb",
+    "PDB fetch failed: 404 Client Error: Not Found for url: https://files.rcsb.org/download/8DPP.pdb",
+    "PDB fetch failed: 404 Client Error: Not Found for url: https://files.rcsb.org/download/8H8K.pdb"
+  ]
+}
