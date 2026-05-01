@@ -1,3 +1,4 @@
+import glob
 import io
 import logging
 import hashlib
@@ -447,22 +448,35 @@ def call_boltz(
         if proc.returncode != 0:
             raise RuntimeError(f"Boltz-2 failed (exit {proc.returncode}): {proc.stderr[-2000:]}")
 
-        # Boltz names its output dir after the input file stem ("input")
-        results_dir = os.path.join(out_dir, "boltz_results_input", "predictions")
-
-        # CIF → PDB
-        cif_path = os.path.join(results_dir, "input_model_0.cif")
-        if not os.path.exists(cif_path):
-            raise FileNotFoundError(f"Boltz-2 CIF output not found: {cif_path}")
+        # Boltz-2 output layout can vary by version; find the CIF by glob.
+        cif_hits = sorted(glob.glob(os.path.join(out_dir, "**", "*model_0.cif"), recursive=True))
+        logger.info(f"Boltz-2 output tree: {glob.glob(os.path.join(out_dir, '**', '*'), recursive=True)}")
+        if not cif_hits:
+            raise FileNotFoundError(
+                f"Boltz-2 produced no *model_0.cif under {out_dir}. "
+                f"stderr: {proc.stderr[-1000:]}"
+            )
+        cif_path = cif_hits[0]
+        results_dir = os.path.dirname(cif_path)
+        # Derive the stem prefix used by Boltz for related files.
+        # cif_path looks like ".../stem_model_0.cif"; strip "_model_0.cif" → stem
+        cif_stem = os.path.basename(cif_path).replace("_model_0.cif", "")
         pdb_string = _cif_to_pdb(cif_path)
 
         # pLDDT from confidence JSON (0–1 scale → multiply by 100)
         plddt_scores: List[float] = []
-        conf_path = os.path.join(results_dir, "input_confidence_model_0.json")
+        conf_path = os.path.join(results_dir, f"{cif_stem}_confidence_model_0.json")
         if os.path.exists(conf_path):
             with open(conf_path) as fh:
                 conf = json.load(fh)
-            plddt_scores = [v * 100.0 for v in conf.get("plddt", [])]
+            raw = conf.get("plddt", [])
+            # Boltz-1 stores pLDDT on 0–1 scale; Boltz-2 uses 0–100.
+            import importlib.metadata
+            _boltz_major = int(importlib.metadata.version("boltz").split(".")[0])
+            if _boltz_major < 2:
+                plddt_scores = [v * 100.0 for v in raw]
+            else:
+                plddt_scores = list(raw)
 
         if not plddt_scores:
             # Fallback: parse from PDB B-factor column (Boltz stores pLDDT there too)
@@ -476,7 +490,7 @@ def call_boltz(
         # Binding affinity (kcal/mol) — only present when ligands were provided
         affinity_score: Optional[float] = None
         if affinity_binder:
-            aff_path = os.path.join(results_dir, "input_affinity_0.json")
+            aff_path = os.path.join(results_dir, f"{cif_stem}_affinity_0.json")
             if os.path.exists(aff_path):
                 with open(aff_path) as fh:
                     aff_data = json.load(fh)
