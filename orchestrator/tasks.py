@@ -458,40 +458,25 @@ def call_boltz(
             )
         cif_path = cif_hits[0]
         results_dir = os.path.dirname(cif_path)
-        # Derive the stem prefix used by Boltz for related files.
-        # cif_path looks like ".../stem_model_0.cif"; strip "_model_0.cif" → stem
-        cif_stem = os.path.basename(cif_path).replace("_model_0.cif", "")
-        print(f"[boltz] cif_path={cif_path}  cif_stem={cif_stem}")
         pdb_string = _cif_to_pdb(cif_path)
 
-        # pLDDT from confidence JSON
+        import importlib.metadata
+        _boltz_major = int(importlib.metadata.version("boltz").split(".")[0])
+
+        # pLDDT from confidence JSON — Boltz-2 names it confidence_{stem}_model_0.json
+        # inside a per-stem subdirectory; use glob so layout changes don't break us.
         plddt_scores: List[float] = []
-        # Search for the confidence JSON next to the CIF and one level up (Boltz-2 layout varies).
-        conf_candidates = [
-            os.path.join(results_dir, f"{cif_stem}_confidence_model_0.json"),
-            os.path.join(os.path.dirname(results_dir), f"{cif_stem}_confidence_model_0.json"),
-        ]
-        conf_candidates += glob.glob(os.path.join(out_dir, "**", f"*confidence*model_0.json"), recursive=True)
-        conf_path = next((p for p in conf_candidates if os.path.exists(p)), None)
-        print(f"[boltz] conf_path={conf_path}")
-        if conf_path is not None:
-            with open(conf_path) as fh:
+        conf_hits = glob.glob(os.path.join(out_dir, "**", "*confidence*model_0.json"), recursive=True)
+        if conf_hits:
+            with open(conf_hits[0]) as fh:
                 conf = json.load(fh)
             raw = conf.get("plddt", [])
             # Boltz-1 stores pLDDT on 0–1 scale; Boltz-2 uses 0–100.
-            import importlib.metadata
-            _boltz_major = int(importlib.metadata.version("boltz").split(".")[0])
-            if _boltz_major < 2:
-                plddt_scores = [v * 100.0 for v in raw]
-            else:
-                plddt_scores = list(raw)
+            plddt_scores = [v * 100.0 for v in raw] if _boltz_major < 2 else list(raw)
 
         if not plddt_scores:
-            # Fallback: Boltz-2 stores pLDDT in B-factor on 0–100 scale (not 0–1).
-            import importlib.metadata
-            _boltz_major = int(importlib.metadata.version("boltz").split(".")[0])
-            # _parse_plddt_from_pdb multiplies B-factor by 100 (ESMFold uses 0–1 B-factor).
-            # Boltz-2 stores B-factor on 0–100 scale, so that multiplication overshoots by 100x.
+            # Last resort: B-factor column. _parse_plddt_from_pdb multiplies by 100
+            # (written for ESMFold's 0–1 B-factor), so undo that for Boltz-2's 0–100 scale.
             raw_bfactor = _parse_plddt_from_pdb(pdb_string)
             plddt_scores = raw_bfactor if _boltz_major < 2 else [v / 100.0 for v in raw_bfactor]
 
@@ -503,8 +488,9 @@ def call_boltz(
         # Binding affinity (kcal/mol) — only present when ligands were provided
         affinity_score: Optional[float] = None
         if affinity_binder:
-            aff_path = os.path.join(results_dir, f"{cif_stem}_affinity_0.json")
-            if os.path.exists(aff_path):
+            aff_hits = glob.glob(os.path.join(out_dir, "**", "*affinity*.json"), recursive=True)
+            aff_path = aff_hits[0] if aff_hits else None
+            if aff_path and os.path.exists(aff_path):
                 with open(aff_path) as fh:
                     aff_data = json.load(fh)
                 affinity_score = aff_data.get("affinity")
