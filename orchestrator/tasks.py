@@ -461,12 +461,20 @@ def call_boltz(
         # Derive the stem prefix used by Boltz for related files.
         # cif_path looks like ".../stem_model_0.cif"; strip "_model_0.cif" → stem
         cif_stem = os.path.basename(cif_path).replace("_model_0.cif", "")
+        print(f"[boltz] cif_path={cif_path}  cif_stem={cif_stem}")
         pdb_string = _cif_to_pdb(cif_path)
 
-        # pLDDT from confidence JSON (0–1 scale → multiply by 100)
+        # pLDDT from confidence JSON
         plddt_scores: List[float] = []
-        conf_path = os.path.join(results_dir, f"{cif_stem}_confidence_model_0.json")
-        if os.path.exists(conf_path):
+        # Search for the confidence JSON next to the CIF and one level up (Boltz-2 layout varies).
+        conf_candidates = [
+            os.path.join(results_dir, f"{cif_stem}_confidence_model_0.json"),
+            os.path.join(os.path.dirname(results_dir), f"{cif_stem}_confidence_model_0.json"),
+        ]
+        conf_candidates += glob.glob(os.path.join(out_dir, "**", f"*confidence*model_0.json"), recursive=True)
+        conf_path = next((p for p in conf_candidates if os.path.exists(p)), None)
+        print(f"[boltz] conf_path={conf_path}")
+        if conf_path is not None:
             with open(conf_path) as fh:
                 conf = json.load(fh)
             raw = conf.get("plddt", [])
@@ -479,8 +487,13 @@ def call_boltz(
                 plddt_scores = list(raw)
 
         if not plddt_scores:
-            # Fallback: parse from PDB B-factor column (Boltz stores pLDDT there too)
-            plddt_scores = _parse_plddt_from_pdb(pdb_string)
+            # Fallback: Boltz-2 stores pLDDT in B-factor on 0–100 scale (not 0–1).
+            import importlib.metadata
+            _boltz_major = int(importlib.metadata.version("boltz").split(".")[0])
+            # _parse_plddt_from_pdb multiplies B-factor by 100 (ESMFold uses 0–1 B-factor).
+            # Boltz-2 stores B-factor on 0–100 scale, so that multiplication overshoots by 100x.
+            raw_bfactor = _parse_plddt_from_pdb(pdb_string)
+            plddt_scores = raw_bfactor if _boltz_major < 2 else [v / 100.0 for v in raw_bfactor]
 
         if not plddt_scores:
             raise ValueError("No pLDDT scores found in Boltz-2 output")
