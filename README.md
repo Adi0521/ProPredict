@@ -2,6 +2,54 @@
 
 Agentic protein structure prediction service. Accepts an amino acid sequence + environmental context (pH, ligands, membrane, ions), predicts the 3D structure using one or more backends, optionally refines and simulates, and returns a scored PDB.
 
+## System Overview
+
+```mermaid
+flowchart TB
+  Client["Client"] -->|sequence + context| API["FastAPI<br/>api/main.py"]
+
+  API -->|MODAL_ENABLED=False| Celery["Celery Worker"]
+  API -->|MODAL_ENABLED=True| Modal["Modal GPU (A10G)"]
+
+  Celery --> Core["_run_prediction_core()"]
+  Modal --> Core
+
+  subgraph "Step 1: Prediction"
+    Core --> ESM["ESMFold<br/>(local or remote)"]
+    Core --> Boltz["Boltz-2<br/>(multi-seed, GPU)"]
+    Core --> Stubs["RF2 / OpenFold<br/>(stubs)"]
+  end
+
+  subgraph "Step 2: Ensemble"
+    ESM --> Ensemble["Inter-model alignment<br/>+ disagreement scoring"]
+    Boltz --> Ensemble
+    Stubs --> Ensemble
+    Ensemble --> Best["Best prediction<br/>(max pLDDT)"]
+  end
+
+  subgraph "Step 3: Refinement"
+    Best --> Agent{AGENT_ENABLED?}
+    Agent -->|Yes| Claude["Claude tool-use loop<br/>analyze / relax / simulate / re-predict"]
+    Agent -->|No| Loop["Threshold loop<br/>Boltz re-seed + Rosetta relax"]
+  end
+
+  subgraph "Step 4: MD Simulation"
+    Claude --> MD
+    Loop --> MD{Membrane or<br/>ligands?}
+    MD -->|Yes + OpenMM| OpenMM["OpenMM<br/>solvate + membrane + ligands<br/>EM → NVT → NPT → Production"]
+    MD -->|Yes + GROMACS| GMX["GROMACS<br/>pdb2gmx + insane.py + GNINA<br/>EM → NVT → NPT → Production"]
+    MD -->|No| Score
+  end
+
+  OpenMM --> Score["Scoring<br/>clash detection + pLDDT<br/>accept / refine / escalate"]
+  GMX --> Score
+
+  Score --> DB["Postgres<br/>(job + result_json)"]
+  Score --> Cache["Redis<br/>(structure cache)"]
+  Score --> Webhook["Webhook callback"]
+  DB --> API
+```
+
 ## Prediction Backends
 
 | Backend | Accuracy | Hardware | Install |
