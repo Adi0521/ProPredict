@@ -2087,6 +2087,7 @@ def _run_prediction_core(request_data: Dict[str, Any]) -> Dict[str, Any]:
         # ---------------------------------------------------------------
         # Step 2: Iterative refinement loop
         # ---------------------------------------------------------------
+        refinement_iterations = 0
         # When AGENT_ENABLED the Claude agent decides tools to invoke (replaces this loop).
         if AGENT_ENABLED:
             logger.info("Running Claude agent refinement loop...")
@@ -2274,6 +2275,7 @@ def _run_prediction_core(request_data: Dict[str, Any]) -> Dict[str, Any]:
             "sequence": sequence,
             "status": "failed",
             "error_message": str(e),
+            "context": context,
             "created_at": datetime.utcnow().isoformat(),
         }
 

@@ -54,8 +54,8 @@ app = App("propredict", image=image)
 #     GROMACS_ENABLED=True \
 #     OPENMM_ENABLED=True \
 #     BOLTZ_ENABLED=True \
-#     BOLTZ_SAMPLES=1 \
-#     BOLTZ_STEPS=200 \
+#     BOLTZ_DIFFUSION_SAMPLES=1 \
+#     BOLTZ_SAMPLING_STEPS=200 \
 #     BOLTZ_USE_MSA=False \
 #     ESMFOLD_LOCAL=True \
 #     MODAL_ENABLED=True \
@@ -96,8 +96,8 @@ def test_boltz_gpu(sequence: str = "MKTAYIAKQRQISFVKSHFSRQDILDLWQYVQG") -> dict:
     """
     import os
     os.environ["BOLTZ_ENABLED"] = "True"
-    os.environ["BOLTZ_SAMPLES"] = "1"
-    os.environ["BOLTZ_STEPS"] = "200"
+    os.environ["BOLTZ_DIFFUSION_SAMPLES"] = "1"
+    os.environ["BOLTZ_SAMPLING_STEPS"] = "200"
     os.environ["BOLTZ_USE_MSA"] = "False"
 
     # Import after env vars are set so config.py picks them up

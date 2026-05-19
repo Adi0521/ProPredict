@@ -1,3 +1,6 @@
+import ipaddress
+import socket
+from urllib.parse import urlparse
 from typing import Optional, Dict, List, Any
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 from datetime import datetime
@@ -52,6 +55,26 @@ class PredictionRequest(BaseModel):
     job_timeout_seconds: int = Field(default=600, ge=60, le=3600)
     run_id: Optional[str] = None
     webhook_url: Optional[str] = None
+
+    @field_validator("webhook_url")
+    @classmethod
+    def validate_webhook_url(cls, v):
+        """Block SSRF: require HTTPS and reject private/link-local/loopback targets."""
+        if v is None:
+            return v
+        parsed = urlparse(v)
+        if parsed.scheme != "https":
+            raise ValueError("webhook_url must use HTTPS")
+        hostname = parsed.hostname
+        if not hostname:
+            raise ValueError("webhook_url must include a hostname")
+        try:
+            addr = ipaddress.ip_address(hostname)
+        except ValueError:
+            addr = ipaddress.ip_address(socket.getaddrinfo(hostname, None, socket.AF_INET)[0][4][0])
+        if addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved:
+            raise ValueError("webhook_url must not point to a private or internal address")
+        return v
 
     @field_validator("sequence")
     @classmethod

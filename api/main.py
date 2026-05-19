@@ -230,22 +230,41 @@ async def get_job_status(run_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Failed to get job status: {str(e)}")
 
 
+def _get_completed_result(run_id: str, db: Session) -> dict:
+    """Fetch the completed result dict for a job from Modal or Celery."""
+    if MODAL_ENABLED:
+        job = db.get(Job, run_id)
+        if not job or not job.modal_call_id:
+            raise HTTPException(status_code=404, detail=f"Job {run_id} not found")
+        if job.result_json:
+            return json.loads(job.result_json)
+        fc = modal.functions.FunctionCall.from_id(job.modal_call_id)
+        try:
+            return fc.get(timeout=0)
+        except TimeoutError:
+            raise HTTPException(status_code=404, detail=f"PDB not available — job is still running")
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"PDB not available — job failed: {exc}")
+    else:
+        task = predict_protein_structure.AsyncResult(run_id)
+        if task.state != "SUCCESS" or not task.result:
+            status = task.state.lower()
+            raise HTTPException(
+                status_code=404 if status == "pending" else 400,
+                detail=f"PDB not available — job status is '{status}'",
+            )
+        return task.result
+
+
 @app.get("/predict/{run_id}/pdb")
-async def get_pdb(run_id: str):
+async def get_pdb(run_id: str, db: Session = Depends(get_db)):
     """
     Download the predicted PDB structure file directly.
     Returns a .pdb file attachment ready to open in PyMOL, ChimeraX, etc.
     """
-    task = predict_protein_structure.AsyncResult(run_id)
+    result = _get_completed_result(run_id, db)
 
-    if task.state != "SUCCESS" or not task.result:
-        status = task.state.lower()
-        raise HTTPException(
-            status_code=404 if status == "pending" else 400,
-            detail=f"PDB not available — job status is '{status}'",
-        )
-
-    pdb_string = task.result.get("ensemble_result", {}).get("structure_pdb", "")
+    pdb_string = result.get("ensemble_result", {}).get("structure_pdb", "")
     if not pdb_string:
         raise HTTPException(status_code=404, detail="No PDB structure found in result")
 
@@ -258,7 +277,7 @@ async def get_pdb(run_id: str):
 
 
 @app.get("/predict/{run_id}/simulation-pdb")
-async def get_simulation_pdb(run_id: str):
+async def get_simulation_pdb(run_id: str, db: Session = Depends(get_db)):
     """
     Download the full simulation-ready PDB (post-solvation / post-docking).
 
@@ -268,16 +287,9 @@ async def get_simulation_pdb(run_id: str):
     ran successfully (OPENMM_ENABLED=True and a membrane/ligand context was
     provided, or MD was triggered).
     """
-    task = predict_protein_structure.AsyncResult(run_id)
+    result = _get_completed_result(run_id, db)
 
-    if task.state != "SUCCESS" or not task.result:
-        status = task.state.lower()
-        raise HTTPException(
-            status_code=404 if status == "pending" else 400,
-            detail=f"Simulation PDB not available — job status is '{status}'",
-        )
-
-    pdb_string = task.result.get("simulation_pdb")
+    pdb_string = result.get("simulation_pdb")
     if not pdb_string:
         raise HTTPException(
             status_code=404,
