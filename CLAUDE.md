@@ -40,14 +40,23 @@ modal deploy modal_app.py
 1. **Local/Docker** (`MODAL_ENABLED=False`): FastAPI dispatches to Celery (`orchestrator/tasks.py`), which runs the pipeline on the local worker. Redis is both Celery broker and result cache.
 2. **Modal** (`MODAL_ENABLED=True`): FastAPI dispatches to `modal_app.py::run_prediction` on a GPU (A10G). The Modal image bundles GROMACS, OpenMM, RDKit, Boltz-2, and all conda deps.
 
-**Pipeline stages in `orchestrator/tasks.py`:**
-1. Structure prediction (ESMFold local/remote, Boltz-2 if enabled)
-2. Multi-model ensemble + inter-model disagreement scoring (BioPython Superimposer)
-3. Rosetta FastRelax (optional, ROSETTA_ENABLED)
-4. GROMACS energy minimization (optional, GROMACS_ENABLED)
-5. OpenMM MD simulation with solvation, ligand docking via GNINA, membrane embedding (optional, OPENMM_ENABLED)
-6. Agentic refinement loop via Claude API (optional, AGENT_ENABLED) — LLM decides whether to refine/escalate
-7. Post-processing: scoring, clash detection, decision (accept/refine/escalate based on pLDDT thresholds)
+**Orchestrator modules:**
+- `orchestrator/tasks.py` — Celery app, caching, webhook, main pipeline (`_run_prediction_core`), refinement loop
+- `orchestrator/backends/esmfold.py` — ESMFold local + remote, pLDDT parsing
+- `orchestrator/backends/boltz.py` — Boltz-2 CLI wrapper, CIF-to-PDB conversion
+- `orchestrator/backends/stubs.py` — RoseTTAFold2/OpenFold placeholders
+- `orchestrator/ensemble.py` — multi-model alignment + inter-model disagreement scoring
+- `orchestrator/simulation.py` — Rosetta FastRelax, GROMACS EM/MD, OpenMM, protonation (PropKa)
+- `orchestrator/scoring.py` — clash detection, post-processing decision logic
+- `orchestrator/agent.py` — Claude tool-use refinement loop + tool handlers
+
+**Pipeline stages (orchestrated by `tasks.py`):**
+1. Structure prediction (`backends/esmfold.py`, `backends/boltz.py`)
+2. Multi-model ensemble + disagreement scoring (`ensemble.py`)
+3. Iterative refinement: Boltz-2 re-seeds + Rosetta relax (`simulation.py`)
+4. MD simulation: GROMACS or OpenMM with membrane/ligand support (`simulation.py`)
+5. Agentic refinement via Claude API (`agent.py`, optional, AGENT_ENABLED)
+6. Post-processing: scoring, clash detection, decision (`scoring.py`)
 
 **Feature flags in `config.py`** gate every optional tool. Each tool (PyRosetta, GROMACS, OpenMM, Boltz-2, GNINA, Claude agent) must be installed separately and enabled via `.env`.
 

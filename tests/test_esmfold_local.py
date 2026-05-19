@@ -32,14 +32,14 @@ EXPECTED_PLDDT = [85.0, 72.0]
 # ---------------------------------------------------------------------------
 
 def test_parse_plddt_from_pdb():
-    from orchestrator.tasks import _parse_plddt_from_pdb
+    from orchestrator.backends.esmfold import _parse_plddt_from_pdb
 
     scores = _parse_plddt_from_pdb(SAMPLE_PDB)
     assert scores == EXPECTED_PLDDT
 
 
 def test_parse_plddt_empty_pdb():
-    from orchestrator.tasks import _parse_plddt_from_pdb
+    from orchestrator.backends.esmfold import _parse_plddt_from_pdb
 
     assert _parse_plddt_from_pdb("") == []
     assert _parse_plddt_from_pdb("HETATM  1  C   LIG A   1\n") == []
@@ -68,14 +68,14 @@ def _mock_torch():
 
 
 def test_call_esmfold_local_returns_structure_prediction():
-    from orchestrator.tasks import call_esmfold_local
+    from orchestrator.backends.esmfold import call_esmfold_local
 
     mock_model = _make_mock_model(SAMPLE_PDB)
     mock_tokenizer = MagicMock(return_value={"input_ids": MagicMock(to=lambda d: MagicMock())})
 
     with patch.dict(sys.modules, {"torch": _mock_torch()}), \
-         patch("orchestrator.tasks._esmfold_model", mock_model), \
-         patch("orchestrator.tasks._esmfold_tokenizer", mock_tokenizer):
+         patch("orchestrator.backends.esmfold._esmfold_model", mock_model), \
+         patch("orchestrator.backends.esmfold._esmfold_tokenizer", mock_tokenizer):
         result = call_esmfold_local("MKTAYIAK", seed=0)
 
     assert result.model_name == "esmfold_local"
@@ -86,14 +86,14 @@ def test_call_esmfold_local_returns_structure_prediction():
 
 
 def test_call_esmfold_local_raises_on_empty_pdb():
-    from orchestrator.tasks import call_esmfold_local
+    from orchestrator.backends.esmfold import call_esmfold_local
 
     mock_model = _make_mock_model("REMARK no atoms\n")
     mock_tokenizer = MagicMock(return_value={"input_ids": MagicMock(to=lambda d: MagicMock())})
 
     with patch.dict(sys.modules, {"torch": _mock_torch()}), \
-         patch("orchestrator.tasks._esmfold_model", mock_model), \
-         patch("orchestrator.tasks._esmfold_tokenizer", mock_tokenizer):
+         patch("orchestrator.backends.esmfold._esmfold_model", mock_model), \
+         patch("orchestrator.backends.esmfold._esmfold_tokenizer", mock_tokenizer):
         with pytest.raises(ValueError, match="No CA atoms"):
             call_esmfold_local("MKTAYIAK")
 
@@ -103,20 +103,20 @@ def test_call_esmfold_local_raises_on_empty_pdb():
 # ---------------------------------------------------------------------------
 
 def test_dispatch_routes_to_local_when_flag_true():
-    with patch("orchestrator.tasks.ESMFOLD_LOCAL", True), \
-         patch("orchestrator.tasks.call_esmfold_local") as mock_local, \
-         patch("orchestrator.tasks._call_esmfold_remote") as mock_remote:
-        from orchestrator.tasks import call_esmfold_api
+    with patch("orchestrator.backends.esmfold.ESMFOLD_LOCAL", True), \
+         patch("orchestrator.backends.esmfold.call_esmfold_local") as mock_local, \
+         patch("orchestrator.backends.esmfold._call_esmfold_remote") as mock_remote:
+        from orchestrator.backends.esmfold import call_esmfold_api
         call_esmfold_api("MKTAYIAK", seed=1)
         mock_local.assert_called_once_with("MKTAYIAK", 1)
         mock_remote.assert_not_called()
 
 
 def test_dispatch_routes_to_remote_when_flag_false():
-    with patch("orchestrator.tasks.ESMFOLD_LOCAL", False), \
-         patch("orchestrator.tasks.call_esmfold_local") as mock_local, \
-         patch("orchestrator.tasks._call_esmfold_remote") as mock_remote:
-        from orchestrator.tasks import call_esmfold_api
+    with patch("orchestrator.backends.esmfold.ESMFOLD_LOCAL", False), \
+         patch("orchestrator.backends.esmfold.call_esmfold_local") as mock_local, \
+         patch("orchestrator.backends.esmfold._call_esmfold_remote") as mock_remote:
+        from orchestrator.backends.esmfold import call_esmfold_api
         call_esmfold_api("MKTAYIAK", seed=0)
         mock_remote.assert_called_once_with("MKTAYIAK", 0)
         mock_local.assert_not_called()
@@ -136,7 +136,7 @@ def test_call_esmfold_local_integration():
     except Exception:
         pytest.skip("transformers not importable (missing or incompatible huggingface_hub)")
 
-    from orchestrator.tasks import call_esmfold_local
+    from orchestrator.backends.esmfold import call_esmfold_local
 
     result = call_esmfold_local("MKTAYIAK", seed=0)
     assert result.model_name == "esmfold_local"

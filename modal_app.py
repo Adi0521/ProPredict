@@ -101,7 +101,7 @@ def test_boltz_gpu(sequence: str = "MKTAYIAKQRQISFVKSHFSRQDILDLWQYVQG") -> dict:
     os.environ["BOLTZ_USE_MSA"] = "False"
 
     # Import after env vars are set so config.py picks them up
-    from orchestrator.tasks import call_boltz
+    from orchestrator.backends.boltz import call_boltz
 
     print(f"Running Boltz-2 on sequence of length {len(sequence)}...")
     result = call_boltz(sequence, seed=0)

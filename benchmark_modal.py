@@ -240,7 +240,7 @@ def benchmark_one(target: dict) -> dict:
         "BOLTZ_STEPS": "200",
         "BOLTZ_USE_MSA": "False",
     })
-    from orchestrator.tasks import call_boltz
+    from orchestrator.backends.boltz import call_boltz
 
     pdb_id, chain = target["pdb_id"], target["chain"]
 

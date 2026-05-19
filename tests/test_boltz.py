@@ -133,7 +133,7 @@ def test_yaml_multiple_ligands():
 # ---------------------------------------------------------------------------
 
 def test_call_boltz_raises_on_missing_smiles():
-    from orchestrator.tasks import call_boltz
+    from orchestrator.backends.boltz import call_boltz
 
     ctx = {"ligands": [{"name": "mystery", "smiles": None}]}
     with pytest.raises(ValueError, match="no SMILES"):
@@ -141,7 +141,7 @@ def test_call_boltz_raises_on_missing_smiles():
 
 
 def test_call_boltz_raises_on_empty_smiles():
-    from orchestrator.tasks import call_boltz
+    from orchestrator.backends.boltz import call_boltz
 
     ctx = {"ligands": [{"name": "empty", "smiles": ""}]}
     with pytest.raises(ValueError, match="no SMILES"):
@@ -156,7 +156,7 @@ def test_cif_to_pdb_produces_atom_records(tmp_path):
     cif_file = tmp_path / "test.cif"
     cif_file.write_text(SAMPLE_CIF)
 
-    from orchestrator.tasks import _cif_to_pdb
+    from orchestrator.backends.boltz import _cif_to_pdb
     pdb_string = _cif_to_pdb(str(cif_file))
 
     assert "ATOM" in pdb_string
@@ -193,7 +193,7 @@ def _mock_subprocess_success():
 
 
 def test_call_boltz_returns_structure_prediction(tmp_path):
-    from orchestrator.tasks import call_boltz
+    from orchestrator.backends.boltz import call_boltz
 
     def fake_run(cmd, **kwargs):
         # Locate the out_dir arg from the command list and populate it
@@ -202,8 +202,7 @@ def test_call_boltz_returns_structure_prediction(tmp_path):
         _make_fake_results_dir(out_dir, SAMPLE_CONFIDENCE)
         return _mock_subprocess_success()
 
-    with patch("orchestrator.tasks.subprocess.run", side_effect=fake_run), \
-         patch("orchestrator.tasks.BOLTZ_ENABLED", True):
+    with patch("orchestrator.backends.boltz.subprocess.run", side_effect=fake_run):
         result = call_boltz(SAMPLE_SEQUENCE, seed=0)
 
     assert result.model_name == "boltz2"
@@ -214,7 +213,7 @@ def test_call_boltz_returns_structure_prediction(tmp_path):
 
 
 def test_call_boltz_parses_affinity(tmp_path):
-    from orchestrator.tasks import call_boltz
+    from orchestrator.backends.boltz import call_boltz
 
     ctx = {"ligands": [{"name": "ATP", "smiles": "C1=NC2=C(N1)N=CN=C2N"}]}
 
@@ -224,33 +223,32 @@ def test_call_boltz_parses_affinity(tmp_path):
         _make_fake_results_dir(out_dir, SAMPLE_CONFIDENCE, affinity_data=SAMPLE_AFFINITY)
         return _mock_subprocess_success()
 
-    with patch("orchestrator.tasks.subprocess.run", side_effect=fake_run), \
-         patch("orchestrator.tasks.BOLTZ_ENABLED", True):
+    with patch("orchestrator.backends.boltz.subprocess.run", side_effect=fake_run):
         result = call_boltz(SAMPLE_SEQUENCE, context=ctx, seed=0)
 
     assert result.affinity_score == pytest.approx(-8.42)
 
 
 def test_call_boltz_raises_on_subprocess_failure():
-    from orchestrator.tasks import call_boltz
+    from orchestrator.backends.boltz import call_boltz
 
     proc = MagicMock()
     proc.returncode = 1
     proc.stderr = "CUDA out of memory"
 
-    with patch("orchestrator.tasks.subprocess.run", return_value=proc):
+    with patch("orchestrator.backends.boltz.subprocess.run", return_value=proc):
         with pytest.raises(RuntimeError, match="Boltz-2 failed"):
             call_boltz(SAMPLE_SEQUENCE)
 
 
 def test_call_boltz_raises_on_missing_cif():
-    from orchestrator.tasks import call_boltz
+    from orchestrator.backends.boltz import call_boltz
 
     def fake_run(cmd, **kwargs):
         # Write nothing — simulate missing CIF
         return _mock_subprocess_success()
 
-    with patch("orchestrator.tasks.subprocess.run", side_effect=fake_run):
+    with patch("orchestrator.backends.boltz.subprocess.run", side_effect=fake_run):
         with pytest.raises(FileNotFoundError, match="CIF output not found"):
             call_boltz(SAMPLE_SEQUENCE)
 
@@ -273,7 +271,6 @@ def test_boltz_appended_to_predictions_when_enabled():
 
     with patch("orchestrator.tasks.BOLTZ_ENABLED", True), \
          patch("orchestrator.tasks.call_boltz", return_value=fake_pred) as mock_boltz:
-        # Import after patching so the module-level flag is seen
         from orchestrator.tasks import call_boltz as cb
         result = cb("MKTAYIAK", context={}, seed=0)
 
@@ -297,7 +294,7 @@ def test_call_boltz_integration():
     except Exception:
         pytest.skip("boltz CLI not found — install with: pip install git+https://github.com/jwohlwend/boltz")
 
-    from orchestrator.tasks import call_boltz
+    from orchestrator.backends.boltz import call_boltz
 
     result = call_boltz(SAMPLE_SEQUENCE, seed=0)
     assert result.model_name == "boltz2"
@@ -318,7 +315,7 @@ def test_call_boltz_affinity_integration():
     except Exception:
         pytest.skip("boltz CLI not found")
 
-    from orchestrator.tasks import call_boltz
+    from orchestrator.backends.boltz import call_boltz
 
     ctx = {"ligands": [{"name": "ethanol", "smiles": "CCO"}]}
     result = call_boltz(SAMPLE_SEQUENCE, context=ctx, seed=0)
