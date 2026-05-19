@@ -249,7 +249,7 @@ def test_call_boltz_raises_on_missing_cif():
         return _mock_subprocess_success()
 
     with patch("orchestrator.backends.boltz.subprocess.run", side_effect=fake_run):
-        with pytest.raises(FileNotFoundError, match="CIF output not found"):
+        with pytest.raises(FileNotFoundError, match="Boltz-2 produced no"):
             call_boltz(SAMPLE_SEQUENCE)
 
 

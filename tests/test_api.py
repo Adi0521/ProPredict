@@ -43,7 +43,7 @@ def test_predict_sequence_too_long():
         "priority": "fast",
     }
     response = client.post("/predict", json=payload)
-    assert response.status_code == 400
+    assert response.status_code == 422  # Pydantic max_length validation
 
 def test_get_job_status():
     """Test retrieving job status."""

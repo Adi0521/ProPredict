@@ -83,8 +83,10 @@ services:
       - GROMACS_BIN=gmx
       - OPENMM_ENABLED=True
     depends_on:
-      - redis
-      - postgres
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
     volumes:
       - .:/app
     networks:

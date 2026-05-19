@@ -1,141 +1,193 @@
 # ProPredict
-Protein Modeling Service implementing Agentic AI Framework
 
-Uses ESMFold (local, CPU-friendly), PyRosetta, and GROMACS with an agentic orchestrator for accurate protein structure prediction.
-Runs on any platform (ARM64 or x86). Docker images auto-detect the host architecture.
+Agentic protein structure prediction service. Accepts an amino acid sequence + environmental context (pH, ligands, membrane, ions), predicts the 3D structure using one or more backends, optionally refines and simulates, and returns a scored PDB.
 
-## Local ESMFold Setup
+## Prediction Backends
 
-By default ProPredict runs ESMFold locally via HuggingFace Transformers — no external API key required.
+| Backend | Accuracy | Hardware | Install |
+|---------|----------|----------|---------|
+| **ESMFold** (local) | Good | CPU / MPS / CUDA | Included in `requirements.txt` |
+| **ESMFold** (remote) | Good | None (API call) | Set `ESMFOLD_LOCAL=False` |
+| **Boltz-2** | AlphaFold3-class | GPU (A10G+) | `pip install git+https://github.com/jwohlwend/boltz` |
+| RoseTTAFold2 | Stub | GPU | Not yet implemented |
+| OpenFold | Stub | GPU | Not yet implemented |
+
+When multiple backends are enabled, the pipeline runs all of them with multi-seed sampling and picks the best prediction by pLDDT. Inter-model structural disagreement is computed via BioPython Superimposer.
+
+## Pipeline
+
+```
+Sequence + Context
+    |
+    v
+1. Structure prediction (ESMFold, Boltz-2)
+2. Multi-model ensemble + disagreement scoring
+3. Iterative refinement (Boltz-2 re-seeds + Rosetta relax)
+4. MD simulation (OpenMM or GROMACS, with membrane/ligand support)
+5. Agentic refinement via Claude API (optional)
+6. Post-processing: scoring, clash detection, accept/refine/escalate
+    |
+    v
+Scored PDB + metrics
+```
+
+## Quick Start
 
 ```bash
-# Install Python deps (includes torch + transformers)
+# Install dependencies
 pip install -r requirements.txt
 
-# Copy and configure env
+# Configure environment
 cp .env.example .env
-# ESMFOLD_LOCAL=True is the default — no changes needed for local inference
+# Edit .env as needed — defaults work for local ESMFold inference
 
-# Start all services
+# Start all services (Postgres, Redis, API, Celery worker, Flower)
 docker compose up
 ```
 
-On first run the worker downloads the `facebook/esmfold_v1` weights (~2 GB) and caches them.
-Set `ESMFOLD_LOCAL=False` to fall back to the public `api.esmatlas.com` endpoint instead.
+On first run, the Celery worker downloads the `facebook/esmfold_v1` weights (~2 GB) and caches them.
 
-# Architecture & Implementation Diagram — ProPredict
+### Submit a prediction
 
-Below is a compact, runnable design for an agentic protein-modeling service that composes pretrained tools (AlphaFold, Rosetta, MD engines) and makes context-aware decisions.
-
-## High-level architecture (Mermaid)
-```mermaid
-flowchart TB
-  subgraph Ingest
-    U["User / Lab / LIMS"] -->|sequence + context| API["API Gateway"]
-    Sensors["Lab Sensors"] -->|env params| API
-  end
-
-  API["API Gateway"] --> Agent["Agent Layer (Planner / Policy)"]
-  Agent --> Orchestrator["Orchestrator / Workflow Engine"]
-  Orchestrator --> Featurizer["Featurizer / MSA & Template Prep"]
-  Featurizer --> StoreFeatures["Features Cache / DB"]
-  Orchestrator --> AF["AlphaFold Service"]
-  Orchestrator --> RS["Rosetta / Relax"]
-  Orchestrator --> MD["MD (OpenMM / GROMACS)"]
-  AF --> Post["Post-process & Scoring"]
-  RS --> Post
-  MD --> Post
-  Post --> Ensemble["Ensemble / Uncertainty Estimator"]
-  Ensemble --> Evaluator["Constraint & Score Evaluator"]
-  Evaluator --> Decision["Agent Decision: accept / refine / escalate"]
-  Decision -->|refine| Orchestrator
-  Decision -->|notify| UI["Dashboard / Reports"]
-  Decision --> Artifacts["Object Store"]
-  Artifacts --> API
-
-  subgraph Infra
-    Orchestrator --> Queue["Job Queue (Argo/Celery)"]
-    AF --> GPU["GPU Pool"]
-    MD --> CPU_GPU["CPU/GPU Pool"]
-    Artifacts --> S3["S3 / MinIO"]
-    DB["Postgres / Metadata"] --> Agent
-  end
+```bash
+curl -X POST http://localhost:8000/predict \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sequence": "MKTAYIAKQRQISFVKSHFSRQDILDLWQYVQG",
+    "context": {"pH": 7.4, "temperature_c": 25},
+    "priority": "fast"
+  }'
 ```
 
-## Core components
-- API Gateway: accept sequence + structured context (pH, temp, ligands, membrane, mutations, constraints), auth, webhooks.
-- Agent Layer (planner/policy): inspects input + history, selects pipeline and stopping criteria. Implements rules and learned surrogate gating.
-- Orchestrator: schedules tasks, handles retries, caches results, parallelizes runs.
-- Featurizer: builds MSAs, template picks, constraint files for Rosetta/MD per context.
-- Model services: containerized AlphaFold inference, Rosetta relax/refine, optional MD engines (OpenMM/GROMACS).
-- Post-processing: structural scoring (pLDDT, TM-score surrogate), clash detection, energy eval, ML-based uncertainty.
-- Ensemble & Uncertainty: combine predictors; compute region-level uncertainty; decide refinements.
-- Storage & provenance: S3 for artifacts; Postgres for metadata, audit trail.
-- UI / API: results visualization (NGL/Mol*), run logs, parameter editing.
+### Poll for results
 
-## Dataflow (step-by-step)
-1. Client posts sequence + context to API.
-2. Agent policy chooses pipeline variant (fast vs. accurate) based on context and budget.
-3. Orchestrator runs Featurizer (MSA, templates) — cached by hash(context+seq).
-4. Run AlphaFold (multiple seeds/settings if needed).
-5. Score predictions; if low confidence or constraints unmet, call Rosetta relax or guided refinement.
-6. If dynamics required, run short MD to validate flexible regions.
-7. Ensemble outputs; compute uncertainty; Agent decides to accept, refine, or flag for human review.
-8. Store artifacts and metadata; notify user via webhook/UI.
+```bash
+curl http://localhost:8000/predict/<run_id>
+curl http://localhost:8000/predict/<run_id>/status
+curl http://localhost:8000/predict/<run_id>/pdb          # download PDB file
+curl http://localhost:8000/predict/<run_id>/simulation-pdb  # post-solvation system
+```
 
-## Example API schema
+## Architecture
+
+```
+Client --> FastAPI (api/main.py)
+               |
+       +-------+-------+
+       |               |
+   Celery task    Modal function
+   (local dev)    (GPU cloud)
+       |               |
+       +-------+-------+
+               |
+    _run_prediction_core()
+               |
+    orchestrator pipeline
+               |
+    Postgres (results) + Redis (cache)
+```
+
+**Two execution modes:**
+- **Local/Docker** (`MODAL_ENABLED=False`): FastAPI dispatches to Celery. Redis is both broker and result cache.
+- **Modal** (`MODAL_ENABLED=True`): FastAPI dispatches to `modal_app.py::run_prediction` on a GPU (A10G).
+
+**Orchestrator modules:**
+
+| Module | Responsibility |
+|--------|---------------|
+| `orchestrator/tasks.py` | Celery app, caching, webhook, main pipeline, refinement loop |
+| `orchestrator/backends/esmfold.py` | ESMFold local + remote, pLDDT parsing |
+| `orchestrator/backends/boltz.py` | Boltz-2 CLI wrapper, CIF-to-PDB conversion |
+| `orchestrator/backends/stubs.py` | RoseTTAFold2 / OpenFold placeholders |
+| `orchestrator/ensemble.py` | Multi-model alignment + disagreement scoring |
+| `orchestrator/simulation.py` | Rosetta FastRelax, GROMACS EM/MD, OpenMM, protonation (PropKa) |
+| `orchestrator/scoring.py` | Clash detection, post-processing decision logic |
+| `orchestrator/agent.py` | Claude tool-use refinement loop + tool handlers |
+| `orchestrator/ligands.py` | RDKit conformer gen, GNINA/Vina docking, ACPYPE/OpenFF params |
+| `orchestrator/membrane.py` | insane.py (GROMACS) and OpenMM CHARMM36m membrane embedding |
+
+## Environmental Context
+
+The `context` field supports:
+
 ```json
 {
-  "sequence": "MKTAYIAKQRQISFVKSHFSRQDILDLWQYVQG",
-  "context": {
-    "pH": 7.4,
-    "temperature_c": 25,
-    "ions": {"Na+": 150, "Cl-": 150},
-    "membrane": {"type":"POPC","span":[20,45]},
-    "ligands": [{"name":"ATP","binding_site":[45,46]}],
-    "mutations": [{"pos":12,"from":"A","to":"V"}],
-    "priority": "accurate"
-  },
-  "callbacks": {"webhook":"https://..."},
-  "run_id": "optional-client-id-123"
+  "pH": 7.4,
+  "temperature_c": 25,
+  "ions": {"Na+": 150, "Cl-": 150},
+  "membrane": {"type": "POPC", "span": [20, 45]},
+  "ligands": [{"name": "ATP", "smiles": "...", "binding_site": [45, 46]}],
+  "mutations": [{"pos": 12, "from": "A", "to": "V"}]
 }
 ```
 
-## Agent policies (examples)
-- Fast policy: run AlphaFold single-pass; if mean pLDDT < 70 -> run Rosetta relax; else return.
-- Accurate policy: run AlphaFold with templates & multiple seeds, ensemble + Rosetta; if ensemble variance > threshold -> run 10 ns MD for flagged regions.
-- Constraint-driven: if experimental crosslinks present -> enforce constraints during Rosetta/MD and re-evaluate.
+- **pH** drives PropKa3 protonation state assignment (HIS/ASP/GLU) before MD
+- **Membrane** triggers insane.py (GROMACS) or CHARMM36m addMembrane (OpenMM)
+- **Ligands** with SMILES trigger RDKit conformer generation, GNINA docking, and force-field parameterization
+- **Temperature** sets thermostat for NVT/NPT equilibration and production MD
 
-## Orchestration & caching rules
-- Cache key: sha256(sequence + sorted(context JSON) + pipeline config).
-- Cache MSAs and templates separately to reuse across similar sequences.
-- Use job queue with priority weighting from context.priority.
+## Optional Tools
 
-## Scoring & decision thresholds (suggested)
-- Accept if mean pLDDT > 80 and no steric clashes and energy < threshold.
-- Refine if mean pLDDT 60–80 or region pLDDT variance high.
-- Escalate to human if mean pLDDT < 60 or constraints violated.
+All optional tools are gated by feature flags in `.env`. Enable after installing:
 
-## Deployment & infra (minimal to production)
-- Local dev: Python + Celery/Redis + Dockerized AlphaFold minimal or remote AF API.
-- Small cluster: Kubernetes + Argo workflows, GPU node pool, MinIO, Postgres.
-- Production: K8s autoscaling for GPUs, S3, Prometheus + Grafana, RBAC, audit logs.
+| Tool | Flag | Install |
+|------|------|---------|
+| PyRosetta | `ROSETTA_ENABLED=True` | `conda install -c rosettacommons pyrosetta` |
+| GROMACS | `GROMACS_ENABLED=True` | `brew install gromacs` (Mac) / `apt-get install gromacs` |
+| OpenMM | `OPENMM_ENABLED=True` | `conda install -c conda-forge openmm` |
+| Boltz-2 | `BOLTZ_ENABLED=True` | `pip install git+https://github.com/jwohlwend/boltz` (GPU required) |
+| GNINA | `GNINA_BIN=gnina` | Download from [gnina releases](https://github.com/gnina/gnina/releases) |
+| Claude agent | `AGENT_ENABLED=True` | `pip install anthropic` + set `ANTHROPIC_API_KEY` |
 
-## Roadmap / milestones
-1. ~~MVP: API + orchestrator + remote ESMFold API + caching + basic agent policy.~~ DONE
-2. ~~Migrate to local ESMFold inference (CPU/MPS/CUDA, no external API required).~~ DONE
-3. Add Boltz-2 as high-accuracy GPU backend.
-4. Add Chai-1 specialist backend for experimental constraints.
-5. Implement UI with NGL, run history, and webhooks.
-6. Implement surrogate gating model and active learning with experimental data.
+## Modal (GPU Cloud)
 
-## TODO
-- Scaffold API endpoint + orchestrator skeleton (I can generate a Python Flask/FastAPI + Celery scaffold).
-- Create container spec for AlphaFold inference or integrate EBI AF API with retries.
-- Implement feature hashing & cache table in Postgres.
+For GPU-accelerated predictions (Boltz-2, ESMFold on CUDA):
 
-Checklist for me to scaffold next:
-- Scaffold FastAPI + Celery orchestrator
-- Generate example feature hashing + cache implementation
-- Create minimal AlphaFold-call adapter with retries
-- Produce mermaid sequence diagram for a specific pipeline
+```bash
+# GPU smoke test
+modal run modal_app.py::test_boltz_gpu --sequence MKTAYIAK
+
+# Benchmark against CASP15 targets
+modal run benchmark_modal.py
+
+# Deploy the full API + worker
+modal deploy modal_app.py
+```
+
+Configure Modal secrets:
+```bash
+modal secret create propredict-secrets \
+  BOLTZ_ENABLED=True \
+  BOLTZ_DIFFUSION_SAMPLES=1 \
+  BOLTZ_SAMPLING_STEPS=200 \
+  ESMFOLD_LOCAL=True \
+  MODAL_ENABLED=True \
+  GROMACS_ENABLED=True \
+  OPENMM_ENABLED=True
+```
+
+## Testing
+
+```bash
+# Unit tests (no GPU, no Postgres, no Redis needed)
+pytest tests/test_boltz.py -k "not integration"
+pytest tests/test_esmfold_local.py -k "not integration"
+
+# API tests (need Postgres running)
+pytest tests/test_api.py
+
+# Integration tests (need GPU + tools installed)
+pytest tests/test_boltz.py -k "integration"
+```
+
+## Agent Decision Logic
+
+When `AGENT_ENABLED=True`, a Claude tool-use loop assesses the predicted structure and decides:
+
+- **Accept**: mean pLDDT >= 75, <= 2 clashes, no special context
+- **Refine**: run Rosetta relax, re-predict with Boltz-2, or run MD simulation
+- **Escalate**: flag for human review when quality is too low or backends unavailable
+
+The agent has access to tools: `analyze_structure`, `run_rosetta_relax`, `run_simulation`, `run_boltz_prediction`, `accept_structure`, `escalate_structure`.
+
+When `AGENT_ENABLED=False`, a threshold-based policy makes the same decisions automatically.

@@ -61,9 +61,6 @@ async def predict(request: PredictionRequest, db: Session = Depends(get_db)):
         run_id = request.run_id or str(uuid.uuid4())
         logger.info(f"Received prediction request {run_id} for sequence: {request.sequence[:30]}...")
 
-        if len(request.sequence) > 2000:
-            raise HTTPException(status_code=400, detail="Sequence too long (max 2000 residues)")
-
         # Persist job metadata to Postgres
         now = datetime.utcnow()
         job = Job(
@@ -105,7 +102,7 @@ async def predict(request: PredictionRequest, db: Session = Depends(get_db)):
         raise
     except Exception as e:
         logger.error(f"Error submitting prediction request: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to submit prediction: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to submit prediction")
 
 
 @app.get("/predict/{run_id}", response_model=PredictionResponse)
@@ -188,7 +185,7 @@ async def get_prediction(run_id: str, db: Session = Depends(get_db)):
         raise
     except Exception as e:
         logger.error(f"Error retrieving results for {run_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve results: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve results")
 
 
 @app.get("/predict/{run_id}/status", response_model=JobStatus)
@@ -227,7 +224,7 @@ async def get_job_status(run_id: str, db: Session = Depends(get_db)):
         raise
     except Exception as e:
         logger.error(f"Error getting status for {run_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to get job status: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get job status")
 
 
 def _get_completed_result(run_id: str, db: Session) -> dict:
