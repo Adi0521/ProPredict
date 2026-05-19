@@ -4,6 +4,7 @@ import logging
 import hashlib
 import json
 import os
+import random
 import shutil
 import subprocess
 import tempfile
@@ -40,6 +41,8 @@ from config import (
     AGENT_MODEL,
     AGENT_MAX_ITERATIONS,
     ENSEMBLE_NUM_SEEDS,
+    REFINEMENT_MAX_ITERATIONS,
+    REFINEMENT_PLDDT_PLATEAU_DELTA,
     REDIS_URL,
     CACHE_TTL,
     REDIS_CACHE_PREFIX,
@@ -461,7 +464,10 @@ def call_boltz(
         pdb_string = _cif_to_pdb(cif_path)
 
         import importlib.metadata
-        _boltz_major = int(importlib.metadata.version("boltz").split(".")[0])
+        try:
+            _boltz_major = int(importlib.metadata.version("boltz").split(".")[0])
+        except importlib.metadata.PackageNotFoundError:
+            _boltz_major = 2
 
         # pLDDT from confidence JSON — Boltz-2 names it confidence_{stem}_model_0.json
         # inside a per-stem subdirectory; use glob so layout changes don't break us.
@@ -1633,12 +1639,22 @@ _AGENT_TOOLS = [
     {
         "name": "run_boltz_prediction",
         "description": (
-            "Re-predict the structure using Boltz-2, which gives AlphaFold3-class accuracy and "
-            "supports ligand co-folding with binding affinity estimation. Use when ESMFold pLDDT "
-            "is low, inter-model disagreement is high, or ligands are present. "
+            "Re-predict the structure using Boltz-2 with multiple random seeds (3-5), which gives "
+            "AlphaFold3-class accuracy and supports ligand co-folding with binding affinity estimation. "
+            "Runs 3-5 seeds with random values, picks the best by pLDDT, and reports the spread. "
+            "Use when ESMFold pLDDT is low, inter-model disagreement is high, or ligands are present. "
             "Requires BOLTZ_ENABLED=True."
         ),
-        "input_schema": {"type": "object", "properties": {}, "required": []},
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "num_seeds": {
+                    "type": "integer",
+                    "description": "Number of random seeds to try (default 3, max 5)",
+                }
+            },
+            "required": [],
+        },
     },
     {
         "name": "accept_structure",
@@ -1772,20 +1788,37 @@ def _execute_agent_tool(
     if tool_name == "run_boltz_prediction":
         if not BOLTZ_ENABLED:
             return json.dumps({"error": "BOLTZ_ENABLED=False — cannot run Boltz-2"})
+        num_seeds = min(int(tool_input.get("num_seeds", 3)), 5)
+        num_seeds = max(num_seeds, 3)
+        seeds = [random.randint(0, 2**31 - 1) for _ in range(num_seeds)]
         try:
-            boltz_pred = call_boltz(
-                state["sequence"], context=state["context"], seed=0
-            )
-            state["current_pdb"] = boltz_pred.structure_pdb
-            state["plddt_scores"] = boltz_pred.plddt_scores
-            state["mean_plddt"] = boltz_pred.mean_plddt
+            preds: List[StructurePrediction] = []
+            for s in seeds:
+                try:
+                    pred = call_boltz(state["sequence"], context=state["context"], seed=s)
+                    preds.append(pred)
+                    logger.info(f"[agent/boltz2] seed={s}: mean pLDDT={pred.mean_plddt:.2f}")
+                except (RuntimeError, FileNotFoundError, ValueError) as e:
+                    logger.warning(f"[agent/boltz2] seed={s} failed: {e}")
+            if not preds:
+                return json.dumps({"error": "All Boltz-2 seeds failed"})
+            best = max(preds, key=lambda p: p.mean_plddt)
+            state["current_pdb"] = best.structure_pdb
+            state["plddt_scores"] = best.plddt_scores
+            state["mean_plddt"] = best.mean_plddt
+            all_plddts = [round(p.mean_plddt, 2) for p in preds]
             result: Dict[str, Any] = {
                 "status": "completed",
                 "model_name": "boltz2",
-                "mean_plddt": round(boltz_pred.mean_plddt, 2),
+                "seeds_tried": num_seeds,
+                "seeds_succeeded": len(preds),
+                "best_mean_plddt": round(best.mean_plddt, 2),
+                "all_mean_plddts": all_plddts,
+                "plddt_spread": round(max(all_plddts) - min(all_plddts), 2),
+                "best_seed": best.seed,
             }
-            if boltz_pred.affinity_score is not None:
-                result["affinity_kcal_mol"] = round(boltz_pred.affinity_score, 3)
+            if best.affinity_score is not None:
+                result["affinity_kcal_mol"] = round(best.affinity_score, 3)
             return json.dumps(result)
         except Exception as e:
             return json.dumps({"error": str(e)})
@@ -1950,7 +1983,17 @@ def run_agent_refinement(
 
 def _run_prediction_core(request_data: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Core prediction logic: ESMFold → (optional) Rosetta relax → (optional) GROMACS/OpenMM.
+    Core prediction logic with multi-seed sampling and iterative refinement.
+
+    Pipeline:
+      1. Initial multi-seed predictions (ESMFold + Boltz-2 with ENSEMBLE_NUM_SEEDS seeds each)
+      2. Score best prediction → if "accept", skip refinement
+      3. Iterative refinement loop (up to REFINEMENT_MAX_ITERATIONS):
+         a. Try new Boltz-2 seed (stochastic → new structure each time)
+         b. If Rosetta enabled, relax the best structure so far
+         c. Re-score; exit early on accept or pLDDT plateau
+      4. Post-refinement: MD simulation (OpenMM/GROMACS) if membrane/ligand context present
+
     Called by both the Celery task (local dev) and the Modal function (production).
     """
     run_id = request_data.get("run_id", str(uuid.uuid4()))
@@ -1972,14 +2015,17 @@ def _run_prediction_core(request_data: Dict[str, Any]) -> Dict[str, Any]:
         except Exception as e:
             logger.warning(f"Cache lookup failed: {e}")
 
-        # Step 1: ESMFold — run ENSEMBLE_NUM_SEEDS times
+        # ---------------------------------------------------------------
+        # Step 1: Initial multi-seed predictions
+        # ---------------------------------------------------------------
         predictions: List[StructurePrediction] = []
-        for seed in range(ENSEMBLE_NUM_SEEDS):
-            p = call_esmfold_api(sequence, seed=seed)
-            predictions.append(p)
-            logger.info(f"[esmfold] seed={seed}: mean pLDDT={p.mean_plddt:.2f}")
 
-        # Step 1b: Additional model backends (Stage E)
+        # ESMFold (deterministic — one call suffices regardless of ENSEMBLE_NUM_SEEDS)
+        p = call_esmfold_api(sequence, seed=0)
+        predictions.append(p)
+        logger.info(f"[esmfold] mean pLDDT={p.mean_plddt:.2f}")
+
+        # Additional model backends (Stage E stubs)
         if ROSETTAFOLD_ENABLED:
             try:
                 rf2_pred = call_rosettafold2(sequence)
@@ -1996,23 +2042,27 @@ def _run_prediction_core(request_data: Dict[str, Any]) -> Dict[str, Any]:
             except (RuntimeError, NotImplementedError) as e:
                 logger.warning(f"OpenFold skipped: {e}")
 
+        # Boltz-2 multi-seed: random seeds → stochastic diffusion gives different structures
         if BOLTZ_ENABLED:
-            try:
-                boltz_pred = call_boltz(sequence, context=context, seed=0)
-                predictions.append(boltz_pred)
-                logger.info(
-                    f"[boltz2] mean pLDDT={boltz_pred.mean_plddt:.2f}"
-                    + (f", affinity={boltz_pred.affinity_score:.3f} kcal/mol"
-                       if boltz_pred.affinity_score is not None else "")
-                )
-            except (RuntimeError, FileNotFoundError, ValueError) as e:
-                logger.warning(f"Boltz-2 skipped: {e}")
+            num_boltz_seeds = max(1, ENSEMBLE_NUM_SEEDS)
+            boltz_seeds = [random.randint(0, 2**31 - 1) for _ in range(num_boltz_seeds)]
+            for seed in boltz_seeds:
+                try:
+                    boltz_pred = call_boltz(sequence, context=context, seed=seed)
+                    predictions.append(boltz_pred)
+                    logger.info(
+                        f"[boltz2] seed={seed}: mean pLDDT={boltz_pred.mean_plddt:.2f}"
+                        + (f", affinity={boltz_pred.affinity_score:.3f} kcal/mol"
+                           if boltz_pred.affinity_score is not None else "")
+                    )
+                except (RuntimeError, FileNotFoundError, ValueError) as e:
+                    logger.warning(f"Boltz-2 seed={seed} skipped: {e}")
 
-        # Best prediction across all models
+        # Best prediction across all initial seeds/models
         best_prediction = max(predictions, key=lambda p: p.mean_plddt)
         models_used = {p.model_name for p in predictions}
         logger.info(
-            f"Best: [{best_prediction.model_name}] seed={best_prediction.seed} "
+            f"Initial best: [{best_prediction.model_name}] seed={best_prediction.seed} "
             f"(pLDDT={best_prediction.mean_plddt:.2f}, "
             f"models run: {sorted(models_used)})"
         )
@@ -2034,9 +2084,10 @@ def _run_prediction_core(request_data: Dict[str, Any]) -> Dict[str, Any]:
             except Exception as e:
                 logger.warning(f"Inter-model comparison failed: {e}")
 
-        # Steps 2–4: Post-processing, refinement, and simulation
-        # When AGENT_ENABLED the Claude agent decides which tools to invoke.
-        # Otherwise, the original threshold + step-by-step pipeline runs.
+        # ---------------------------------------------------------------
+        # Step 2: Iterative refinement loop
+        # ---------------------------------------------------------------
+        # When AGENT_ENABLED the Claude agent decides tools to invoke (replaces this loop).
         if AGENT_ENABLED:
             logger.info("Running Claude agent refinement loop...")
             post_proc, updated_pdb = run_agent_refinement(
@@ -2055,30 +2106,87 @@ def _run_prediction_core(request_data: Dict[str, Any]) -> Dict[str, Any]:
                 f"Agent decision: {post_proc.decision} — {post_proc.agent_reasoning or '(no reasoning)'}"
             )
         else:
-            # Step 2: threshold-based post-processing
             post_proc = compute_post_processing(best_prediction)
             logger.info(
-                f"Decision: {post_proc.decision} "
+                f"Initial decision: {post_proc.decision} "
                 f"(pLDDT={best_prediction.mean_plddt:.2f}, clashes={post_proc.num_clashes})"
             )
 
-            # Step 3: Rosetta relax on refine/escalate (if enabled)
-            if post_proc.decision in ("refine", "escalate") and ROSETTA_ENABLED:
-                logger.info("Running Rosetta FastRelax...")
-                try:
-                    relaxed_pdb, rosetta_score = run_rosetta_relax(best_prediction.structure_pdb)
-                    best_prediction = StructurePrediction(
-                        structure_pdb=relaxed_pdb,
-                        plddt_scores=best_prediction.plddt_scores,
-                        mean_plddt=best_prediction.mean_plddt,
-                        seed=best_prediction.seed,
-                        model_name=best_prediction.model_name,
-                    )
-                    post_proc.rosetta_energy = rosetta_score
-                except RuntimeError as e:
-                    logger.warning(f"Rosetta relax skipped: {e}")
+            # Iterative refinement: re-predict (random seeds) + relax until accept or budget exhausted
+            prev_best_plddt = best_prediction.mean_plddt
+            refinement_iterations = 0
 
-            # Step 4: MD simulation when membrane or ligand context is present
+            while (
+                post_proc.decision in ("refine", "escalate")
+                and refinement_iterations < REFINEMENT_MAX_ITERATIONS
+            ):
+                refinement_iterations += 1
+                logger.info(
+                    f"Refinement iteration {refinement_iterations}/{REFINEMENT_MAX_ITERATIONS} "
+                    f"(current pLDDT={best_prediction.mean_plddt:.2f})"
+                )
+
+                improved = False
+
+                # Strategy A: Try a new random Boltz-2 seed (stochastic → potentially better structure)
+                if BOLTZ_ENABLED:
+                    rand_seed = random.randint(0, 2**31 - 1)
+                    try:
+                        new_pred = call_boltz(sequence, context=context, seed=rand_seed)
+                        predictions.append(new_pred)
+                        logger.info(
+                            f"[boltz2] refinement seed={rand_seed}: "
+                            f"mean pLDDT={new_pred.mean_plddt:.2f}"
+                        )
+                        if new_pred.mean_plddt > best_prediction.mean_plddt:
+                            best_prediction = new_pred
+                            improved = True
+                    except (RuntimeError, FileNotFoundError, ValueError) as e:
+                        logger.warning(f"Boltz-2 refinement seed={rand_seed} failed: {e}")
+
+                # Strategy B: Rosetta relax on the current best structure
+                if ROSETTA_ENABLED:
+                    try:
+                        relaxed_pdb, rosetta_score = run_rosetta_relax(best_prediction.structure_pdb)
+                        relaxed_plddt = _parse_plddt_from_pdb(relaxed_pdb)
+                        if relaxed_plddt:
+                            relaxed_mean = sum(relaxed_plddt) / len(relaxed_plddt)
+                        else:
+                            relaxed_mean = best_prediction.mean_plddt
+                        if relaxed_mean >= best_prediction.mean_plddt:
+                            best_prediction = StructurePrediction(
+                                structure_pdb=relaxed_pdb,
+                                plddt_scores=relaxed_plddt or best_prediction.plddt_scores,
+                                mean_plddt=relaxed_mean,
+                                seed=best_prediction.seed,
+                                model_name=best_prediction.model_name,
+                            )
+                            improved = True
+                        post_proc.rosetta_energy = rosetta_score
+                        logger.info(f"Rosetta relax: score={rosetta_score:.1f}, pLDDT={relaxed_mean:.2f}")
+                    except RuntimeError as e:
+                        logger.warning(f"Rosetta relax skipped: {e}")
+
+                # Re-score after this iteration
+                post_proc = compute_post_processing(best_prediction)
+
+                # Early exit: pLDDT plateau detection — stop if improvement < delta
+                plddt_delta = best_prediction.mean_plddt - prev_best_plddt
+                if not improved or plddt_delta < REFINEMENT_PLDDT_PLATEAU_DELTA:
+                    logger.info(
+                        f"Refinement plateau at iteration {refinement_iterations} "
+                        f"(delta={plddt_delta:.3f}, threshold={REFINEMENT_PLDDT_PLATEAU_DELTA})"
+                    )
+                    break
+                prev_best_plddt = best_prediction.mean_plddt
+
+            if refinement_iterations > 0:
+                logger.info(
+                    f"Refinement complete after {refinement_iterations} iteration(s). "
+                    f"Final pLDDT={best_prediction.mean_plddt:.2f}, decision={post_proc.decision}"
+                )
+
+            # Step 3: MD simulation when membrane or ligand context is present
             needs_md = bool(context.get("membrane") or context.get("ligands"))
             if needs_md and (OPENMM_ENABLED or GROMACS_ENABLED):
                 pH = float(context.get("pH", 7.4))
@@ -2140,6 +2248,9 @@ def _run_prediction_core(request_data: Dict[str, Any]) -> Dict[str, Any]:
             "n_models_used": len(models_used),
             "inter_model_disagreement": inter_model_data.get("per_residue_disagreement_nm"),
             "disagreement_regions": inter_model_data.get("disagreement_regions"),
+            # Refinement metadata
+            "refinement_iterations": refinement_iterations if not AGENT_ENABLED else None,
+            "total_seeds_tried": len(predictions),
         }
 
         # Store result in cache

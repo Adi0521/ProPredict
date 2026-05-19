@@ -119,6 +119,9 @@ class PredictionResponse(BaseModel):
     n_models_used: Optional[int] = None
     inter_model_disagreement: Optional[List[float]] = None  # per-residue CA RMSD across models (nm)
     disagreement_regions: Optional[List[Dict[str, Any]]] = None  # high-disagreement stretches
+    # Iterative refinement metadata
+    refinement_iterations: Optional[int] = None
+    total_seeds_tried: Optional[int] = None
 
     model_config = ConfigDict(json_schema_extra={
         "example": {

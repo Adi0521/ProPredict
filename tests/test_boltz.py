@@ -20,11 +20,11 @@ import pytest
 SAMPLE_SEQUENCE = "MKTAYIAK"
 
 SAMPLE_CONFIDENCE = {
-    "plddt": [0.85, 0.90, 0.78, 0.92, 0.88, 0.75, 0.83, 0.91],
+    "plddt": [85.0, 90.0, 78.0, 92.0, 88.0, 75.0, 83.0, 91.0],
     "ptm": 0.88,
     "confidence_score": 0.87,
 }
-EXPECTED_PLDDT = [v * 100 for v in SAMPLE_CONFIDENCE["plddt"]]
+EXPECTED_PLDDT = SAMPLE_CONFIDENCE["plddt"]
 
 SAMPLE_AFFINITY = {"affinity": -8.42, "affinity_probability_binary": 0.91}
 

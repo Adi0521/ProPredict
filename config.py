@@ -50,6 +50,10 @@ VARIANCE_REGION_PERCENT = float(os.getenv("VARIANCE_REGION_PERCENT", 10.0))
 JOB_TIMEOUT_SECONDS = int(os.getenv("JOB_TIMEOUT_SECONDS", 600))
 ENSEMBLE_NUM_SEEDS = int(os.getenv("ENSEMBLE_NUM_SEEDS", 1))
 
+# Iterative refinement: re-predict with new seeds / relax until accept or budget exhausted
+REFINEMENT_MAX_ITERATIONS = int(os.getenv("REFINEMENT_MAX_ITERATIONS", 10))
+REFINEMENT_PLDDT_PLATEAU_DELTA = float(os.getenv("REFINEMENT_PLDDT_PLATEAU_DELTA", 0.5))
+
 # Structure result cache (Redis)
 CACHE_TTL = int(os.getenv("CACHE_TTL", 86400))           # seconds; default 24 h
 REDIS_CACHE_PREFIX = os.getenv("REDIS_CACHE_PREFIX", "propredict:structure:")

@@ -43,7 +43,7 @@
     {
       "pdb_id": "7UXC",
       "length": 2188,
-      "error": "Boltz failed: Boltz-2 produced no *model_0.cif under /tmp/tmpf01exqxl/output. stderr: ason, `logger=True` will use `CSVLogger` as the default logger, unless the `tensorboard` or `tensorboardX` packages are found. Please `pip install lightning[extra]` or one of them to enable TensorBoard support by default\n/opt/conda/lib/python3.11/site-packages/pytorch_lightning/utilities/migration/utils.py:56: The loaded checkpoint was produced with Lightning v2.5.0.post0, which is newer than your current Lightning version: v2.5.0\nYou are using a CUDA device ('NVIDIA A10G') that has Tensor Cores. To properly utilize them, you should set `torch.set_float32_matmul_precision('medium' | 'high')` which will trade-off precision for performance. For more details, read https://pytorch.org/docs/stable/generated/torch.set_float32_matmul_precision.html#torch.set_float32_matmul_precision\nLOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]\n/opt/conda/lib/python3.11/tempfile.py:934: ResourceWarning: Implicitly cleaning up <TemporaryDirectory '/tmp/tmpcn1jr1ni'>\n  _warnings.warn(warn_message, ResourceWarning)\n"
+      "error": "Boltz failed: Boltz-2 produced no *model_0.cif under /tmp/tmp2oi4qspo/output. stderr: eason, `logger=True` will use `CSVLogger` as the default logger, unless the `tensorboard` or `tensorboardX` packages are found. Please `pip install lightning[extra]` or one of them to enable TensorBoard support by default\n/opt/conda/lib/python3.11/site-packages/pytorch_lightning/utilities/migration/utils.py:56: The loaded checkpoint was produced with Lightning v2.5.0.post0, which is newer than your current Lightning version: v2.5.0\nYou are using a CUDA device ('NVIDIA A10') that has Tensor Cores. To properly utilize them, you should set `torch.set_float32_matmul_precision('medium' | 'high')` which will trade-off precision for performance. For more details, read https://pytorch.org/docs/stable/generated/torch.set_float32_matmul_precision.html#torch.set_float32_matmul_precision\nLOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]\n/opt/conda/lib/python3.11/tempfile.py:934: ResourceWarning: Implicitly cleaning up <TemporaryDirectory '/tmp/tmpc55iud0j'>\n  _warnings.warn(warn_message, ResourceWarning)\n"
     },
     {
       "pdb_id": "7V3E",
@@ -67,9 +67,9 @@
       "pdb_id": "7VDL",
       "name": "CASP15/7VDL",
       "length": 215,
-      "mean_plddt": 77.37,
-      "tm_score": 0.3876,
-      "rmsd": 11.317,
+      "mean_plddt": 78.3,
+      "tm_score": 0.3936,
+      "rmsd": 11.037,
       "n_aligned": 215
     },
     {
@@ -156,9 +156,9 @@
       "pdb_id": "7XPU",
       "name": "CASP15/7XPU",
       "length": 371,
-      "mean_plddt": 39.95,
-      "tm_score": 0.3834,
-      "rmsd": 16.361,
+      "mean_plddt": 39.94,
+      "tm_score": 0.3795,
+      "rmsd": 16.813,
       "n_aligned": 371
     },
     {
@@ -174,9 +174,9 @@
       "pdb_id": "7YEL",
       "name": "CASP15/7YEL",
       "length": 456,
-      "mean_plddt": 40.92,
-      "tm_score": 0.1876,
-      "rmsd": 22.717,
+      "mean_plddt": 41.26,
+      "tm_score": 0.187,
+      "rmsd": 22.18,
       "n_aligned": 456
     },
     {
@@ -184,8 +184,8 @@
       "name": "CASP15/7YG3",
       "length": 276,
       "mean_plddt": 96.32,
-      "tm_score": 0.9758,
-      "rmsd": 0.985,
+      "tm_score": 0.9761,
+      "rmsd": 0.978,
       "n_aligned": 276
     },
     {
@@ -219,9 +219,9 @@
       "pdb_id": "7ZPE",
       "name": "CASP15/7ZPE",
       "length": 305,
-      "mean_plddt": 57.27,
-      "tm_score": 0.4079,
-      "rmsd": 15.427,
+      "mean_plddt": 57.24,
+      "tm_score": 0.4075,
+      "rmsd": 15.436,
       "n_aligned": 305
     },
     {
@@ -246,27 +246,27 @@
       "pdb_id": "8A2O",
       "name": "CASP15/8A2O",
       "length": 386,
-      "mean_plddt": 97.33,
-      "tm_score": 0.7722,
-      "rmsd": 3.968,
+      "mean_plddt": 97.36,
+      "tm_score": 0.7721,
+      "rmsd": 3.969,
       "n_aligned": 386
     },
     {
       "pdb_id": "8A2P",
       "name": "CASP15/8A2P",
       "length": 386,
-      "mean_plddt": 97.33,
-      "tm_score": 0.6962,
-      "rmsd": 4.903,
+      "mean_plddt": 97.36,
+      "tm_score": 0.6961,
+      "rmsd": 4.904,
       "n_aligned": 386
     },
     {
       "pdb_id": "8ACS",
       "name": "CASP15/8ACS",
       "length": 598,
-      "mean_plddt": 43.36,
-      "tm_score": 0.3714,
-      "rmsd": 14.942,
+      "mean_plddt": 43.48,
+      "tm_score": 0.3715,
+      "rmsd": 14.81,
       "n_aligned": 598
     },
     {
@@ -356,9 +356,9 @@
       "pdb_id": "8BDG",
       "name": "CASP15/8BDG",
       "length": 441,
-      "mean_plddt": 81.35,
+      "mean_plddt": 80.7,
       "tm_score": 0.2273,
-      "rmsd": 19.767,
+      "rmsd": 19.758,
       "n_aligned": 441
     },
     {
@@ -401,9 +401,9 @@
       "pdb_id": "8BPP",
       "name": "CASP15/8BPP",
       "length": 362,
-      "mean_plddt": 68.7,
-      "tm_score": 0.7827,
-      "rmsd": 5.898,
+      "mean_plddt": 68.38,
+      "tm_score": 0.7757,
+      "rmsd": 6.174,
       "n_aligned": 362
     },
     {
@@ -454,7 +454,7 @@
       "pdb_id": "8CGV",
       "name": "CASP15/8CGV",
       "length": 51,
-      "mean_plddt": 60.56,
+      "mean_plddt": 60.55,
       "tm_score": 0.1881,
       "rmsd": 6.638,
       "n_aligned": 51
@@ -472,9 +472,9 @@
       "pdb_id": "8CIR",
       "name": "CASP15/8CIR",
       "length": 339,
-      "mean_plddt": 64.53,
-      "tm_score": 0.2404,
-      "rmsd": 21.343,
+      "mean_plddt": 63.43,
+      "tm_score": 0.2463,
+      "rmsd": 20.225,
       "n_aligned": 339
     },
     {
@@ -485,18 +485,18 @@
       "pdb_id": "8CMK",
       "name": "CASP15/8CMK",
       "length": 913,
-      "mean_plddt": 73.11,
-      "tm_score": 0.4528,
-      "rmsd": 17.95,
+      "mean_plddt": 73.32,
+      "tm_score": 0.4507,
+      "rmsd": 18.159,
       "n_aligned": 913
     },
     {
       "pdb_id": "8D40",
       "name": "CASP15/8D40",
       "length": 422,
-      "mean_plddt": 92.55,
-      "tm_score": 0.877,
-      "rmsd": 3.044,
+      "mean_plddt": 93.04,
+      "tm_score": 0.8952,
+      "rmsd": 2.783,
       "n_aligned": 422
     },
     {
@@ -512,7 +512,7 @@
       "pdb_id": "8D8C",
       "name": "CASP15/8D8C",
       "length": 129,
-      "mean_plddt": 97.97,
+      "mean_plddt": 97.96,
       "tm_score": 0.9886,
       "rmsd": 0.457,
       "n_aligned": 129
@@ -530,18 +530,18 @@
       "pdb_id": "8DGS",
       "name": "CASP15/8DGS",
       "length": 425,
-      "mean_plddt": 73.8,
-      "tm_score": 0.1171,
-      "rmsd": 28.022,
+      "mean_plddt": 71.18,
+      "tm_score": 0.1815,
+      "rmsd": 22.073,
       "n_aligned": 425
     },
     {
       "pdb_id": "8DGT",
       "name": "CASP15/8DGT",
       "length": 429,
-      "mean_plddt": 72.06,
-      "tm_score": 0.2015,
-      "rmsd": 20.052,
+      "mean_plddt": 72.25,
+      "tm_score": 0.2016,
+      "rmsd": 20.086,
       "n_aligned": 429
     },
     {
@@ -557,9 +557,9 @@
       "pdb_id": "8DPO",
       "name": "CASP15/8DPO",
       "length": 222,
-      "mean_plddt": 54.3,
-      "tm_score": 0.7701,
-      "rmsd": 5.609,
+      "mean_plddt": 65.56,
+      "tm_score": 0.7917,
+      "rmsd": 6.339,
       "n_aligned": 222
     },
     {
@@ -597,18 +597,18 @@
       "pdb_id": "8DPT",
       "name": "CASP15/8DPT",
       "length": 398,
-      "mean_plddt": 90.16,
-      "tm_score": 0.8191,
-      "rmsd": 3.864,
+      "mean_plddt": 89.96,
+      "tm_score": 0.82,
+      "rmsd": 3.85,
       "n_aligned": 398
     },
     {
       "pdb_id": "8DPU",
       "name": "CASP15/8DPU",
       "length": 298,
-      "mean_plddt": 91.77,
-      "tm_score": 0.8902,
-      "rmsd": 2.447,
+      "mean_plddt": 91.84,
+      "tm_score": 0.8912,
+      "rmsd": 2.432,
       "n_aligned": 298
     },
     {
@@ -642,27 +642,27 @@
       "pdb_id": "8FM1",
       "name": "CASP15/8FM1",
       "length": 353,
-      "mean_plddt": 47.67,
-      "tm_score": 0.1837,
-      "rmsd": 20.448,
+      "mean_plddt": 47.82,
+      "tm_score": 0.1832,
+      "rmsd": 20.45,
       "n_aligned": 353
     },
     {
       "pdb_id": "8GEO",
       "name": "CASP15/8GEO",
       "length": 581,
-      "mean_plddt": 40.33,
-      "tm_score": 0.3025,
-      "rmsd": 18.499,
+      "mean_plddt": 42.4,
+      "tm_score": 0.2487,
+      "rmsd": 23.155,
       "n_aligned": 581
     },
     {
       "pdb_id": "8GEP",
       "name": "CASP15/8GEP",
       "length": 456,
-      "mean_plddt": 39.87,
-      "tm_score": 0.2799,
-      "rmsd": 21.35,
+      "mean_plddt": 39.74,
+      "tm_score": 0.2817,
+      "rmsd": 21.251,
       "n_aligned": 456
     },
     {
@@ -678,9 +678,9 @@
       "pdb_id": "8H8J",
       "name": "CASP15/8H8J",
       "length": 225,
-      "mean_plddt": 56.23,
-      "tm_score": 0.2335,
-      "rmsd": 17.606,
+      "mean_plddt": 56.45,
+      "tm_score": 0.238,
+      "rmsd": 17.267,
       "n_aligned": 225
     },
     {
@@ -691,9 +691,9 @@
       "pdb_id": "8HAK",
       "name": "CASP15/8HAK",
       "length": 96,
-      "mean_plddt": 51.24,
-      "tm_score": 0.2813,
-      "rmsd": 9.963,
+      "mean_plddt": 51.14,
+      "tm_score": 0.3072,
+      "rmsd": 9.049,
       "n_aligned": 96
     },
     {
@@ -726,7 +726,7 @@
   ],
   "errors": [
     "PDB fetch failed: 404 Client Error: Not Found for url: https://files.rcsb.org/download/7TY5.pdb",
-    "Boltz failed: Boltz-2 produced no *model_0.cif under /tmp/tmpf01exqxl/output. stderr: ason, `logger=True` will use `CSVLogger` as the default logger, unless the `tensorboard` or `tensorboardX` packages are found. Please `pip install lightning[extra]` or one of them to enable TensorBoard support by default\n/opt/conda/lib/python3.11/site-packages/pytorch_lightning/utilities/migration/utils.py:56: The loaded checkpoint was produced with Lightning v2.5.0.post0, which is newer than your current Lightning version: v2.5.0\nYou are using a CUDA device ('NVIDIA A10G') that has Tensor Cores. To properly utilize them, you should set `torch.set_float32_matmul_precision('medium' | 'high')` which will trade-off precision for performance. For more details, read https://pytorch.org/docs/stable/generated/torch.set_float32_matmul_precision.html#torch.set_float32_matmul_precision\nLOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]\n/opt/conda/lib/python3.11/tempfile.py:934: ResourceWarning: Implicitly cleaning up <TemporaryDirectory '/tmp/tmpcn1jr1ni'>\n  _warnings.warn(warn_message, ResourceWarning)\n",
+    "Boltz failed: Boltz-2 produced no *model_0.cif under /tmp/tmp2oi4qspo/output. stderr: eason, `logger=True` will use `CSVLogger` as the default logger, unless the `tensorboard` or `tensorboardX` packages are found. Please `pip install lightning[extra]` or one of them to enable TensorBoard support by default\n/opt/conda/lib/python3.11/site-packages/pytorch_lightning/utilities/migration/utils.py:56: The loaded checkpoint was produced with Lightning v2.5.0.post0, which is newer than your current Lightning version: v2.5.0\nYou are using a CUDA device ('NVIDIA A10') that has Tensor Cores. To properly utilize them, you should set `torch.set_float32_matmul_precision('medium' | 'high')` which will trade-off precision for performance. For more details, read https://pytorch.org/docs/stable/generated/torch.set_float32_matmul_precision.html#torch.set_float32_matmul_precision\nLOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]\n/opt/conda/lib/python3.11/tempfile.py:934: ResourceWarning: Implicitly cleaning up <TemporaryDirectory '/tmp/tmpc55iud0j'>\n  _warnings.warn(warn_message, ResourceWarning)\n",
     "PDB fetch failed: 404 Client Error: Not Found for url: https://files.rcsb.org/download/7WV6.pdb",
     "PDB fetch failed: 404 Client Error: Not Found for url: https://files.rcsb.org/download/7WV7.pdb",
     "PDB fetch failed: 404 Client Error: Not Found for url: https://files.rcsb.org/download/8APC.pdb",
