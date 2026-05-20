@@ -90,5 +90,9 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 AGENT_MODEL = os.getenv("AGENT_MODEL", "claude-opus-4-6")
 AGENT_MAX_ITERATIONS = int(os.getenv("AGENT_MAX_ITERATIONS", 5))
 
+# Weights & Biases (optional benchmark tracking)
+WANDB_PROJECT = os.getenv("WANDB_PROJECT", "")
+WANDB_ENTITY = os.getenv("WANDB_ENTITY", "")
+
 # Logging
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")

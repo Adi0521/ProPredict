@@ -21,6 +21,7 @@ torch>=2.1.0
 pyyaml>=6.0
 
 meeko
+wandb>=0.16.0
 
 # Boltz-2 (GPU required — install from source, not PyPI):
 #   pip install git+https://github.com/jwohlwend/boltz

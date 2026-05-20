@@ -12,6 +12,7 @@ Usage:
 """
 
 import json
+import time
 import numpy as np
 from typing import Optional
 
@@ -238,7 +239,7 @@ def benchmark_one(target: dict) -> dict:
         "BOLTZ_ENABLED": "True",
         "BOLTZ_SAMPLES": "1",
         "BOLTZ_STEPS": "200",
-        "BOLTZ_USE_MSA": "False",
+        "BOLTZ_USE_MSA": "True",
     })
     from orchestrator.backends.boltz import call_boltz
 
@@ -305,17 +306,22 @@ def run_benchmark(
     pdb_ids: str = "",
     max_targets: int = 0,
     out: str = "benchmark_results.json",
+    notes: str = "",
+    wandb_project: str = "",
 ):
     """
-    source:      casp15 | rcsb | custom  (default: casp15)
-    pdb-ids:     comma-separated PDB IDs, implies source=custom
-    max-targets: cap the number of targets (0 = unlimited, useful for quick tests)
-    out:         output JSON file
+    source:         casp15 | rcsb | custom  (default: casp15)
+    pdb-ids:        comma-separated PDB IDs, implies source=custom
+    max-targets:    cap the number of targets (0 = unlimited, useful for quick tests)
+    out:            output JSON file
+    notes:          free-text notes about what changed in this run
+    wandb-project:  W&B project name (or set WANDB_PROJECT env var)
 
     Examples:
         modal run benchmark_modal.py
         modal run benchmark_modal.py --source rcsb --max-targets 50
         modal run benchmark_modal.py --pdb-ids 1UBQ,1VII,1GB1
+        modal run benchmark_modal.py --notes "enabled MSA" --wandb-project propredict
     """
     if pdb_ids:
         targets = [
@@ -334,7 +340,9 @@ def run_benchmark(
 
     print(f"Running Boltz-2 on {len(targets)} targets in parallel...\n")
 
+    t0 = time.time()
     results = list(benchmark_one.map(targets, return_exceptions=True))
+    duration_seconds = time.time() - t0
 
     # Print table
     header = (
@@ -377,3 +385,22 @@ def run_benchmark(
     with open(out, "w") as f:
         json.dump({"targets": results, "errors": errors}, f, indent=2, default=str)
     print(f"  Full results saved to {out}")
+
+    # Log to benchmarks/results.jsonl (and optionally W&B)
+    import os
+    from benchmarks.log_benchmark import log_run
+
+    config_snapshot = {
+        "BOLTZ_SAMPLES": int(os.getenv("BOLTZ_SAMPLES", 1)),
+        "BOLTZ_STEPS": int(os.getenv("BOLTZ_STEPS", 200)),
+        "BOLTZ_USE_MSA": os.getenv("BOLTZ_USE_MSA", "False") == "True",
+        "max_targets": max_targets,
+    }
+    effective_source = "custom" if pdb_ids else source
+    log_run(
+        results, config_snapshot,
+        source=effective_source,
+        notes=notes,
+        duration_seconds=duration_seconds,
+        wandb_project=wandb_project or None,
+    )
