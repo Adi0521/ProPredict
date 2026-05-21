@@ -10,6 +10,7 @@ from config import (
     BOLTZ_ENABLED,
     MD_PRODUCTION_NS,
     ANTHROPIC_API_KEY,
+    ANTHROPIC_BASE_URL,
     AGENT_MODEL,
     AGENT_MAX_ITERATIONS,
 )
@@ -342,7 +343,10 @@ def run_agent_refinement(
         f"GROMACS={'enabled' if GROMACS_ENABLED else 'disabled'}"
     )
 
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    client_kwargs = {"api_key": ANTHROPIC_API_KEY}
+    if ANTHROPIC_BASE_URL:
+        client_kwargs["base_url"] = ANTHROPIC_BASE_URL
+    client = anthropic.Anthropic(**client_kwargs)
     messages: List[Dict[str, Any]] = [{"role": "user", "content": user_msg}]
 
     for iteration in range(AGENT_MAX_ITERATIONS):
