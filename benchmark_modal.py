@@ -237,8 +237,8 @@ def benchmark_one(target: dict) -> dict:
 
     os.environ.update({
         "BOLTZ_ENABLED": "True",
-        "BOLTZ_SAMPLES": "1",
-        "BOLTZ_STEPS": "200",
+        "BOLTZ_DIFFUSION_SAMPLES": "1",
+        "BOLTZ_SAMPLING_STEPS": "200",
         "BOLTZ_USE_MSA": "True",
     })
     from orchestrator.backends.boltz import call_boltz
@@ -308,6 +308,7 @@ def run_benchmark(
     out: str = "benchmark_results.json",
     notes: str = "",
     wandb_project: str = "",
+    wandb_entity: str = "",
 ):
     """
     source:         casp15 | rcsb | custom  (default: casp15)
@@ -316,6 +317,7 @@ def run_benchmark(
     out:            output JSON file
     notes:          free-text notes about what changed in this run
     wandb-project:  W&B project name (or set WANDB_PROJECT env var)
+    wandb-entity:   W&B entity / team (or set WANDB_ENTITY env var)
 
     Examples:
         modal run benchmark_modal.py
@@ -391,8 +393,8 @@ def run_benchmark(
     from benchmarks.log_benchmark import log_run
 
     config_snapshot = {
-        "BOLTZ_SAMPLES": int(os.getenv("BOLTZ_SAMPLES", 1)),
-        "BOLTZ_STEPS": int(os.getenv("BOLTZ_STEPS", 200)),
+        "BOLTZ_DIFFUSION_SAMPLES": int(os.getenv("BOLTZ_DIFFUSION_SAMPLES", 1)),
+        "BOLTZ_SAMPLING_STEPS": int(os.getenv("BOLTZ_SAMPLING_STEPS", 200)),
         "BOLTZ_USE_MSA": os.getenv("BOLTZ_USE_MSA", "False") == "True",
         "max_targets": max_targets,
     }
@@ -403,4 +405,5 @@ def run_benchmark(
         notes=notes,
         duration_seconds=duration_seconds,
         wandb_project=wandb_project or None,
+        wandb_entity=wandb_entity or None,
     )

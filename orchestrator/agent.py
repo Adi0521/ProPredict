@@ -9,8 +9,8 @@ from config import (
     OPENMM_ENABLED,
     BOLTZ_ENABLED,
     MD_PRODUCTION_NS,
-    ANTHROPIC_API_KEY,
-    ANTHROPIC_BASE_URL,
+    AGENT_API_KEY,
+    AGENT_BASE_URL,
     AGENT_MODEL,
     AGENT_MAX_ITERATIONS,
 )
@@ -271,7 +271,7 @@ def run_agent_refinement(
 
     The agent iterates: analyze -> (optionally) refine/simulate -> decide.
     Falls back to threshold logic if the anthropic package is not installed
-    or ANTHROPIC_API_KEY is not set.
+    or AGENT_API_KEY is not set.
 
     inter_model_data: optional output of align_and_compare_structures(); when
     provided the agent receives disagreement regions in its initial prompt.
@@ -286,8 +286,8 @@ def run_agent_refinement(
         logger.warning("anthropic not installed — falling back to threshold logic (pip install anthropic)")
         return compute_post_processing(prediction), None
 
-    if not ANTHROPIC_API_KEY:
-        logger.warning("ANTHROPIC_API_KEY not set — falling back to threshold logic")
+    if not AGENT_API_KEY:
+        logger.warning("AGENT_API_KEY not set — falling back to threshold logic")
         return compute_post_processing(prediction), None
 
     num_clashes = count_clashes(prediction.structure_pdb)
@@ -343,9 +343,9 @@ def run_agent_refinement(
         f"GROMACS={'enabled' if GROMACS_ENABLED else 'disabled'}"
     )
 
-    client_kwargs = {"api_key": ANTHROPIC_API_KEY}
-    if ANTHROPIC_BASE_URL:
-        client_kwargs["base_url"] = ANTHROPIC_BASE_URL
+    client_kwargs = {"api_key": AGENT_API_KEY}
+    if AGENT_BASE_URL:
+        client_kwargs["base_url"] = AGENT_BASE_URL
     client = anthropic.Anthropic(**client_kwargs)
     messages: List[Dict[str, Any]] = [{"role": "user", "content": user_msg}]
 

@@ -49,7 +49,7 @@ app = App("propredict", image=image)
 # Create this secret in the Modal dashboard:
 #   modal secret create propredict-secrets \
 #     DATABASE_URL=postgresql://user:pass@host/db \
-#     ANTHROPIC_API_KEY=sk-ant-... \
+#     AGENT_API_KEY=sk-ant-... \
 #     ROSETTA_ENABLED=False \
 #     GROMACS_ENABLED=True \
 #     OPENMM_ENABLED=True \

@@ -86,8 +86,8 @@ GNINA_BIN = os.getenv("GNINA_BIN", "gnina")
 
 # Agentic refinement loop (Stage D — requires ANTHROPIC_API_KEY)
 AGENT_ENABLED = os.getenv("AGENT_ENABLED", "False") == "True"
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-ANTHROPIC_BASE_URL = os.getenv("ANTHROPIC_BASE_URL", "")
+AGENT_API_KEY = os.getenv("AGENT_API_KEY", "")
+AGENT_BASE_URL = os.getenv("AGENT_BASE_URL", "")
 AGENT_MODEL = os.getenv("AGENT_MODEL", "claude-opus-4-6")
 AGENT_MAX_ITERATIONS = int(os.getenv("AGENT_MAX_ITERATIONS", 5))
 

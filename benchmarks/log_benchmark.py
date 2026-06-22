@@ -180,6 +180,7 @@ def log_run(
     notes: str = "",
     duration_seconds: float | None = None,
     wandb_project: str | None = None,
+    wandb_entity: str | None = None,
 ) -> dict:
     """
     Append a paper-ready benchmark entry to results.jsonl.
@@ -215,12 +216,13 @@ def log_run(
 
     wb_project = wandb_project or os.getenv("WANDB_PROJECT")
     if wb_project:
-        _log_wandb(entry, wb_project)
+        wb_entity = wandb_entity or os.getenv("WANDB_ENTITY") or None
+        _log_wandb(entry, wb_project, entity=wb_entity)
 
     return entry
 
 
-def _log_wandb(entry: dict, project: str):
+def _log_wandb(entry: dict, project: str, entity: str | None = None):
     try:
         import wandb
     except ImportError:
@@ -231,6 +233,7 @@ def _log_wandb(entry: dict, project: str):
 
     run = wandb.init(
         project=project,
+        entity=entity or None,
         name=entry["run_id"],
         config={
             **entry["git"],
@@ -280,6 +283,7 @@ if __name__ == "__main__":
     parser.add_argument("--source", default="casp15", help="Target source")
     parser.add_argument("--backend", default="boltz-2", help="Backend used")
     parser.add_argument("--wandb-project", default=None, help="W&B project name")
+    parser.add_argument("--wandb-entity", default=None, help="W&B entity (team or username)")
     args = parser.parse_args()
 
     with open(args.file) as f:
@@ -287,13 +291,15 @@ if __name__ == "__main__":
 
     targets = data.get("targets", data.get("results", []))
     config_snapshot = {
-        "BOLTZ_SAMPLES": int(os.getenv("BOLTZ_SAMPLES", 1)),
-        "BOLTZ_STEPS": int(os.getenv("BOLTZ_STEPS", 200)),
+        "BOLTZ_DIFFUSION_SAMPLES": int(os.getenv("BOLTZ_DIFFUSION_SAMPLES", 1)),
+        "BOLTZ_SAMPLING_STEPS": int(os.getenv("BOLTZ_SAMPLING_STEPS", 200)),
         "BOLTZ_USE_MSA": os.getenv("BOLTZ_USE_MSA", "False") == "True",
     }
 
     log_run(
         targets, config_snapshot,
         source=args.source, backend=args.backend,
-        notes=args.notes, wandb_project=args.wandb_project,
+        notes=args.notes,
+        wandb_project=args.wandb_project,
+        wandb_entity=args.wandb_entity,
     )
