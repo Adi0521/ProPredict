@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
 # API Configuration
 API_HOST = os.getenv("API_HOST", "0.0.0.0")

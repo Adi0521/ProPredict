@@ -235,11 +235,13 @@ def benchmark_one(target: dict) -> dict:
     from Bio.PDB import PDBParser
     from Bio.PDB.Polypeptide import is_aa, protein_letters_3to1
 
+    boltz_cfg = target.get("_boltz_config", {})
     os.environ.update({
         "BOLTZ_ENABLED": "True",
-        "BOLTZ_DIFFUSION_SAMPLES": os.getenv("BOLTZ_DIFFUSION_SAMPLES", "1"),
-        "BOLTZ_SAMPLING_STEPS": os.getenv("BOLTZ_SAMPLING_STEPS", "200"),
-        "BOLTZ_USE_MSA": os.getenv("BOLTZ_USE_MSA", "False"),
+        "BOLTZ_DIFFUSION_SAMPLES": str(boltz_cfg.get("BOLTZ_DIFFUSION_SAMPLES", "1")),
+        "BOLTZ_SAMPLING_STEPS": str(boltz_cfg.get("BOLTZ_SAMPLING_STEPS", "200")),
+        "BOLTZ_USE_MSA": str(boltz_cfg.get("BOLTZ_USE_MSA", "False")),
+        "BOLTZ_MSA_SERVER_URL": str(boltz_cfg.get("BOLTZ_MSA_SERVER_URL", "https://api.colabfold.com")),
     })
     from orchestrator.backends.boltz import call_boltz
 
@@ -325,6 +327,12 @@ def run_benchmark(
         modal run benchmark_modal.py --pdb-ids 1UBQ,1VII,1GB1
         modal run benchmark_modal.py --notes "enabled MSA" --wandb-project propredict
     """
+    import os
+    from config import (
+        BOLTZ_DIFFUSION_SAMPLES, BOLTZ_SAMPLING_STEPS,
+        BOLTZ_USE_MSA, BOLTZ_MSA_SERVER_URL,
+    )
+
     if pdb_ids:
         targets = [
             {"pdb_id": p.strip().upper(), "chain": "A", "name": p.strip().upper()}
@@ -340,7 +348,17 @@ def run_benchmark(
     if max_targets and max_targets < len(targets):
         targets = targets[:max_targets]
 
-    print(f"Running Boltz-2 on {len(targets)} targets in parallel...\n")
+    boltz_config = {
+        "BOLTZ_DIFFUSION_SAMPLES": str(BOLTZ_DIFFUSION_SAMPLES),
+        "BOLTZ_SAMPLING_STEPS": str(BOLTZ_SAMPLING_STEPS),
+        "BOLTZ_USE_MSA": str(BOLTZ_USE_MSA),
+        "BOLTZ_MSA_SERVER_URL": BOLTZ_MSA_SERVER_URL,
+    }
+    for t in targets:
+        t["_boltz_config"] = boltz_config
+
+    use_msa = boltz_config["BOLTZ_USE_MSA"]
+    print(f"Running Boltz-2 on {len(targets)} targets in parallel (MSA={use_msa})...\n")
 
     t0 = time.time()
     results = list(benchmark_one.map(targets, return_exceptions=True))
@@ -389,7 +407,6 @@ def run_benchmark(
     print(f"  Full results saved to {out}")
 
     # Log to benchmarks/results.jsonl (and optionally W&B)
-    import os
     from benchmarks.log_benchmark import log_run
 
     config_snapshot = {

@@ -61,13 +61,10 @@ def call_boltz(
                 "Add smiles to the LigandContext or remove the ligand from context."
             )
 
-    sequences: list = [{
-        "protein": {
-            "id": "A",
-            "sequence": sequence,
-            "msa": "server" if BOLTZ_USE_MSA else "empty",
-        }
-    }]
+    protein_entry: dict = {"id": "A", "sequence": sequence}
+    if not BOLTZ_USE_MSA:
+        protein_entry["msa"] = "empty"
+    sequences: list = [{"protein": protein_entry}]
 
     affinity_binder: Optional[str] = None
     for i, lig in enumerate(ligands):
