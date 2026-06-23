@@ -72,6 +72,7 @@ BOLTZ_DIFFUSION_SAMPLES = int(os.getenv("BOLTZ_DIFFUSION_SAMPLES", 1))   # --dif
 BOLTZ_SAMPLING_STEPS = int(os.getenv("BOLTZ_SAMPLING_STEPS", 200))       # --sampling_steps
 # False = fully local (msa: empty); True = use ColabFold MSA server (better accuracy, requires network)
 BOLTZ_USE_MSA = os.getenv("BOLTZ_USE_MSA", "False") == "True"
+BOLTZ_MSA_SERVER_URL = os.getenv("BOLTZ_MSA_SERVER_URL", "https://api.colabfold.com")
 
 # MD Simulation parameters
 MD_PRODUCTION_NS = float(os.getenv("MD_PRODUCTION_NS", 0.1))   # production run length (nanoseconds)

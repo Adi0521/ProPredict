@@ -237,9 +237,9 @@ def benchmark_one(target: dict) -> dict:
 
     os.environ.update({
         "BOLTZ_ENABLED": "True",
-        "BOLTZ_DIFFUSION_SAMPLES": "1",
-        "BOLTZ_SAMPLING_STEPS": "200",
-        "BOLTZ_USE_MSA": "True",
+        "BOLTZ_DIFFUSION_SAMPLES": os.getenv("BOLTZ_DIFFUSION_SAMPLES", "1"),
+        "BOLTZ_SAMPLING_STEPS": os.getenv("BOLTZ_SAMPLING_STEPS", "200"),
+        "BOLTZ_USE_MSA": os.getenv("BOLTZ_USE_MSA", "False"),
     })
     from orchestrator.backends.boltz import call_boltz
 

@@ -9,6 +9,7 @@ from typing import Optional, Dict, Any, List
 
 from config import (
     BOLTZ_DIFFUSION_SAMPLES,
+    BOLTZ_MSA_SERVER_URL,
     BOLTZ_SAMPLING_STEPS,
     BOLTZ_USE_MSA,
 )
@@ -95,6 +96,8 @@ def call_boltz(
             "--sampling_steps", str(BOLTZ_SAMPLING_STEPS),
             "--seed", str(seed),
         ]
+        if BOLTZ_USE_MSA:
+            cmd += ["--use_msa_server", "--msa_server_url", BOLTZ_MSA_SERVER_URL]
         logger.info(f"Running Boltz-2: {' '.join(cmd)}")
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
         if proc.returncode != 0:
