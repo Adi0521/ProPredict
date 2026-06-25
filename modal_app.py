@@ -71,7 +71,31 @@ secrets = [Secret.from_name("propredict-secrets")]
 def run_prediction(request_data: dict) -> dict:
     """Worker function — replaces the Celery worker in production."""
     from orchestrator.tasks import _run_prediction_core
-    return _run_prediction_core(request_data)
+    from orchestrator.progress import PROGRESS_DICT_NAME
+
+    run_id = request_data.get("run_id")
+
+    # Modal has no Celery result backend, so relay per-stage progress through a
+    # named Modal Dict keyed by run_id; the API status endpoint reads it back.
+    progress = modal.Dict.from_name(PROGRESS_DICT_NAME, create_if_missing=True)
+
+    def progress_cb(percent: int, stage: str) -> None:
+        if run_id:
+            try:
+                progress[run_id] = {"progress_percent": percent, "stage": stage}
+            except Exception:
+                pass
+
+    try:
+        return _run_prediction_core(request_data, progress_cb=progress_cb)
+    finally:
+        # The terminal state is reported by the FunctionCall result itself, so the
+        # interim progress entry is no longer needed — drop it to bound Dict growth.
+        if run_id:
+            try:
+                del progress[run_id]
+            except Exception:
+                pass
 
 
 @app.function(secrets=secrets)

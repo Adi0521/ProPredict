@@ -22,6 +22,17 @@ if MODAL_ENABLED:
 else:
     from orchestrator.tasks import predict_protein_structure
 
+from orchestrator.progress import PROGRESS_DICT_NAME, celery_state_to_status
+
+
+def _read_modal_progress(run_id: str) -> Optional[dict]:
+    """Read the latest {progress_percent, stage} the Modal worker wrote, if any."""
+    try:
+        d = modal.Dict.from_name(PROGRESS_DICT_NAME, create_if_missing=True)
+        return d.get(run_id)
+    except Exception:
+        return None
+
 # Configure logging
 logging.basicConfig(level=LOG_LEVEL)
 logger = logging.getLogger(__name__)
@@ -195,6 +206,7 @@ async def get_job_status(run_id: str, db: Session = Depends(get_db)):
         job = db.get(Job, run_id)
         now = datetime.utcnow()
 
+        stage: Optional[str] = None
         if MODAL_ENABLED:
             if not job or not job.modal_call_id:
                 raise HTTPException(status_code=404, detail=f"Job {run_id} not found")
@@ -203,18 +215,23 @@ async def get_job_status(run_id: str, db: Session = Depends(get_db)):
                 fc.get(timeout=0)
                 state, progress = "completed", 100
             except TimeoutError:
+                # In flight — refine the coarse 50% with the worker's Dict progress.
                 state, progress = "started", 50
+                entry = _read_modal_progress(run_id)
+                if entry:
+                    progress = int(entry.get("progress_percent", progress))
+                    stage = entry.get("stage")
             except Exception:
                 state, progress = "failed", 0
         else:
             task = predict_protein_structure.AsyncResult(run_id)
-            state = task.state.lower() if task.state != "PENDING" else "pending"
-            progress = 100 if state in ("success", "completed") else (50 if state == "started" else 0)
+            state, progress, stage = celery_state_to_status(task.state, task.info)
 
         return JobStatus(
             run_id=run_id,
             status=state,
             progress_percent=progress,
+            stage=stage,
             error_message=job.error_message if job else None,
             created_at=job.created_at if job else now,
             updated_at=job.updated_at if job else now,

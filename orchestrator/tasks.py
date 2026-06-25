@@ -43,6 +43,12 @@ from orchestrator.simulation import (
     run_openmm_simulation,
 )
 from orchestrator.scoring import count_clashes, compute_post_processing, validate_simulation_metrics
+from orchestrator.progress import (
+    STAGE_FOLDING,
+    STAGE_POST_PROCESSING,
+    STAGE_SIMULATION,
+    STAGE_FINALIZING,
+)
 from orchestrator.agent import run_agent_refinement
 
 # Configure Celery app
@@ -123,7 +129,10 @@ def send_webhook(webhook_url: str, payload: Dict[str, Any]) -> None:
 # Main pipeline
 # ---------------------------------------------------------------------------
 
-def _run_prediction_core(request_data: Dict[str, Any]) -> Dict[str, Any]:
+def _run_prediction_core(
+    request_data: Dict[str, Any],
+    progress_cb: Optional[Callable[[int, str], None]] = None,
+) -> Dict[str, Any]:
     """
     Core prediction logic with multi-seed sampling and iterative refinement.
 
@@ -137,11 +146,23 @@ def _run_prediction_core(request_data: Dict[str, Any]) -> Dict[str, Any]:
       4. Post-refinement: MD simulation (OpenMM/GROMACS) if membrane/ligand context present
 
     Called by both the Celery task (local dev) and the Modal function (production).
+    `progress_cb`, when provided, is invoked as progress_cb(percent, stage) at each
+    coarse stage boundary; the two wrappers relay it to their own transport (Celery
+    update_state / Modal Dict). It is optional so the shared dict-in entry point is
+    unchanged for callers that don't report progress.
     """
     run_id = request_data.get("run_id", str(uuid.uuid4()))
     sequence = request_data["sequence"]
     context = request_data.get("context", {})
     priority = request_data.get("priority", "fast")
+
+    def _emit(percent: int, stage: str) -> None:
+        """Report progress; never let a status-update failure break the prediction."""
+        if progress_cb:
+            try:
+                progress_cb(percent, stage)
+            except Exception:
+                logger.debug("progress callback failed", exc_info=True)
 
     logger.info(f"Starting prediction task {run_id} (priority={priority})")
 
@@ -160,6 +181,7 @@ def _run_prediction_core(request_data: Dict[str, Any]) -> Dict[str, Any]:
         # ---------------------------------------------------------------
         # Step 1: Initial multi-seed predictions
         # ---------------------------------------------------------------
+        _emit(10, STAGE_FOLDING)
         predictions: List[StructurePrediction] = []
 
         # ESMFold (deterministic — one call suffices regardless of ENSEMBLE_NUM_SEEDS)
@@ -229,6 +251,7 @@ def _run_prediction_core(request_data: Dict[str, Any]) -> Dict[str, Any]:
         # ---------------------------------------------------------------
         # Step 2: Iterative refinement loop
         # ---------------------------------------------------------------
+        _emit(40, STAGE_POST_PROCESSING)
         refinement_iterations = 0
         # When AGENT_ENABLED the Claude agent decides tools to invoke (replaces this loop).
         if AGENT_ENABLED:
@@ -332,6 +355,7 @@ def _run_prediction_core(request_data: Dict[str, Any]) -> Dict[str, Any]:
             # Step 3: MD simulation when membrane or ligand context is present
             needs_md = bool(context.get("membrane") or context.get("ligands"))
             if needs_md and (OPENMM_ENABLED or GROMACS_ENABLED):
+                _emit(60, STAGE_SIMULATION)
                 pH = float(context.get("pH", 7.4))
                 temperature_c = float(context.get("temperature_c", 25.0))
                 membrane_ctx = context.get("membrane")  # dict or None
@@ -374,6 +398,8 @@ def _run_prediction_core(request_data: Dict[str, Any]) -> Dict[str, Any]:
                         post_proc.decision = "escalate"
                 except RuntimeError as e:
                     logger.warning(f"MD simulation skipped: {e}")
+
+        _emit(90, STAGE_FINALIZING)
 
         # Extract simulation_pdb from sim metrics (present when OpenMM ran);
         # keep it out of simulation_metrics so the metrics dict stays compact.
@@ -433,4 +459,9 @@ def _run_prediction_core(request_data: Dict[str, Any]) -> Dict[str, Any]:
 def predict_protein_structure(self, request_data: Dict[str, Any]) -> Dict[str, Any]:
     """Celery task wrapper around _run_prediction_core (used for local dev)."""
     request_data.setdefault("run_id", self.request.id)
-    return _run_prediction_core(request_data)
+
+    def progress_cb(percent: int, stage: str) -> None:
+        # Relayed to Celery's result backend; the API reads it via AsyncResult.info.
+        self.update_state(state="PROGRESS", meta={"progress_percent": percent, "stage": stage})
+
+    return _run_prediction_core(request_data, progress_cb=progress_cb)

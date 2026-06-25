@@ -174,6 +174,7 @@ class JobStatus(BaseModel):
     run_id: str
     status: str
     progress_percent: int
+    stage: Optional[str] = None  # coarse pipeline stage: folding/post_processing/simulation/finalizing
     error_message: Optional[str] = None
     created_at: datetime
     updated_at: datetime
