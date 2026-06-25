@@ -1,0 +1,26 @@
+name: propredict
+channels:
+  - conda-forge
+  - rosettacommons
+dependencies:
+  # MD simulation
+  - openmm
+  - pdbfixer
+  - openmmforcefields
+  - mdanalysis
+
+  # Ligand preparation
+  - rdkit
+  - openff-toolkit
+  - openff-forcefields
+  - openff-interchange
+
+  # Docking
+  - vina
+
+  # Rosetta (free academic license)
+  - pyrosetta
+
+  # GROMACS — install separately:
+  #   macOS: brew install gromacs
+  #   Linux/Docker: apt-get install gromacs

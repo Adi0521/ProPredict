@@ -68,3 +68,9 @@ See @ROADMAP.md for completed stages and remaining work.
 ## Testing
 
 When modifying orchestrator code, always run `pytest tests/test_boltz.py` to verify nothing broke — it's the fastest feedback loop (fully mocked). For API changes, `test_api.py` needs Postgres or mocking `models.database.init_db`.
+
+## Workflow Rules
+
+- **Step by step** — do NOT batch multiple sub-tasks in one pass. Complete one, discuss the next.
+- **Discuss before acting** — always propose the plan for the next step and get approval before writing code or making changes.
+- **Document in `Process/`** — each completed step gets a short write-up in the `Process/` folder describing what was done, why, and any decisions made. Cite sources (docs, issues, etc.) when applicable.

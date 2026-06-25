@@ -1,0 +1,2 @@
+-r requirements.txt
+boltz @ git+https://github.com/jwohlwend/boltz
