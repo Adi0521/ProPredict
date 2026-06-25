@@ -4,7 +4,7 @@ import logging
 import random
 import time
 import uuid
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Callable
 from celery import Celery, Task
 from datetime import datetime
 import requests
