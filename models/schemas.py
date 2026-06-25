@@ -121,6 +121,7 @@ class PostProcessingResult(BaseModel):
     gromacs_potential_energy: Optional[float] = None
     simulation_metrics: Optional[Dict[str, Any]] = None  # RMSD, Rg, n_frames, pH, backend, etc.
     agent_reasoning: Optional[str] = None               # Claude agent explanation (Stage D)
+    validation_reason: Optional[str] = None             # why simulation validation escalated; None if it passed/didn't run
     score: float
     decision: str  # "accept", "refine", "escalate"
 

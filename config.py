@@ -46,6 +46,10 @@ PLDDT_REFINE_THRESHOLD = float(os.getenv("PLDDT_REFINE_THRESHOLD", 60.0))
 PLDDT_VARIANCE_THRESHOLD = float(os.getenv("PLDDT_VARIANCE_THRESHOLD", 30.0))
 VARIANCE_REGION_PERCENT = float(os.getenv("VARIANCE_REGION_PERCENT", 10.0))
 
+# MD Simulation Validation (Stage 4.5) — escalate when a trajectory looks unphysical
+SIM_RMSD_MAX_NM = float(os.getenv("SIM_RMSD_MAX_NM", 2.0))            # CA RMSD blowup threshold (nm)
+SIM_RG_DIVERGENCE_FACTOR = float(os.getenv("SIM_RG_DIVERGENCE_FACTOR", 3.0))  # max Rg / initial Rg before "diverged"
+
 # Job Configuration
 JOB_TIMEOUT_SECONDS = int(os.getenv("JOB_TIMEOUT_SECONDS", 600))
 ENSEMBLE_NUM_SEEDS = int(os.getenv("ENSEMBLE_NUM_SEEDS", 1))

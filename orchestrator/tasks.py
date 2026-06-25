@@ -42,7 +42,7 @@ from orchestrator.simulation import (
     run_gromacs_md,
     run_openmm_simulation,
 )
-from orchestrator.scoring import count_clashes, compute_post_processing
+from orchestrator.scoring import count_clashes, compute_post_processing, validate_simulation_metrics
 from orchestrator.agent import run_agent_refinement
 
 # Configure Celery app
@@ -365,6 +365,13 @@ def _run_prediction_core(request_data: Dict[str, Any]) -> Dict[str, Any]:
                         )
                     post_proc.gromacs_potential_energy = sim_result["potential_energy"]
                     post_proc.simulation_metrics = sim_result
+
+                    # Stage 4.5: validate the trajectory; escalate if it looks unphysical.
+                    failure_reason = validate_simulation_metrics(sim_result)
+                    if failure_reason:
+                        logger.warning(f"MD validation failed — escalating: {failure_reason}")
+                        post_proc.validation_reason = failure_reason
+                        post_proc.decision = "escalate"
                 except RuntimeError as e:
                     logger.warning(f"MD simulation skipped: {e}")
 
