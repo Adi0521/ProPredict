@@ -319,3 +319,103 @@ class TestValidateSimulationMetrics:
             post_proc.decision = "escalate"
         assert post_proc.decision == "escalate"
         assert post_proc.validation_reason is not None
+
+
+# ---------------------------------------------------------------------------
+# 7. celery_state_to_status  (Stage 4.6 — status endpoint progress mapping)
+# ---------------------------------------------------------------------------
+
+class TestCeleryStateToStatus:
+    def test_pending(self):
+        from orchestrator.progress import celery_state_to_status
+
+        assert celery_state_to_status("PENDING", None) == ("pending", 0, None)
+
+    def test_none_state_treated_as_pending(self):
+        from orchestrator.progress import celery_state_to_status
+
+        assert celery_state_to_status(None, None) == ("pending", 0, None)
+
+    def test_started_before_first_progress(self):
+        from orchestrator.progress import celery_state_to_status
+
+        assert celery_state_to_status("STARTED", None) == ("started", 50, None)
+
+    def test_progress_reads_meta(self):
+        from orchestrator.progress import celery_state_to_status
+
+        info = {"progress_percent": 60, "stage": "simulation"}
+        assert celery_state_to_status("PROGRESS", info) == ("started", 60, "simulation")
+
+    def test_progress_with_missing_meta_keys_defaults(self):
+        from orchestrator.progress import celery_state_to_status
+
+        assert celery_state_to_status("PROGRESS", {}) == ("started", 50, None)
+
+    def test_success(self):
+        from orchestrator.progress import celery_state_to_status
+
+        assert celery_state_to_status("SUCCESS", None) == ("completed", 100, None)
+
+    def test_failure_does_not_dereference_exception_info(self):
+        from orchestrator.progress import celery_state_to_status
+
+        # On FAILURE, Celery sets info to the exception — must not crash or read it.
+        assert celery_state_to_status("FAILURE", ValueError("boom")) == ("failed", 0, None)
+
+    def test_lowercase_state_is_normalised(self):
+        from orchestrator.progress import celery_state_to_status
+
+        assert celery_state_to_status("progress", {"progress_percent": 90, "stage": "finalizing"}) == (
+            "started", 90, "finalizing",
+        )
+
+
+# ---------------------------------------------------------------------------
+# 8. _run_prediction_core progress emission (Stage 4.6 wiring)
+# ---------------------------------------------------------------------------
+
+def _accept_prediction():
+    from models.schemas import StructurePrediction
+
+    # mean_plddt 95 >= accept threshold -> decision "accept" -> no refinement, no MD.
+    return StructurePrediction(
+        structure_pdb="ATOM",
+        plddt_scores=[95.0],
+        mean_plddt=95.0,
+        seed=0,
+        model_name="esmfold",
+    )
+
+
+class TestRunPredictionCoreProgress:
+    def _run(self, cb):
+        from unittest.mock import patch, MagicMock
+        import orchestrator.tasks as tasks
+
+        fake_redis = MagicMock()
+        fake_redis.get.return_value = None  # cache miss -> full pipeline runs
+
+        with patch.object(tasks, "_get_redis", return_value=fake_redis), \
+             patch.object(tasks, "call_esmfold_api", return_value=_accept_prediction()), \
+             patch.object(tasks, "AGENT_ENABLED", False), \
+             patch("orchestrator.scoring.count_clashes", return_value=0):
+            return tasks._run_prediction_core(
+                {"run_id": "test-progress", "sequence": "MKTAYIAK", "context": {}},
+                progress_cb=cb,
+            )
+
+    def test_emits_expected_stage_sequence_on_accept_path(self):
+        events = []
+        result = self._run(lambda pct, stage: events.append((pct, stage)))
+
+        assert result["status"] == "completed"
+        # No MD (empty context) -> simulation stage is skipped.
+        assert events == [(10, "folding"), (40, "post_processing"), (90, "finalizing")]
+
+    def test_failing_callback_does_not_break_prediction(self):
+        def boom(pct, stage):
+            raise RuntimeError("status backend down")
+
+        result = self._run(boom)  # must not raise
+        assert result["status"] == "completed"

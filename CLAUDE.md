@@ -50,7 +50,7 @@ See @ROADMAP.md for completed stages and remaining work.
 - **Feature flags gate every optional tool** — each must be installed separately AND enabled in `.env`. Never assume a tool is available; always check the flag first (e.g. `if BOLTZ_ENABLED`).
 - **Pydantic v2** — use `model_dump()` never `.dict()`. Schemas in `models/schemas.py`.
 - **Celery app** is defined in `orchestrator/tasks.py`, not a separate celery.py.
-- **`_run_prediction_core(request_data: dict)`** is the shared entry point for both Celery and Modal — keep this invariant.
+- **`_run_prediction_core(request_data: dict, progress_cb=None)`** is the shared entry point for both Celery and Modal — keep the dict-in invariant. `progress_cb(percent, stage)` is optional; each wrapper relays it to its own transport (Celery `update_state`, Modal `modal.Dict`). Stage names/percents live in `orchestrator/progress.py`.
 - **PDB files are strings** stored in task results and Postgres `result_json`, never on disk.
 - **pLDDT is always 0-100** — ESMFold B-factor is 0-1, multiply by 100 on parse.
 - **Boltz-2 runs via CLI subprocess** (`boltz predict` with YAML input), not Python API.
