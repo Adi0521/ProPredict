@@ -70,3 +70,5 @@ wandb/
 # ---- Claude Code (personal / local-only) ----
 CLAUDE.local.md
 .claude/settings.local.json
+
+mutation-plans/

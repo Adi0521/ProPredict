@@ -89,12 +89,18 @@ MEMBRANE_FF = os.getenv("MEMBRANE_FF", "charmm36-feb2026_cgenff-5.0")
 # GNINA docking binary: https://github.com/gnina/gnina/releases
 GNINA_BIN = os.getenv("GNINA_BIN", "gnina")
 
+# Structure-aware mutation scoring (ProteinMPNN — MIT license)
+# git clone https://github.com/dauparas/ProteinMPNN.git — weights (~26MB) ship in the clone
+PROTEINMPNN_PATH = os.getenv("PROTEINMPNN_PATH", "")
+PROTEINMPNN_MODEL_NAME = os.getenv("PROTEINMPNN_MODEL_NAME", "v_48_020")
+
 # Agentic refinement loop (Stage D — requires ANTHROPIC_API_KEY)
 AGENT_ENABLED = os.getenv("AGENT_ENABLED", "False") == "True"
 AGENT_API_KEY = os.getenv("AGENT_API_KEY", "")
 AGENT_BASE_URL = os.getenv("AGENT_BASE_URL", "")
-AGENT_MODEL = os.getenv("AGENT_MODEL", "claude-opus-4-6")
+AGENT_MODEL = os.getenv("AGENT_MODEL", "claude-sonnet-5")
 AGENT_MAX_ITERATIONS = int(os.getenv("AGENT_MAX_ITERATIONS", 5))
+AGENT_MAX_MUTATIONS = int(os.getenv("AGENT_MAX_MUTATIONS", 3))   # apply_mutation calls per session, separate from AGENT_MAX_ITERATIONS
 
 # Weights & Biases (optional benchmark tracking)
 WANDB_PROJECT = os.getenv("WANDB_PROJECT", "")
