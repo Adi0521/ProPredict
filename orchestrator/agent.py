@@ -13,13 +13,20 @@ from config import (
     AGENT_BASE_URL,
     AGENT_MODEL,
     AGENT_MAX_ITERATIONS,
+    AGENT_MAX_MUTATIONS,
 )
 from models.schemas import StructurePrediction, PostProcessingResult
 from orchestrator.backends.boltz import call_boltz
+from orchestrator.backends.esmfold import call_esmfold_api
 from orchestrator.simulation import run_rosetta_relax, run_openmm_simulation, run_gromacs_md
 from orchestrator.scoring import count_clashes, compute_post_processing
 
 logger = logging.getLogger(__name__)
+
+# Standard amino acids for mutation validation. Deliberately duplicated from
+# PredictionRequest.validate_sequence in models/schemas.py rather than imported —
+# keeps agent.py independent of the request schema's validators.
+_VALID_AA = set("ACDEFGHIKLMNPQRSTVWY")
 
 
 _AGENT_TOOLS = [
@@ -88,6 +95,37 @@ _AGENT_TOOLS = [
         },
     },
     {
+        "name": "apply_mutation",
+        "description": (
+            "Mutate the sequence at a given position and re-predict the structure. "
+            "Use to test whether a point mutation resolves a low-confidence region or "
+            "matches a requested mutation in context.mutations. Re-runs the active "
+            "prediction backend (Boltz-2 if enabled, else ESMFold) on the mutated sequence. "
+            "Limited to AGENT_MAX_MUTATIONS calls per session — use them deliberately."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "position": {
+                    "type": "integer",
+                    "description": "1-indexed residue position to mutate.",
+                },
+                "from_aa": {
+                    "type": "string",
+                    "description": (
+                        "Expected current amino acid (1-letter code) at `position`, for "
+                        "verification. Optional but recommended."
+                    ),
+                },
+                "to_aa": {
+                    "type": "string",
+                    "description": "Target amino acid (1-letter code) to mutate to.",
+                },
+            },
+            "required": ["position", "to_aa"],
+        },
+    },
+    {
         "name": "accept_structure",
         "description": "Accept the current structure. Final decision — call when quality is sufficient.",
         "input_schema": {
@@ -131,6 +169,16 @@ Guidelines:
 - mean_pLDDT < 60 -> try run_boltz_prediction if BOLTZ_ENABLED, else escalate
 - Membrane or ligand context present -> run simulation before accepting
 - If a required backend is disabled -> escalate and explain
+
+If context.mutations lists specific mutations, use apply_mutation to test them and
+compare mean_pLDDT before/after. Only mutate when context requests it or when analysis
+suggests a mutation would resolve a specific low-confidence region — don't mutate
+speculatively without a stated reason in your final reasoning.
+
+Note: a structure-aware mutation scorer (orchestrator/mutation_scan.py, ProteinMPNN-
+based, validated against ProteinGym) exists in the codebase for ranking candidate
+substitutions algorithmically, but is not yet available to you as a tool — for now,
+choose mutation targets from analyze_structure's output and context.mutations only.
 
 Be concise. Make a terminal decision as soon as you have enough information."""
 
@@ -252,6 +300,70 @@ def _execute_agent_tool(
         except Exception as e:
             return json.dumps({"error": str(e)})
 
+    if tool_name == "apply_mutation":
+        applied_so_far = len(state.get("mutations_applied", []))
+        if applied_so_far >= AGENT_MAX_MUTATIONS:
+            return json.dumps({
+                "error": (
+                    f"mutation limit reached ({applied_so_far}/{AGENT_MAX_MUTATIONS} "
+                    "AGENT_MAX_MUTATIONS) — no further mutations this session"
+                )
+            })
+
+        try:
+            position = int(tool_input["position"])
+            to_aa = str(tool_input["to_aa"]).upper()
+        except (KeyError, ValueError, TypeError):
+            return json.dumps({"error": "position and to_aa are required and must be valid"})
+
+        from_aa = tool_input.get("from_aa")
+        seq = state["sequence"]
+
+        if position < 1 or position > len(seq):
+            return json.dumps({
+                "error": f"position {position} out of range (sequence length {len(seq)})"
+            })
+        if to_aa not in _VALID_AA:
+            return json.dumps({"error": f"'{to_aa}' is not a standard amino acid code"})
+
+        idx = position - 1
+        actual_from = seq[idx]
+        if from_aa and str(from_aa).upper() != actual_from:
+            return json.dumps({
+                "error": (
+                    f"from_aa mismatch: sequence has '{actual_from}' at position "
+                    f"{position}, not '{from_aa}'"
+                )
+            })
+
+        mutated_seq = seq[:idx] + to_aa + seq[idx + 1:]
+
+        try:
+            if BOLTZ_ENABLED:
+                pred = call_boltz(mutated_seq, context=state["context"], seed=0)
+            else:
+                pred = call_esmfold_api(mutated_seq, seed=0)
+        except Exception as e:
+            return json.dumps({"error": f"re-prediction failed, mutation not applied: {e}"})
+
+        state["sequence"] = mutated_seq
+        state["current_pdb"] = pred.structure_pdb
+        state["plddt_scores"] = pred.plddt_scores
+        state["mean_plddt"] = pred.mean_plddt
+        state["num_clashes"] = count_clashes(pred.structure_pdb)
+        state.setdefault("mutations_applied", []).append(f"{actual_from}{position}{to_aa}")
+
+        result = {
+            "status": "completed",
+            "mutation": f"{actual_from}{position}{to_aa}",
+            "model_name": pred.model_name,
+            "mean_plddt": round(pred.mean_plddt, 2),
+            "num_clashes": state["num_clashes"],
+        }
+        if pred.affinity_score is not None:
+            result["affinity_kcal_mol"] = round(pred.affinity_score, 3)
+        return json.dumps(result)
+
     if tool_name in ("accept_structure", "escalate_structure"):
         state["terminal_tool"] = tool_name
         state["agent_reasoning"] = tool_input.get("reasoning", "")
@@ -303,6 +415,7 @@ def run_agent_refinement(
         "sim_result":     None,
         "terminal_tool":  None,
         "agent_reasoning": "",
+        "mutations_applied": [],
     }
 
     disagreement_lines = ""
@@ -403,6 +516,8 @@ def run_agent_refinement(
     if state["sim_result"]:
         post_proc.gromacs_potential_energy = state["sim_result"].get("potential_energy")
         post_proc.simulation_metrics = state["sim_result"]
+
+    post_proc.mutations_applied = state["mutations_applied"] or None
 
     updated_pdb = state["current_pdb"] if state["current_pdb"] != prediction.structure_pdb else None
     return post_proc, updated_pdb
