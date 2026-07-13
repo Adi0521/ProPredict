@@ -419,8 +419,11 @@ def parameterize_ligand_acpype(
         )
 
     logger.info(f"ACPYPE: generating GAFF2 parameters for {ligand_name}...")
+    # -o gmx selects GROMACS output (`--outtop`); NOT -f, which is the boolean
+    # --force flag (store_true) — passing "-f gmx" leaves "gmx" as a stray positional
+    # arg and acpype errors with "unrecognized arguments: gmx".
     result = subprocess.run(
-        [acpype, "-i", docked_sdf, "-n", "0", "-b", ligand_name, "-f", "gmx"],
+        [acpype, "-i", docked_sdf, "-n", "0", "-b", ligand_name, "-o", "gmx"],
         capture_output=True,
         text=True,
         cwd=out_dir,

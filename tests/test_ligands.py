@@ -252,6 +252,11 @@ def test_acpype_success_collects_outputs(mock_run, tmp_path):
 
     assert set(out) == {"itp", "gro", "mol2"}
     assert out["itp"].endswith("LIG_GMX.itp")
+    # GROMACS output must be selected via -o gmx (--outtop), NOT -f (which is the
+    # boolean --force flag). Regression guard for the "unrecognized arguments: gmx" bug.
+    cmd = mock_run.call_args.args[0]
+    assert cmd[cmd.index("-o") + 1] == "gmx"
+    assert "-f" not in cmd
 
 
 @patch("orchestrator.ligands.subprocess.run")

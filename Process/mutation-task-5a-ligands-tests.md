@@ -41,21 +41,44 @@ Each step is wrapped to return diagnostics (`*_ok` / `*_error`) rather than hard
 and returns a summary dict like `test_boltz_gpu`.
 
 ## Modal image coverage note (important)
-The Modal image (`modal_app.py`) installs RDKit, Vina, meeko, OpenFF, GROMACS — but
-**NOT gnina and NOT acpype** (gnina is a release-binary download; acpype isn't in
-`requirements.txt` or the conda spec). Consequences:
-- `test_ligands_modal` genuinely exercises the **GNINA-absent → Vina fallback** and the
-  `use_openff=True` branch — a real test of the fallback logic, not a contrivance.
-- `dock_gnina` and `parameterize_ligand_acpype` have **no real-binary coverage anywhere**
-  — mocked-only. Real coverage would require adding the gnina release binary and
-  `pip install acpype` (+ AmberTools) to the image. Flagged here rather than implied.
+The Modal image (`modal_app.py`) installs RDKit, Vina, meeko, OpenFF, GROMACS, and now
+**AmberTools + OpenBabel + acpype** (added via conda-forge). GNINA is still absent
+(CUDA-compiled binary; no maintained conda package). Consequences:
+- `test_ligands_modal` genuinely exercises RDKit → Vina → OpenFF **and ACPYPE(GAFF2)**
+  for real, plus the **GNINA-absent → Vina fallback** in `prepare_ligands`.
+- `parameterize_ligand_acpype` now has **real coverage** on Modal (conda AmberTools 21.11,
+  not the fragile pip acpype wheel).
+- `dock_gnina` remains **mocked-only** — real gnina coverage is a tracked follow-up
+  (see ROADMAP "Real-binary GNINA coverage on Modal"): it needs a dedicated CUDA GPU
+  image because the release binary is CUDA-linked and the official gnina Docker image is
+  Py3.6/Ubuntu18.04. Not blocking, since Vina (the CPU fallback) is real-tested.
 
 ## Verification
 `python -m pytest tests/test_ligands.py -q` in the `ProPredict` conda env: **27 passed**.
 Full relevant suite (`test_ligands + test_agent + test_mutation_scan + test_boltz`):
 **60 passed, 3 skipped** (skips: 2 Boltz GPU + 1 ProteinMPNN integration). `modal_app.py`
-parses clean. The Modal function is invoked separately via `modal run` (not part of the
-local pytest run).
+parses clean.
+
+## Real Modal run — two bugs caught (2026-07-12)
+`modal run modal_app.py::test_ligands_modal` surfaced two real defects the mocks could
+not (both now fixed and confirmed green on a second run):
+1. **`parameterize_ligand_acpype` wrong flag** — the command used `-f gmx`, but acpype's
+   `-f`/`--force` is a boolean (`store_true`); `gmx` landed as a stray positional →
+   `acpype: error: unrecognized arguments: gmx`. Fixed to `-o gmx` (`--outtop`, the real
+   GROMACS-output selector). Regression-locked in the mocked test.
+2. **`pydantic==2.5.0` stale pin** — conda `openff-interchange` calls
+   `model_dump(serialize_as_any=...)` (pydantic ≥ 2.7); the pip requirements downgraded
+   pydantic to 2.5.0 in the image, breaking OpenFF. Bumped `requirements.txt` to
+   `pydantic==2.13.4` (the version the local suite already passes on; fastapi 0.104.1
+   validated against it locally).
+
+Confirmed result: `smiles_to_3d_ok`, `dock_vina_ok`, `openff_ok`, `acpype_ok` all `True`;
+`prepare_ligands` returns one entry with `parameterizer="openff"`, docked pose set.
+
+**Known minor caveat:** acpype names its charged mol2 by charge-method+atom-type (e.g.
+`ETH_bcc_gaff2.mol2`), not `<name>.mol2`, so `parameterize_ligand_acpype`'s exact-name
+mol2 lookup misses it (logs a warning, `mol2` key omitted). Inspection-only — GROMACS MD
+uses the `.itp`/`.gro`/`.top`, which ARE collected. Fix is a glob lookup (see task notes).
 
 ## Next
 Task 5b — `tests/test_membrane.py` (mocked) for `orchestrator/membrane.py`
