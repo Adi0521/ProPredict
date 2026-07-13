@@ -132,7 +132,7 @@ def test_ca_centroid_falls_back_to_all_when_no_match(tmp_path):
     pdb = _write(tmp_path, "p.pdb", _PDB)
     # residue 999 doesn't exist -> falls back to the full-protein CA centroid
     cx, cy, cz = _ca_centroid(pdb, [999])
-    assert (round(cx, 3), round(cy, 3), round(cz, 3)) == (5.0, 6.0, 22.0 / 3)
+    assert (round(cx, 3), round(cy, 3), round(cz, 3)) == (5.0, 6.0, round(22.0 / 3, 3))
 
 
 def test_ca_helpers_on_missing_file():

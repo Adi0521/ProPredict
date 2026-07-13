@@ -106,6 +106,94 @@ def fastapi_endpoint():
     return fastapi_app
 
 
+@app.function(timeout=600)
+def test_ligands_modal() -> dict:
+    """
+    Real-binary smoke test for the Stage-F ligand pipeline (CPU — no GPU needed).
+
+    Exercises the actual RDKit -> Vina -> OpenFF path in the image. GNINA and ACPYPE
+    are NOT installed in this image, so prepare_ligands here genuinely walks the
+    GNINA-absent -> Vina fallback and the use_openff=True branch. The mocked local
+    counterpart is tests/test_ligands.py.
+
+    Run with:
+        modal run modal_app.py::test_ligands_modal
+    """
+    import os
+    import tempfile
+
+    from orchestrator.ligands import (
+        smiles_to_3d,
+        dock_vina,
+        parameterize_ligand_openff,
+        prepare_ligands,
+    )
+
+    # A minimal but valid multi-residue receptor (real CA coords) — enough for Vina's
+    # blind-docking box and receptor prep. Ethanol is the ligand (clean neutral
+    # molecule OpenFF handles cleanly).
+    receptor_pdb = (
+        "ATOM      1  N   ALA A   1      11.104   6.134  -6.504  1.00  0.00           N\n"
+        "ATOM      2  CA  ALA A   1      11.639   6.071  -5.147  1.00  0.00           C\n"
+        "ATOM      3  C   ALA A   1      13.140   6.341  -5.184  1.00  0.00           C\n"
+        "ATOM      4  O   ALA A   1      13.629   7.147  -5.980  1.00  0.00           O\n"
+        "ATOM      5  N   GLY A   2      13.865   5.677  -4.283  1.00  0.00           N\n"
+        "ATOM      6  CA  GLY A   2      15.311   5.846  -4.215  1.00  0.00           C\n"
+        "ATOM      7  C   GLY A   2      15.998   4.630  -3.617  1.00  0.00           C\n"
+        "ATOM      8  O   GLY A   2      15.379   3.815  -2.934  1.00  0.00           O\n"
+        "ATOM      9  N   SER A   3      17.296   4.502  -3.881  1.00  0.00           N\n"
+        "ATOM     10  CA  SER A   3      18.079   3.375  -3.383  1.00  0.00           C\n"
+        "ATOM     11  C   SER A   3      19.529   3.759  -3.103  1.00  0.00           C\n"
+        "ATOM     12  O   SER A   3      20.207   4.353  -3.944  1.00  0.00           O\n"
+    )
+    ethanol = "CCO"
+    results: dict = {"gnina_in_image": False, "acpype_in_image": False}
+
+    with tempfile.TemporaryDirectory() as td:
+        # 1. RDKit ETKDG conformer
+        try:
+            sdf = smiles_to_3d(ethanol, "ETH", td)
+            results["smiles_to_3d_ok"] = os.path.isfile(sdf)
+        except Exception as e:  # noqa: BLE001
+            results["smiles_to_3d_error"] = repr(e)
+            sdf = None
+
+        rec_path = os.path.join(td, "receptor_input.pdb")
+        with open(rec_path, "w") as fh:
+            fh.write(receptor_pdb)
+
+        # 2. Real Vina blind docking (meeko is in the image)
+        if sdf:
+            try:
+                docked = dock_vina(sdf, rec_path, None, td)
+                results["dock_vina_ok"] = os.path.isfile(docked)
+            except Exception as e:  # noqa: BLE001
+                results["dock_vina_error"] = repr(e)
+
+        # 3. Real OpenFF SMIRNOFF parameterization
+        if sdf:
+            try:
+                params = parameterize_ligand_openff(sdf, "ETH", td)
+                results["openff_ok"] = os.path.isfile(params.get("xml", ""))
+            except Exception as e:  # noqa: BLE001
+                results["openff_error"] = repr(e)
+
+        # 4. Full pipeline: GNINA absent -> Vina fallback, use_openff=True
+        entries = prepare_ligands(
+            [{"name": "ETH", "smiles": ethanol, "binding_site": None}],
+            receptor_pdb,
+            td,
+            use_openff=True,
+        )
+        results["prepare_ligands_n"] = len(entries)
+        if entries:
+            results["prepare_ligands_parameterizer"] = entries[0]["parameterizer"]
+            results["prepare_ligands_docked_sdf_set"] = entries[0]["docked_sdf"] is not None
+
+    print(results)
+    return results
+
+
 @app.function(
     timeout=600,
     gpu="A10G",
