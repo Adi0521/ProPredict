@@ -15,6 +15,7 @@ ligand_files = prepare_ligands(ligand_contexts, protein_pdb_string, tmpdir)
 # Returns list of {"name": ..., "mol2": ..., "frcmod": ..., "itp": ...}
 """
 
+import glob
 import logging
 import os
 import shutil
@@ -442,13 +443,20 @@ def parameterize_ligand_acpype(
     for ext, key in [
         (f"{ligand_name}_GMX.itp", "itp"),
         (f"{ligand_name}_GMX.gro", "gro"),
-        (f"{ligand_name}.mol2",   "mol2"),
     ]:
         candidate = os.path.join(acpype_dir, ext)
         if os.path.isfile(candidate):
             paths[key] = candidate
         else:
             logger.warning(f"ACPYPE: expected output not found: {candidate}")
+
+    # ACPYPE names the charged mol2 by charge-method + atom-type
+    # (e.g. <name>_bcc_gaff2.mol2), not <name>.mol2 — glob for it rather than assume.
+    mol2_matches = sorted(glob.glob(os.path.join(acpype_dir, f"{ligand_name}*.mol2")))
+    if mol2_matches:
+        paths["mol2"] = mol2_matches[0]
+    else:
+        logger.warning(f"ACPYPE: no mol2 output found in {acpype_dir}")
 
     logger.info(f"ACPYPE: parameterization complete for {ligand_name}: {list(paths.keys())}")
     return paths

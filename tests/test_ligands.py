@@ -245,13 +245,16 @@ def test_acpype_success_collects_outputs(mock_run, tmp_path):
     acpype_dir.mkdir()
     (acpype_dir / "LIG_GMX.itp").write_text("itp")
     (acpype_dir / "LIG_GMX.gro").write_text("gro")
-    (acpype_dir / "LIG.mol2").write_text("mol2")
+    # Real acpype names the charged mol2 by charge-method + atom-type, not LIG.mol2 —
+    # the collection globs LIG*.mol2 to find it (regression for the missed-mol2 warning).
+    (acpype_dir / "LIG_bcc_gaff2.mol2").write_text("mol2")
 
     with patch("orchestrator.ligands.shutil.which", return_value="/usr/bin/acpype"):
         out = parameterize_ligand_acpype("docked.sdf", "LIG", str(tmp_path))
 
     assert set(out) == {"itp", "gro", "mol2"}
     assert out["itp"].endswith("LIG_GMX.itp")
+    assert out["mol2"].endswith("LIG_bcc_gaff2.mol2")
     # GROMACS output must be selected via -o gmx (--outtop), NOT -f (which is the
     # boolean --force flag). Regression guard for the "unrecognized arguments: gmx" bug.
     cmd = mock_run.call_args.args[0]
