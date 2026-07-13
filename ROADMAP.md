@@ -67,17 +67,19 @@ adaptive agent loop, with support for multi-model ensemble prediction.
 - Celery `update_state()` calls at each pipeline stage (folding → post-processing → simulation → finalizing)
 - Update `/predict/{run_id}/status` to read real progress from `task.info`
 
-### Real-binary GNINA coverage on Modal (test-infra follow-up)
-- `orchestrator/ligands.py::dock_gnina` currently has **mocked-only** coverage
-  (`tests/test_ligands.py`). ACPYPE, Vina, RDKit, OpenFF are all real-tested in
-  `modal_app.py::test_ligands_modal`, but GNINA is not in the Modal image.
-- GNINA has no maintained conda package; the release binary is CUDA-compiled and
-  dynamically linked, and the official `gnina/gnina` Docker image is Ubuntu 18.04 /
-  Python 3.6–3.7 (conflicts with the project's 3.11). So real coverage needs a
-  dedicated CUDA GPU Modal image (gnina binary + CUDA runtime + OpenBabel layered onto
-  a Py3.11 env) and a `test_gnina_modal` function calling `smiles_to_3d` → `dock_gnina`.
-- Lower priority because Vina (the CPU fallback that `prepare_ligands` uses when GNINA
-  is absent) already has real end-to-end coverage.
+### ~~Real-binary GNINA coverage on Modal (test-infra follow-up)~~ DONE
+- `modal_app.py::test_gnina_modal` now gives `orchestrator/ligands.py::dock_gnina`
+  real-binary coverage (both the binding-site `--center_x` box branch and the blind
+  `--autobox_ligand` branch), joining ACPYPE/Vina/RDKit/OpenFF in `test_ligands_modal`.
+- GNINA has no conda package and the official `gnina/gnina` Docker image is Py3.6/
+  Ubuntu18.04, so it rides a **dedicated** `gnina_image`: the prebuilt v1.3 release
+  binary layered onto `nvidia/cuda:12.2.2-runtime-ubuntu22.04` (+ OpenBabel, RDKit).
+  Kept separate from the main image so the CUDA gnina layer doesn't bloat every other
+  function. Runs on a T4. `orchestrator/__init__.py` is empty, so importing
+  `orchestrator.ligands` there does not pull in torch/boltz/openff.
+- Verified green first run (`gnina_on_path`, `smiles_to_3d_ok`, `dock_gnina_blind_ok`,
+  `dock_gnina_site_ok` all True). `tests/test_ligands.py` keeps the mocked local
+  coverage for CI without a GPU.
 
 ---
 

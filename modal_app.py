@@ -50,6 +50,32 @@ image = (
     .add_local_file("modal_app.py", remote_path="/root/modal_app.py")
 )
 
+# ---------------------------------------------------------------------------
+# Dedicated image for the GNINA real-binary test (ROADMAP follow-up).
+# GNINA has no conda package; its release binary is CUDA-linked, and the official
+# gnina Docker image is Py3.6/Ubuntu18.04 (incompatible with our 3.11 stack). So we
+# layer the prebuilt binary onto an NVIDIA CUDA runtime base with just RDKit +
+# OpenBabel — dock_gnina() only needs the binary on PATH and smiles_to_3d() needs
+# RDKit. orchestrator/__init__.py is empty, so importing orchestrator.ligands here
+# does NOT pull in torch/boltz/openff.
+GNINA_RELEASE = "https://github.com/gnina/gnina/releases/download/v1.3/gnina"
+gnina_image = (
+    Image.from_registry(
+        "nvidia/cuda:12.2.2-runtime-ubuntu22.04", add_python="3.11"
+    )
+    .apt_install("wget", "openbabel", "libopenbabel-dev", "libgomp1")
+    .run_commands(
+        f"wget -q {GNINA_RELEASE} -O /usr/local/bin/gnina",
+        "chmod +x /usr/local/bin/gnina",
+        # Fail the build loudly if the binary can't even print its version
+        # (missing runtime lib) rather than discovering it at test time.
+        "/usr/local/bin/gnina --version || true",
+    )
+    .pip_install("rdkit==2024.3.5", "numpy<2")
+    .add_local_dir("orchestrator", remote_path="/root/orchestrator")
+    .add_local_file("config.py", remote_path="/root/config.py")
+)
+
 app = App("propredict", image=image)
 
 # Create this secret in the Modal dashboard:
@@ -284,6 +310,79 @@ def test_ligands_modal() -> dict:
         if entries:
             results["prepare_ligands_parameterizer"] = entries[0]["parameterizer"]
             results["prepare_ligands_docked_sdf_set"] = entries[0]["docked_sdf"] is not None
+
+    print(results)
+    return results
+
+
+@app.function(image=gnina_image, gpu="T4", timeout=900)
+def test_gnina_modal() -> dict:
+    """
+    Real-binary smoke test for dock_gnina() — the one ligand path still mocked-only
+    in tests/test_ligands.py (GNINA is absent from the main image; see ROADMAP
+    "Real-binary GNINA coverage on Modal"). Runs the actual RDKit ETKDG -> gnina
+    docking pipeline on a real GPU, covering both the binding-site box branch and the
+    blind --autobox_ligand branch.
+
+    Run with:
+        modal run modal_app.py::test_gnina_modal
+    """
+    import os
+    import shutil
+    import tempfile
+
+    from orchestrator.ligands import smiles_to_3d, dock_gnina
+
+    # Same minimal multi-residue receptor as test_ligands_modal (real CA coords).
+    receptor_pdb = (
+        "ATOM      1  N   ALA A   1      11.104   6.134  -6.504  1.00  0.00           N\n"
+        "ATOM      2  CA  ALA A   1      11.639   6.071  -5.147  1.00  0.00           C\n"
+        "ATOM      3  C   ALA A   1      13.140   6.341  -5.184  1.00  0.00           C\n"
+        "ATOM      4  O   ALA A   1      13.629   7.147  -5.980  1.00  0.00           O\n"
+        "ATOM      5  N   GLY A   2      13.865   5.677  -4.283  1.00  0.00           N\n"
+        "ATOM      6  CA  GLY A   2      15.311   5.846  -4.215  1.00  0.00           C\n"
+        "ATOM      7  C   GLY A   2      15.998   4.630  -3.617  1.00  0.00           C\n"
+        "ATOM      8  O   GLY A   2      15.379   3.815  -2.934  1.00  0.00           O\n"
+        "ATOM      9  N   SER A   3      17.296   4.502  -3.881  1.00  0.00           N\n"
+        "ATOM     10  CA  SER A   3      18.079   3.375  -3.383  1.00  0.00           C\n"
+        "ATOM     11  C   SER A   3      19.529   3.759  -3.103  1.00  0.00           C\n"
+        "ATOM     12  O   SER A   3      20.207   4.353  -3.944  1.00  0.00           O\n"
+    )
+    ethanol = "CCO"
+    results: dict = {"gnina_on_path": shutil.which("gnina") is not None}
+
+    with tempfile.TemporaryDirectory() as td:
+        rec_path = os.path.join(td, "receptor.pdb")
+        with open(rec_path, "w") as fh:
+            fh.write(receptor_pdb)
+
+        # 1. RDKit ETKDG conformer
+        try:
+            sdf = smiles_to_3d(ethanol, "ETH", td)
+            results["smiles_to_3d_ok"] = os.path.isfile(sdf)
+        except Exception as e:  # noqa: BLE001
+            results["smiles_to_3d_error"] = repr(e)
+            sdf = None
+
+        # 2. Blind docking (--autobox_ligand branch), own out_dir → its own docked.sdf
+        if sdf:
+            blind_dir = os.path.join(td, "blind")
+            os.makedirs(blind_dir, exist_ok=True)
+            try:
+                blind = dock_gnina(sdf, rec_path, None, blind_dir)
+                results["dock_gnina_blind_ok"] = os.path.isfile(blind)
+            except Exception as e:  # noqa: BLE001
+                results["dock_gnina_blind_error"] = repr(e)
+
+        # 3. Binding-site docking (--center_x/--size_x branch, CA centroid of res 1-3)
+        if sdf:
+            site_dir = os.path.join(td, "site")
+            os.makedirs(site_dir, exist_ok=True)
+            try:
+                site = dock_gnina(sdf, rec_path, [1, 2, 3], site_dir)
+                results["dock_gnina_site_ok"] = os.path.isfile(site)
+            except Exception as e:  # noqa: BLE001
+                results["dock_gnina_site_error"] = repr(e)
 
     print(results)
     return results
