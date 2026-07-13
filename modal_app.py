@@ -16,6 +16,12 @@ image = (
         "openff-forcefields",
         "openff-interchange",
         "vina",
+        # Ligand GAFF2 parameterization (real coverage for parameterize_ligand_acpype).
+        # conda-forge ships a working AmberTools 21.11 + OpenBabel; the pip acpype wheel
+        # bundles fragile prebuilt binaries, so prefer conda here.
+        "ambertools",
+        "openbabel",
+        "acpype",
         channels=["conda-forge"],
     )
     .apt_install("gromacs", "curl", "git", "build-essential")
@@ -190,10 +196,11 @@ def test_ligands_modal() -> dict:
     """
     Real-binary smoke test for the Stage-F ligand pipeline (CPU — no GPU needed).
 
-    Exercises the actual RDKit -> Vina -> OpenFF path in the image. GNINA and ACPYPE
-    are NOT installed in this image, so prepare_ligands here genuinely walks the
-    GNINA-absent -> Vina fallback and the use_openff=True branch. The mocked local
-    counterpart is tests/test_ligands.py.
+    Exercises the actual RDKit -> Vina -> OpenFF and ACPYPE(GAFF2) paths in the image.
+    GNINA is NOT installed (CUDA-compiled binary — deferred; see ROADMAP), so
+    prepare_ligands here genuinely walks the GNINA-absent -> Vina fallback. ACPYPE and
+    AmberTools ARE in the image, so parameterize_ligand_acpype is covered for real. The
+    mocked local counterpart is tests/test_ligands.py.
 
     Run with:
         modal run modal_app.py::test_ligands_modal
@@ -205,6 +212,7 @@ def test_ligands_modal() -> dict:
         smiles_to_3d,
         dock_vina,
         parameterize_ligand_openff,
+        parameterize_ligand_acpype,
         prepare_ligands,
     )
 
@@ -226,7 +234,7 @@ def test_ligands_modal() -> dict:
         "ATOM     12  O   SER A   3      20.207   4.353  -3.944  1.00  0.00           O\n"
     )
     ethanol = "CCO"
-    results: dict = {"gnina_in_image": False, "acpype_in_image": False}
+    results: dict = {"gnina_in_image": False, "acpype_in_image": True}
 
     with tempfile.TemporaryDirectory() as td:
         # 1. RDKit ETKDG conformer
@@ -256,6 +264,14 @@ def test_ligands_modal() -> dict:
                 results["openff_ok"] = os.path.isfile(params.get("xml", ""))
             except Exception as e:  # noqa: BLE001
                 results["openff_error"] = repr(e)
+
+        # 3b. Real ACPYPE GAFF2 parameterization (AmberTools + acpype are in the image)
+        if sdf:
+            try:
+                acp = parameterize_ligand_acpype(sdf, "ETH", td)
+                results["acpype_ok"] = bool(acp.get("itp") and os.path.isfile(acp["itp"]))
+            except Exception as e:  # noqa: BLE001
+                results["acpype_error"] = repr(e)
 
         # 4. Full pipeline: GNINA absent -> Vina fallback, use_openff=True
         entries = prepare_ligands(

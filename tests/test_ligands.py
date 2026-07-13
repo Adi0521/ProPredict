@@ -8,9 +8,11 @@ sys.modules; docking/parameterization binaries are mocked via shutil.which +
 subprocess.run. The pure-Python PDB parsers are tested against synthetic PDB files.
 
 The real-binary counterpart is modal_app.py::test_ligands_modal, which runs the actual
-RDKit -> Vina -> OpenFF pipeline in the Modal image (run: modal run
-modal_app.py::test_ligands_modal). GNINA and ACPYPE are absent from that image too, so
-dock_gnina / parameterize_ligand_acpype are covered here (mocked) only.
+RDKit -> Vina -> OpenFF -> ACPYPE pipeline in the Modal image (run: modal run
+modal_app.py::test_ligands_modal). ACPYPE + AmberTools are now in that image, so
+parameterize_ligand_acpype has real coverage there. GNINA is still absent (CUDA-compiled
+binary — deferred, see ROADMAP), so dock_gnina is covered here (mocked) only; the real
+docking path is exercised end-to-end via the Vina fallback in test_ligands_modal.
 """
 import os
 import sys

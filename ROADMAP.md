@@ -67,6 +67,18 @@ adaptive agent loop, with support for multi-model ensemble prediction.
 - Celery `update_state()` calls at each pipeline stage (folding → post-processing → simulation → finalizing)
 - Update `/predict/{run_id}/status` to read real progress from `task.info`
 
+### Real-binary GNINA coverage on Modal (test-infra follow-up)
+- `orchestrator/ligands.py::dock_gnina` currently has **mocked-only** coverage
+  (`tests/test_ligands.py`). ACPYPE, Vina, RDKit, OpenFF are all real-tested in
+  `modal_app.py::test_ligands_modal`, but GNINA is not in the Modal image.
+- GNINA has no maintained conda package; the release binary is CUDA-compiled and
+  dynamically linked, and the official `gnina/gnina` Docker image is Ubuntu 18.04 /
+  Python 3.6–3.7 (conflicts with the project's 3.11). So real coverage needs a
+  dedicated CUDA GPU Modal image (gnina binary + CUDA runtime + OpenBabel layered onto
+  a Py3.11 env) and a `test_gnina_modal` function calling `smiles_to_3d` → `dock_gnina`.
+- Lower priority because Vina (the CPU fallback that `prepare_ligands` uses when GNINA
+  is absent) already has real end-to-end coverage.
+
 ---
 
 ## Tools Summary
