@@ -107,6 +107,85 @@ def fastapi_endpoint():
 
 
 @app.function(timeout=600)
+def test_membrane_modal() -> dict:
+    """
+    Real-binary smoke test for the OpenMM membrane builder (CPU — no GPU needed).
+
+    Mirrors the real setup in simulation.py: PDBFixer -> ForceField(charmm36 lipids)
+    -> Modeller.addHydrogens -> embed_in_membrane_openmm (Modeller.addMembrane). insane.py
+    is NOT in this image, so embed_in_membrane_gromacs is covered by the mocked
+    tests/test_membrane.py only. The mocked local counterpart is tests/test_membrane.py.
+
+    Run with:
+        modal run modal_app.py::test_membrane_modal
+    """
+    import io
+
+    from orchestrator.membrane import embed_in_membrane_openmm
+
+    # A small soluble peptide (villin headpiece fragment) — enough to embed in a POPC
+    # patch. Membrane type POPC exercises the CHARMM36m lipid path.
+    protein_pdb = (
+        "ATOM      1  N   MET A   1      -8.901   4.127  -0.555  1.00  0.00           N\n"
+        "ATOM      2  CA  MET A   1      -8.608   3.135  -1.618  1.00  0.00           C\n"
+        "ATOM      3  C   MET A   1      -7.117   2.964  -1.897  1.00  0.00           C\n"
+        "ATOM      4  O   MET A   1      -6.634   1.849  -1.758  1.00  0.00           O\n"
+        "ATOM      5  N   LYS A   2      -6.379   4.031  -2.228  1.00  0.00           N\n"
+        "ATOM      6  CA  LYS A   2      -4.923   4.002  -2.452  1.00  0.00           C\n"
+        "ATOM      7  C   LYS A   2      -4.136   3.383  -1.301  1.00  0.00           C\n"
+        "ATOM      8  O   LYS A   2      -3.391   2.416  -1.517  1.00  0.00           O\n"
+        "ATOM      9  N   THR A   3      -4.354   3.961  -0.129  1.00  0.00           N\n"
+        "ATOM     10  CA  THR A   3      -3.646   3.474   1.049  1.00  0.00           C\n"
+        "ATOM     11  C   THR A   3      -4.297   2.229   1.652  1.00  0.00           C\n"
+        "ATOM     12  O   THR A   3      -3.605   1.318   2.106  1.00  0.00           O\n"
+    )
+    results: dict = {"insane_in_image": False}
+
+    from openmm.app import PDBFile, ForceField, Modeller
+
+    # 1. PDBFixer -> clean structure
+    try:
+        from pdbfixer import PDBFixer
+        fixer = PDBFixer(pdbfile=io.StringIO(protein_pdb))
+        fixer.findMissingResidues()
+        fixer.findMissingAtoms()
+        fixer.addMissingAtoms()
+        fixer.addMissingHydrogens(7.0)
+        fixed_io = io.StringIO()
+        PDBFile.writeFile(fixer.topology, fixer.positions, fixed_io)
+        fixed_io.seek(0)
+        pdb = PDBFile(fixed_io)
+        results["pdbfixer_ok"] = True
+    except Exception as e:  # noqa: BLE001
+        results["pdbfixer_error"] = repr(e)
+        pdb = PDBFile(io.StringIO(protein_pdb))
+
+    # 2. CHARMM36m force field with lipids
+    try:
+        ff = ForceField("charmm36.xml", "charmm36/water.xml", "charmm36/lipids.xml")
+        results["charmm36_ff_ok"] = True
+    except Exception as e:  # noqa: BLE001
+        results["charmm36_ff_error"] = repr(e)
+        return results
+
+    # 3. Modeller + hydrogens + real addMembrane
+    try:
+        modeller = Modeller(pdb.topology, pdb.positions)
+        modeller.addHydrogens(ff, pH=7.0)
+        n_before = modeller.topology.getNumAtoms()
+        modeller = embed_in_membrane_openmm(modeller, ff, {"type": "POPC"})
+        n_after = modeller.topology.getNumAtoms()
+        results["addmembrane_ok"] = n_after > n_before
+        results["n_atoms_before"] = n_before
+        results["n_atoms_after"] = n_after
+    except Exception as e:  # noqa: BLE001
+        results["addmembrane_error"] = repr(e)
+
+    print(results)
+    return results
+
+
+@app.function(timeout=600)
 def test_ligands_modal() -> dict:
     """
     Real-binary smoke test for the Stage-F ligand pipeline (CPU — no GPU needed).
