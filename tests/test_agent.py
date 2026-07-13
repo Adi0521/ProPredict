@@ -7,11 +7,11 @@ orchestrator.agent namespace, then calls _execute_agent_tool() directly. No real
 ESMFold/Boltz/BioPython needed. Mirrors tests/test_boltz.py style.
 """
 import json
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 import pytest
 
-from orchestrator.agent import _execute_agent_tool
+from orchestrator.agent import _execute_agent_tool, run_agent_refinement
 from models.schemas import StructurePrediction
 
 
@@ -185,3 +185,78 @@ def test_mutation_cap_enforced(mock_esm, mock_boltz):
     assert state["mutations_applied"] == ["A1V", "C2D"]
     mock_esm.assert_not_called()
     mock_boltz.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Task 4 — num_clashes recomputed after refinement branches that reassign the PDB
+# ---------------------------------------------------------------------------
+
+@patch("orchestrator.agent.count_clashes", return_value=7)
+@patch("orchestrator.agent.run_rosetta_relax", return_value=("RELAXED_PDB", -123.4))
+def test_rosetta_relax_recomputes_clashes(mock_relax, mock_clash):
+    with patch("orchestrator.agent.ROSETTA_ENABLED", True):
+        state = _base_state("ACDEF")
+        state["num_clashes"] = 2
+        out = json.loads(_execute_agent_tool("run_rosetta_relax", {}, state))
+
+    assert state["current_pdb"] == "RELAXED_PDB"
+    assert state["num_clashes"] == 7          # recomputed on the relaxed structure
+    assert out["num_clashes"] == 7            # and surfaced in the tool result
+    mock_clash.assert_called_once_with("RELAXED_PDB")
+
+
+@patch("orchestrator.agent.count_clashes", return_value=5)
+@patch("orchestrator.agent.call_boltz")
+def test_boltz_prediction_recomputes_clashes(mock_boltz, mock_clash):
+    with patch("orchestrator.agent.BOLTZ_ENABLED", True):
+        mock_boltz.return_value = _fake_pred(pdb="BOLTZ_PDB", mean=95.0)
+        state = _base_state("ACDEF")
+        state["num_clashes"] = 2
+        out = json.loads(_execute_agent_tool("run_boltz_prediction", {"num_seeds": 3}, state))
+
+    assert state["current_pdb"] == "BOLTZ_PDB"
+    assert state["num_clashes"] == 5
+    assert out["num_clashes"] == 5
+    mock_clash.assert_called_with("BOLTZ_PDB")
+
+
+def test_run_agent_refinement_reports_updated_clashes():
+    """End-to-end: the reported PostProcessingResult.num_clashes must reflect the
+    post-refinement structure, not the stale pre-loop count.
+
+    run_agent_refinement does `import anthropic` internally; we inject a fake module
+    into sys.modules so the test runs without the real SDK installed (the client is
+    fully mocked anyway — no real anthropic types are exercised)."""
+    def _tool_use(name, inp):
+        blk = MagicMock()
+        blk.type = "tool_use"
+        blk.name = name
+        blk.input = inp
+        blk.id = f"tool_{name}"
+        resp = MagicMock()
+        resp.stop_reason = "tool_use"
+        resp.content = [blk]
+        return resp
+
+    client = MagicMock()
+    client.messages.create.side_effect = [
+        _tool_use("run_rosetta_relax", {}),
+        _tool_use("accept_structure", {"reasoning": "looks good"}),
+    ]
+    fake_anthropic = MagicMock()
+    fake_anthropic.Anthropic.return_value = client
+
+    pred = _fake_pred(pdb="ORIG", plddt=[80.0, 80.0, 80.0], mean=80.0)
+
+    with patch.dict("sys.modules", {"anthropic": fake_anthropic}), \
+         patch("orchestrator.agent.ROSETTA_ENABLED", True), \
+         patch("orchestrator.agent.AGENT_API_KEY", "sk-test"), \
+         patch("orchestrator.agent.AGENT_BASE_URL", ""), \
+         patch("orchestrator.agent.run_rosetta_relax", return_value=("RELAXED", -50.0)), \
+         patch("orchestrator.agent.count_clashes", side_effect=[2, 9]):
+        post_proc, updated_pdb = run_agent_refinement(pred, {}, "ACDEF")
+
+    assert post_proc.decision == "accept"
+    assert post_proc.num_clashes == 9        # post-relax count, not the pre-loop 2
+    assert post_proc.score == 80.0 - 9 * 5.0
+    assert updated_pdb == "RELAXED"

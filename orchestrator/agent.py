@@ -221,7 +221,12 @@ def _execute_agent_tool(
             relaxed_pdb, score = run_rosetta_relax(state["current_pdb"])
             state["current_pdb"] = relaxed_pdb
             state["rosetta_energy"] = score
-            return json.dumps({"status": "completed", "rosetta_energy": round(score, 3)})
+            state["num_clashes"] = count_clashes(state["current_pdb"])
+            return json.dumps({
+                "status": "completed",
+                "rosetta_energy": round(score, 3),
+                "num_clashes": state["num_clashes"],
+            })
         except Exception as e:
             return json.dumps({"error": str(e)})
 
@@ -283,6 +288,7 @@ def _execute_agent_tool(
             state["current_pdb"] = best.structure_pdb
             state["plddt_scores"] = best.plddt_scores
             state["mean_plddt"] = best.mean_plddt
+            state["num_clashes"] = count_clashes(best.structure_pdb)
             all_plddts = [round(p.mean_plddt, 2) for p in preds]
             result: Dict[str, Any] = {
                 "status": "completed",
@@ -290,6 +296,7 @@ def _execute_agent_tool(
                 "seeds_tried": num_seeds,
                 "seeds_succeeded": len(preds),
                 "best_mean_plddt": round(best.mean_plddt, 2),
+                "num_clashes": state["num_clashes"],
                 "all_mean_plddts": all_plddts,
                 "plddt_spread": round(max(all_plddts) - min(all_plddts), 2),
                 "best_seed": best.seed,
@@ -506,7 +513,7 @@ def run_agent_refinement(
     decision = "accept" if state["terminal_tool"] == "accept_structure" else "escalate"
 
     post_proc = PostProcessingResult(
-        num_clashes=num_clashes,
+        num_clashes=state["num_clashes"],
         rosetta_energy=state["rosetta_energy"],
         score=score,
         decision=decision,
