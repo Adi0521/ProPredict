@@ -260,3 +260,67 @@ def test_run_agent_refinement_reports_updated_clashes():
     assert post_proc.num_clashes == 9        # post-relax count, not the pre-loop 2
     assert post_proc.score == 80.0 - 9 * 5.0
     assert updated_pdb == "RELAXED"
+
+
+# ---------------------------------------------------------------------------
+# scan_mutations — ProteinMPNN structural-log-odds tool (read-only)
+# ---------------------------------------------------------------------------
+
+def _scan(tool_input, state):
+    return json.loads(_execute_agent_tool("scan_mutations", tool_input, state))
+
+
+@patch("orchestrator.agent.score_candidate_mutations")
+def test_scan_mutations_unconfigured_errors(mock_score):
+    """No PROTEINMPNN_PATH -> tool reports unavailable, scorer never invoked."""
+    with patch("orchestrator.agent.PROTEINMPNN_PATH", ""):
+        state = _base_state("ACDEF")
+        out = _scan({}, state)
+
+    assert "PROTEINMPNN_PATH not configured" in out["error"]
+    mock_score.assert_not_called()
+
+
+@patch("orchestrator.agent.score_candidate_mutations")
+def test_scan_mutations_happy_path(mock_score):
+    """Configured path -> scorer called with state's pdb/sequence and the passed
+    positions/top_k; candidates returned verbatim."""
+    candidates = [
+        {"position": 3, "from_aa": "D", "to_aa": "E", "score": 1.2},
+        {"position": 1, "from_aa": "A", "to_aa": "V", "score": 0.4},
+    ]
+    mock_score.return_value = candidates
+    with patch("orchestrator.agent.PROTEINMPNN_PATH", "/opt/ProteinMPNN"), \
+         patch("orchestrator.agent.PROTEINMPNN_MODEL_NAME", "v_48_020"):
+        state = _base_state("ACDEF")
+        out = _scan({"positions": [1, 3], "top_k": 2}, state)
+
+    assert out["status"] == "completed"
+    assert out["candidates"] == candidates
+    assert "compatibility" in out["note"]
+    mock_score.assert_called_once_with(
+        "ATOM_ORIG", "ACDEF",
+        positions=[1, 3], top_k=2,
+        proteinmpnn_dir="/opt/ProteinMPNN", model_name="v_48_020",
+    )
+
+
+@patch("orchestrator.agent.score_candidate_mutations")
+def test_scan_mutations_bad_positions_errors(mock_score):
+    """Non-integer positions -> validation error before the scorer runs."""
+    with patch("orchestrator.agent.PROTEINMPNN_PATH", "/opt/ProteinMPNN"):
+        state = _base_state("ACDEF")
+        out = _scan({"positions": ["x", 2]}, state)
+
+    assert "positions must be a list of integers" in out["error"]
+    mock_score.assert_not_called()
+
+
+@patch("orchestrator.agent.score_candidate_mutations", side_effect=RuntimeError("mpnn boom"))
+def test_scan_mutations_scorer_failure_is_wrapped(mock_score):
+    """Scorer raising -> wrapped error, no crash."""
+    with patch("orchestrator.agent.PROTEINMPNN_PATH", "/opt/ProteinMPNN"):
+        state = _base_state("ACDEF")
+        out = _scan({}, state)
+
+    assert "mutation scan failed: mpnn boom" in out["error"]

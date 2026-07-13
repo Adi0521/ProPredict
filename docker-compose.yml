@@ -82,6 +82,11 @@ services:
       - GROMACS_ENABLED=True
       - GROMACS_BIN=gmx
       - OPENMM_ENABLED=True
+      # ProteinMPNN clone is baked into the image at /opt/ProteinMPNN (see Dockerfile.celery).
+      # NOTE: config.py loads .env with override=True and this service bind-mounts .:/app,
+      # so a PROTEINMPNN_PATH set in the host .env will override this. To use the baked-in
+      # clone, set PROTEINMPNN_PATH=/opt/ProteinMPNN in your Docker .env (or leave it unset).
+      - PROTEINMPNN_PATH=/opt/ProteinMPNN
     depends_on:
       redis:
         condition: service_healthy

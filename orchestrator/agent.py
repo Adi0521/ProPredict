@@ -14,12 +14,15 @@ from config import (
     AGENT_MODEL,
     AGENT_MAX_ITERATIONS,
     AGENT_MAX_MUTATIONS,
+    PROTEINMPNN_PATH,
+    PROTEINMPNN_MODEL_NAME,
 )
 from models.schemas import StructurePrediction, PostProcessingResult
 from orchestrator.backends.boltz import call_boltz
 from orchestrator.backends.esmfold import call_esmfold_api
 from orchestrator.simulation import run_rosetta_relax, run_openmm_simulation, run_gromacs_md
 from orchestrator.scoring import count_clashes, compute_post_processing
+from orchestrator.mutation_scan import score_candidate_mutations
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +93,39 @@ _AGENT_TOOLS = [
                     "type": "integer",
                     "description": "Number of random seeds to try (default 3, max 5)",
                 }
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "scan_mutations",
+        "description": (
+            "Rank candidate single-point substitutions for the current structure using "
+            "the ProteinMPNN structural log-odds scorer (validated against ProteinGym). "
+            "Returns top candidates as {position, from_aa, to_aa, score}; a POSITIVE "
+            "score means the substitution is more structurally compatible than the "
+            "wild-type residue there. This is a STRUCTURAL-COMPATIBILITY ranking only — "
+            "NOT a proxy for function, stability, or fitness — so treat it as a shortlist "
+            "to feed into apply_mutation, not ground truth. Read-only: does not change "
+            "the sequence. Requires PROTEINMPNN_PATH; if unset, the tool reports it is "
+            "unavailable."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "positions": {
+                    "type": "array",
+                    "items": {"type": "integer"},
+                    "description": (
+                        "1-indexed positions to restrict the scan to (e.g. a "
+                        "low-confidence region from analyze_structure). Omit to scan "
+                        "every position."
+                    ),
+                },
+                "top_k": {
+                    "type": "integer",
+                    "description": "Max candidates to return, best-first (default 10).",
+                },
             },
             "required": [],
         },
@@ -170,15 +206,18 @@ Guidelines:
 - Membrane or ligand context present -> run simulation before accepting
 - If a required backend is disabled -> escalate and explain
 
-If context.mutations lists specific mutations, use apply_mutation to test them and
-compare mean_pLDDT before/after. Only mutate when context requests it or when analysis
-suggests a mutation would resolve a specific low-confidence region — don't mutate
-speculatively without a stated reason in your final reasoning.
-
-Note: a structure-aware mutation scorer (orchestrator/mutation_scan.py, ProteinMPNN-
-based, validated against ProteinGym) exists in the codebase for ranking candidate
-substitutions algorithmically, but is not yet available to you as a tool — for now,
-choose mutation targets from analyze_structure's output and context.mutations only.
+Two mutation tools work together:
+- scan_mutations ranks candidate substitutions by ProteinMPNN structural log-odds
+  (positive = more structurally compatible than the wild-type residue). It is a
+  read-only shortlist, NOT a proxy for function, stability, or fitness. Requires
+  PROTEINMPNN_PATH; if unavailable the tool says so — fall back to analyze_structure
+  and context.mutations.
+- apply_mutation mutates the sequence at a position and re-predicts. Limited to
+  AGENT_MAX_MUTATIONS calls per session — use them deliberately.
+Typical flow: scan_mutations to shortlist substitutions in a low-confidence region,
+then apply_mutation on the most promising candidate to confirm it improves the
+structure. Only mutate when context.mutations requests it or analysis plus a scan give
+a concrete reason — never mutate speculatively without stating why in your reasoning.
 
 Be concise. Make a terminal decision as soon as you have enough information."""
 
@@ -306,6 +345,41 @@ def _execute_agent_tool(
             return json.dumps(result)
         except Exception as e:
             return json.dumps({"error": str(e)})
+
+    if tool_name == "scan_mutations":
+        if not PROTEINMPNN_PATH:
+            return json.dumps({
+                "error": "PROTEINMPNN_PATH not configured — structural mutation scorer unavailable"
+            })
+        positions = tool_input.get("positions")
+        if positions is not None:
+            try:
+                positions = [int(p) for p in positions]
+            except (TypeError, ValueError):
+                return json.dumps({"error": "positions must be a list of integers"})
+        try:
+            top_k = int(tool_input.get("top_k", 10))
+        except (TypeError, ValueError):
+            return json.dumps({"error": "top_k must be an integer"})
+        try:
+            candidates = score_candidate_mutations(
+                state["current_pdb"],
+                state["sequence"],
+                positions=positions,
+                top_k=top_k,
+                proteinmpnn_dir=PROTEINMPNN_PATH,
+                model_name=PROTEINMPNN_MODEL_NAME,
+            )
+        except Exception as e:
+            return json.dumps({"error": f"mutation scan failed: {e}"})
+        return json.dumps({
+            "status": "completed",
+            "note": (
+                "structural-compatibility log-odds; positive = more compatible than "
+                "wild-type. Not a function/stability/fitness proxy."
+            ),
+            "candidates": candidates,
+        })
 
     if tool_name == "apply_mutation":
         applied_so_far = len(state.get("mutations_applied", []))

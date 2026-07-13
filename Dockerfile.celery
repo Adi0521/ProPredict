@@ -4,12 +4,20 @@ USER root
 WORKDIR /app
 
 # Install GROMACS (ARM64-compatible via Debian apt) + curl to fetch force fields
+# + git to clone ProteinMPNN for the structural mutation scorer.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     build-essential \
     gromacs \
     curl \
+    git \
     && rm -rf /var/lib/apt/lists/*
+
+# ProteinMPNN clone (MIT, ~26MB incl. weights) for the structural mutation scorer
+# (orchestrator/mutation_scan.py, exposed to the agent as scan_mutations). torch is
+# installed via requirements.txt below, so the subprocess scorer runs in-place.
+RUN git clone --depth 1 https://github.com/dauparas/ProteinMPNN.git /opt/ProteinMPNN
+ENV PROTEINMPNN_PATH=/opt/ProteinMPNN
 
 # Install CHARMM36m force field (Feb 2026, CGenFF 5.0) into the GROMACS data directory.
 # Required for membrane simulations (Stage F). Source: MacKerell lab, UMaryland.

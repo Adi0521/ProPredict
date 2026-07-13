@@ -41,6 +41,13 @@ image = (
     # Boltz-2 from source — not yet on PyPI as boltz-2, install from GitHub
     .pip_install("git+https://github.com/jwohlwend/boltz.git")
 
+    # ProteinMPNN clone (MIT, ~26MB incl. weights) for the structural mutation scorer
+    # (orchestrator/mutation_scan.py, exposed to the agent as scan_mutations). torch is
+    # already in this image, so the subprocess scorer runs in-place. No .env is copied
+    # into the image, so this image env var is the authoritative PROTEINMPNN_PATH here.
+    .run_commands("git clone --depth 1 https://github.com/dauparas/ProteinMPNN.git /opt/ProteinMPNN")
+    .env({"PROTEINMPNN_PATH": "/opt/ProteinMPNN"})
+
     #.run_commands("boltz download", timeout=1200)
     # Ship local source packages into the image
     .add_local_dir("orchestrator", remote_path="/root/orchestrator")
