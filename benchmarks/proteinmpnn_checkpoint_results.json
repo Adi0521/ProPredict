@@ -1,0 +1,103 @@
+{
+  "checkpoints": [
+    "v_48_002",
+    "v_48_010",
+    "v_48_020",
+    "v_48_030"
+  ],
+  "assays": [
+    {
+      "dms_id": "TCRG1_MOUSE_Tsuboyama_2023_1E0L",
+      "seq_len": 37,
+      "mean_plddt": 83.11,
+      "checkpoints": {
+        "v_48_002": {
+          "spearman": 0.7891,
+          "p_value": 1.049082875049528e-225,
+          "n_scored": 1058,
+          "n_skipped": 0
+        },
+        "v_48_010": {
+          "spearman": 0.7056,
+          "p_value": 3.9429056396420594e-160,
+          "n_scored": 1058,
+          "n_skipped": 0
+        },
+        "v_48_020": {
+          "spearman": 0.7538,
+          "p_value": 7.951697215130285e-195,
+          "n_scored": 1058,
+          "n_skipped": 0
+        },
+        "v_48_030": {
+          "spearman": 0.7199,
+          "p_value": 1.1205928647778014e-169,
+          "n_scored": 1058,
+          "n_skipped": 0
+        }
+      }
+    },
+    {
+      "dms_id": "ESTA_BACSU_Nutschel_2020",
+      "seq_len": 212,
+      "mean_plddt": 91.29,
+      "checkpoints": {
+        "v_48_002": {
+          "spearman": 0.4057,
+          "p_value": 7.877208609845038e-87,
+          "n_scored": 2172,
+          "n_skipped": 0
+        },
+        "v_48_010": {
+          "spearman": 0.4228,
+          "p_value": 6.231106981356071e-95,
+          "n_scored": 2172,
+          "n_skipped": 0
+        },
+        "v_48_020": {
+          "spearman": 0.4318,
+          "p_value": 2.194711814677454e-99,
+          "n_scored": 2172,
+          "n_skipped": 0
+        },
+        "v_48_030": {
+          "spearman": 0.4414,
+          "p_value": 3.077806919736821e-104,
+          "n_scored": 2172,
+          "n_skipped": 0
+        }
+      }
+    },
+    {
+      "dms_id": "CCDB_ECOLI_Adkar_2012",
+      "seq_len": 101,
+      "mean_plddt": 89.04,
+      "checkpoints": {
+        "v_48_002": {
+          "spearman": 0.3164,
+          "p_value": 9.569670283796791e-29,
+          "n_scored": 1176,
+          "n_skipped": 0
+        },
+        "v_48_010": {
+          "spearman": 0.3332,
+          "p_value": 6.789670176971628e-32,
+          "n_scored": 1176,
+          "n_skipped": 0
+        },
+        "v_48_020": {
+          "spearman": 0.3322,
+          "p_value": 1.0693693511188592e-31,
+          "n_scored": 1176,
+          "n_skipped": 0
+        },
+        "v_48_030": {
+          "spearman": 0.2871,
+          "p_value": 9.610315818451831e-24,
+          "n_scored": 1176,
+          "n_skipped": 0
+        }
+      }
+    }
+  ]
+}

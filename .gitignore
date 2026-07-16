@@ -55,6 +55,9 @@ input.pka
 # log, but not the bulky raw dumps.
 benchmark_results.json
 
+# ProteinGym DMS data cache (~89 MB parquet, auto-downloaded, regenerable)
+benchmarks/proteingym_cache/
+
 # ColabFold / MSA testing artifacts (large; regenerable)
 scripts/API-Testing/ColabFold-Testing/results/
 *.a3m
