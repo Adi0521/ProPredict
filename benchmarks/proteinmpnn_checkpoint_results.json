@@ -5,6 +5,12 @@
     "v_48_020",
     "v_48_030"
   ],
+  "seeds": [
+    37,
+    38,
+    39
+  ],
+  "num_decoding_orders": 8,
   "assays": [
     {
       "dms_id": "TCRG1_MOUSE_Tsuboyama_2023_1E0L",
@@ -12,26 +18,70 @@
       "mean_plddt": 83.11,
       "checkpoints": {
         "v_48_002": {
-          "spearman": 0.7891,
-          "p_value": 1.049082875049528e-225,
+          "spearman_mean": 0.7887,
+          "spearman_std": 0.0003,
+          "spearman_per_seed": [
+            0.7886,
+            0.7885,
+            0.789
+          ],
+          "seeds": [
+            37,
+            38,
+            39
+          ],
+          "num_decoding_orders": 8,
           "n_scored": 1058,
           "n_skipped": 0
         },
         "v_48_010": {
-          "spearman": 0.7056,
-          "p_value": 3.9429056396420594e-160,
+          "spearman_mean": 0.7052,
+          "spearman_std": 0.0017,
+          "spearman_per_seed": [
+            0.7063,
+            0.7032,
+            0.7062
+          ],
+          "seeds": [
+            37,
+            38,
+            39
+          ],
+          "num_decoding_orders": 8,
           "n_scored": 1058,
           "n_skipped": 0
         },
         "v_48_020": {
-          "spearman": 0.7538,
-          "p_value": 7.951697215130285e-195,
+          "spearman_mean": 0.7559,
+          "spearman_std": 0.0006,
+          "spearman_per_seed": [
+            0.7556,
+            0.7565,
+            0.7555
+          ],
+          "seeds": [
+            37,
+            38,
+            39
+          ],
+          "num_decoding_orders": 8,
           "n_scored": 1058,
           "n_skipped": 0
         },
         "v_48_030": {
-          "spearman": 0.7199,
-          "p_value": 1.1205928647778014e-169,
+          "spearman_mean": 0.724,
+          "spearman_std": 0.0028,
+          "spearman_per_seed": [
+            0.7273,
+            0.7223,
+            0.7225
+          ],
+          "seeds": [
+            37,
+            38,
+            39
+          ],
+          "num_decoding_orders": 8,
           "n_scored": 1058,
           "n_skipped": 0
         }
@@ -43,26 +93,70 @@
       "mean_plddt": 91.29,
       "checkpoints": {
         "v_48_002": {
-          "spearman": 0.4057,
-          "p_value": 7.877208609845038e-87,
+          "spearman_mean": 0.407,
+          "spearman_std": 0.0006,
+          "spearman_per_seed": [
+            0.4076,
+            0.4069,
+            0.4064
+          ],
+          "seeds": [
+            37,
+            38,
+            39
+          ],
+          "num_decoding_orders": 8,
           "n_scored": 2172,
           "n_skipped": 0
         },
         "v_48_010": {
-          "spearman": 0.4228,
-          "p_value": 6.231106981356071e-95,
+          "spearman_mean": 0.4238,
+          "spearman_std": 0.0005,
+          "spearman_per_seed": [
+            0.4238,
+            0.4234,
+            0.4243
+          ],
+          "seeds": [
+            37,
+            38,
+            39
+          ],
+          "num_decoding_orders": 8,
           "n_scored": 2172,
           "n_skipped": 0
         },
         "v_48_020": {
-          "spearman": 0.4318,
-          "p_value": 2.194711814677454e-99,
+          "spearman_mean": 0.434,
+          "spearman_std": 0.0006,
+          "spearman_per_seed": [
+            0.4347,
+            0.4336,
+            0.4337
+          ],
+          "seeds": [
+            37,
+            38,
+            39
+          ],
+          "num_decoding_orders": 8,
           "n_scored": 2172,
           "n_skipped": 0
         },
         "v_48_030": {
-          "spearman": 0.4414,
-          "p_value": 3.077806919736821e-104,
+          "spearman_mean": 0.4375,
+          "spearman_std": 0.0011,
+          "spearman_per_seed": [
+            0.4382,
+            0.4381,
+            0.4362
+          ],
+          "seeds": [
+            37,
+            38,
+            39
+          ],
+          "num_decoding_orders": 8,
           "n_scored": 2172,
           "n_skipped": 0
         }
@@ -74,26 +168,70 @@
       "mean_plddt": 89.04,
       "checkpoints": {
         "v_48_002": {
-          "spearman": 0.3164,
-          "p_value": 9.569670283796791e-29,
+          "spearman_mean": 0.3162,
+          "spearman_std": 0.0007,
+          "spearman_per_seed": [
+            0.3156,
+            0.316,
+            0.3169
+          ],
+          "seeds": [
+            37,
+            38,
+            39
+          ],
+          "num_decoding_orders": 8,
           "n_scored": 1176,
           "n_skipped": 0
         },
         "v_48_010": {
-          "spearman": 0.3332,
-          "p_value": 6.789670176971628e-32,
+          "spearman_mean": 0.3347,
+          "spearman_std": 0.0011,
+          "spearman_per_seed": [
+            0.3341,
+            0.336,
+            0.334
+          ],
+          "seeds": [
+            37,
+            38,
+            39
+          ],
+          "num_decoding_orders": 8,
           "n_scored": 1176,
           "n_skipped": 0
         },
         "v_48_020": {
-          "spearman": 0.3322,
-          "p_value": 1.0693693511188592e-31,
+          "spearman_mean": 0.3273,
+          "spearman_std": 0.0006,
+          "spearman_per_seed": [
+            0.3279,
+            0.3272,
+            0.3267
+          ],
+          "seeds": [
+            37,
+            38,
+            39
+          ],
+          "num_decoding_orders": 8,
           "n_scored": 1176,
           "n_skipped": 0
         },
         "v_48_030": {
-          "spearman": 0.2871,
-          "p_value": 9.610315818451831e-24,
+          "spearman_mean": 0.2883,
+          "spearman_std": 0.0006,
+          "spearman_per_seed": [
+            0.2877,
+            0.289,
+            0.2883
+          ],
+          "seeds": [
+            37,
+            38,
+            39
+          ],
+          "num_decoding_orders": 8,
           "n_scored": 1176,
           "n_skipped": 0
         }

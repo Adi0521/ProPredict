@@ -13,6 +13,14 @@ than the wild-type at this position. This is a STRUCTURAL COMPATIBILITY score, n
 direct proxy for function, stability, or fitness — say so in any output/UI that
 surfaces these numbers.
 
+Reproducibility: ProteinMPNN's conditional_probs pass is stochastic — each forward
+pass draws a random decoding order (`randn_1`). Scores are the MEAN log-odds over
+`num_decoding_orders` decoding orders at a FIXED, non-zero seed, and are reproducible
+only for a fixed `(seed, num_decoding_orders, model_name, structure)` tuple. NOTE:
+ProteinMPNN's CLI treats `--seed 0` as unset (`if args.seed:` is falsy at 0) and
+picks a random seed, so seed=0 is rejected — see the guard in
+`_run_proteinmpnn_conditional_probs`.
+
 Standalone module: takes proteinmpnn_dir / model_name as parameters, not wired to the
 agent loop or config.py. Run manually via:
     python -m orchestrator.mutation_scan --pdb myprotein.pdb --sequence MKT...
@@ -38,11 +46,24 @@ def _run_proteinmpnn_conditional_probs(
     tmpdir: str,
     proteinmpnn_dir: str,
     model_name: str = "v_48_020",
+    seed: int = 37,                 # MUST be non-zero — ProteinMPNN's `if args.seed:`
+                                    # check treats 0 as unset and randomizes the seed.
+    num_decoding_orders: int = 8,
 ) -> np.ndarray:
     """
     Run ProteinMPNN --conditional_probs_only on a single-chain PDB and return the
-    [L, 21] log-probability matrix (first/only batch element already sliced out).
+    [L, 21] log-probability matrix, MEAN-averaged over `num_decoding_orders` random
+    decoding orders (ProteinMPNN emits one [L, 21] sample per --num_seq_per_target).
+
+    `seed` must be non-zero: ProteinMPNN's CLI does `if args.seed:` and treats 0 as
+    "unset", picking a random seed and making scores non-reproducible.
     """
+    if seed == 0:
+        raise ValueError(
+            "seed=0 is unusable: ProteinMPNN's `if args.seed:` check treats 0 as unset "
+            "and picks a random seed, making scores non-reproducible. Use any non-zero int."
+        )
+
     pdb_path = os.path.join(tmpdir, "structure.pdb")
     with open(pdb_path, "w") as fh:
         fh.write(pdb_string)
@@ -66,8 +87,8 @@ def _run_proteinmpnn_conditional_probs(
         "--path_to_model_weights", weights_dir,
         "--model_name", model_name,
         "--conditional_probs_only", "1",
-        "--num_seq_per_target", "1",
-        "--seed", "0",
+        "--num_seq_per_target", str(num_decoding_orders),
+        "--seed", str(seed),
         "--batch_size", "1",
     ]
     result = subprocess.run(cmd, capture_output=True, text=True, cwd=proteinmpnn_dir)
@@ -83,7 +104,9 @@ def _run_proteinmpnn_conditional_probs(
         raise RuntimeError(f"ProteinMPNN completed but no .npz output found in {npz_dir}")
 
     data = np.load(os.path.join(npz_dir, npz_files[0]))
-    return data["log_p"][0]  # [L, 21] — first (only) batch element
+    # log_p is [N, L, 21] — N independent decoding-order samples. Average over them:
+    # a single sample is noisy; the mean cuts the standard error by ~sqrt(N).
+    return data["log_p"].mean(axis=0)  # [L, 21] — averaged over decoding orders
 
 
 def score_candidate_mutations(
@@ -93,6 +116,8 @@ def score_candidate_mutations(
     top_k: int = 10,
     proteinmpnn_dir: str = "",
     model_name: str = "v_48_020",
+    seed: int = 37,
+    num_decoding_orders: int = 8,
 ) -> List[Dict[str, Any]]:
     """
     Score candidate single-point substitutions using ProteinMPNN structural log-odds.
@@ -108,6 +133,10 @@ def score_candidate_mutations(
                  (lower noise = higher native-sequence recovery; higher noise =
                  designs that fold more reliably when re-predicted — v_48_020 is
                  ProteinMPNN's own default)
+    seed : non-zero RNG seed for ProteinMPNN's decoding order (0 is rejected — see
+                 _run_proteinmpnn_conditional_probs). Fixing it makes scores reproducible.
+    num_decoding_orders : number of random decoding orders averaged per position;
+                 higher = less noise, linearly more compute.
 
     Returns
     -------
@@ -121,7 +150,10 @@ def score_candidate_mutations(
         )
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        log_p = _run_proteinmpnn_conditional_probs(pdb_string, tmpdir, proteinmpnn_dir, model_name)
+        log_p = _run_proteinmpnn_conditional_probs(
+            pdb_string, tmpdir, proteinmpnn_dir, model_name,
+            seed=seed, num_decoding_orders=num_decoding_orders,
+        )
 
     candidates: List[Dict[str, Any]] = []
     scan_positions = positions if positions is not None else range(1, len(sequence) + 1)

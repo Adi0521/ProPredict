@@ -44,7 +44,11 @@ import numpy as np
 import pandas as pd
 from scipy.stats import spearmanr
 
-from config import PROTEINMPNN_PATH
+from config import (
+    PROTEINMPNN_PATH,
+    PROTEINMPNN_SEED,
+    PROTEINMPNN_NUM_DECODING_ORDERS,
+)
 from orchestrator.backends.esmfold import call_esmfold_local
 from orchestrator.mutation_scan import _ALPHABET, _run_proteinmpnn_conditional_probs
 
@@ -106,7 +110,13 @@ def _score_mutant(mutant: str, log_p: np.ndarray, target_seq: str) -> Optional[f
     return total
 
 
-def benchmark_assay(dms_id: str, checkpoints: List[str], parquet_path: str) -> Optional[Dict]:
+def benchmark_assay(
+    dms_id: str,
+    checkpoints: List[str],
+    parquet_path: str,
+    seeds: List[int],
+    num_decoding_orders: int,
+) -> Optional[Dict]:
     df = pd.read_parquet(
         parquet_path, columns=["DMS_id", "mutant", "DMS_score", "target_seq"]
     )
@@ -120,36 +130,49 @@ def benchmark_assay(dms_id: str, checkpoints: List[str], parquet_path: str) -> O
     dms_scores = df["DMS_score"].tolist()
     print(f"\n=== {dms_id}  (L={len(target_seq)}, {len(df)} mutants) ===")
 
-    # Fold ONCE — the predicted structure is identical for every checkpoint.
+    # Fold ONCE — the predicted structure is identical for every checkpoint AND seed
+    # (ESMFold is deterministic; the seed here only varies ProteinMPNN's decoding order).
     print("  Folding target_seq via ESMFold local (one-time, checkpoint-independent)...")
     pred = call_esmfold_local(target_seq, seed=0)
     print(f"  Folded: mean pLDDT {pred.mean_plddt:.1f}")
 
     per_ckpt: Dict[str, Dict] = {}
     for ckpt in checkpoints:
-        with tempfile.TemporaryDirectory() as td:
-            log_p = _run_proteinmpnn_conditional_probs(
-                pred.structure_pdb, td, PROTEINMPNN_PATH, model_name=ckpt
-            )
-        scores, truths, skipped = [], [], 0
-        for mutant, dms in zip(mutants, dms_scores):
-            s = _score_mutant(mutant, log_p, target_seq)
-            if s is None or dms is None or (isinstance(dms, float) and np.isnan(dms)):
-                skipped += 1
-                continue
-            scores.append(s)
-            truths.append(float(dms))
-        if len(scores) > 2:
-            rho, pval = spearmanr(scores, truths)
-        else:
-            rho, pval = float("nan"), float("nan")
+        # Repeat across seeds so the reported rho carries a spread — a single seed
+        # can't separate a real checkpoint effect from decoding-order noise.
+        rhos: List[float] = []
+        n_scored = n_skipped = 0
+        for seed in seeds:
+            with tempfile.TemporaryDirectory() as td:
+                log_p = _run_proteinmpnn_conditional_probs(
+                    pred.structure_pdb, td, PROTEINMPNN_PATH, model_name=ckpt,
+                    seed=seed, num_decoding_orders=num_decoding_orders,
+                )
+            scores, truths, skipped = [], [], 0
+            for mutant, dms in zip(mutants, dms_scores):
+                s = _score_mutant(mutant, log_p, target_seq)
+                if s is None or dms is None or (isinstance(dms, float) and np.isnan(dms)):
+                    skipped += 1
+                    continue
+                scores.append(s)
+                truths.append(float(dms))
+            rho = spearmanr(scores, truths)[0] if len(scores) > 2 else float("nan")
+            rhos.append(float(rho))
+            n_scored, n_skipped = len(scores), skipped  # seed-independent
+        rho_mean = float(np.mean(rhos))
+        rho_std = float(np.std(rhos, ddof=1)) if len(rhos) > 1 else 0.0
         per_ckpt[ckpt] = {
-            "spearman": round(float(rho), 4),
-            "p_value": float(pval),
-            "n_scored": len(scores),
-            "n_skipped": skipped,
+            "spearman_mean": round(rho_mean, 4),
+            "spearman_std": round(rho_std, 4),
+            "spearman_per_seed": [round(r, 4) for r in rhos],
+            "seeds": seeds,
+            "num_decoding_orders": num_decoding_orders,
+            "n_scored": n_scored,
+            "n_skipped": n_skipped,
         }
-        print(f"  {ckpt}: rho={rho:+.4f}  (n={len(scores)}, skipped={skipped})")
+        spread = f" ±{rho_std:.4f}" if len(seeds) > 1 else ""
+        print(f"  {ckpt}: rho={rho_mean:+.4f}{spread}  "
+              f"(n={n_scored}, skipped={n_skipped}, seeds={len(seeds)})")
 
     return {
         "dms_id": dms_id,
@@ -165,6 +188,14 @@ def main() -> None:
                     help="comma-separated ProteinMPNN checkpoints (default: all four)")
     ap.add_argument("--assays", default=",".join(DEFAULT_ASSAYS),
                     help="comma-separated ProteinGym DMS_ids")
+    ap.add_argument("--seeds", default=str(PROTEINMPNN_SEED),
+                    help="comma-separated non-zero ProteinMPNN seeds; each checkpoint is "
+                         "scored once per seed and reported as mean±std (default: config "
+                         f"PROTEINMPNN_SEED={PROTEINMPNN_SEED}). Use e.g. 37,38,39 for a "
+                         "seed-noise band.")
+    ap.add_argument("--num-decoding-orders", type=int, default=PROTEINMPNN_NUM_DECODING_ORDERS,
+                    help=f"decoding orders averaged per score (default: config "
+                         f"PROTEINMPNN_NUM_DECODING_ORDERS={PROTEINMPNN_NUM_DECODING_ORDERS})")
     ap.add_argument("--out",
                     default=os.path.join(os.path.dirname(__file__),
                                          "proteinmpnn_checkpoint_results.json"))
@@ -175,39 +206,55 @@ def main() -> None:
 
     checkpoints = [c.strip() for c in args.checkpoints.split(",") if c.strip()]
     assays = [a.strip() for a in args.assays.split(",") if a.strip()]
+    seeds = [int(s.strip()) for s in args.seeds.split(",") if s.strip()]
+    if any(s == 0 for s in seeds):
+        sys.exit("ERROR: seed 0 is invalid — ProteinMPNN treats it as unset and randomizes. "
+                 "Use non-zero seeds.")
 
     parquet_path = _ensure_parquet()
 
     results = []
     for dms_id in assays:
-        r = benchmark_assay(dms_id, checkpoints, parquet_path)
+        r = benchmark_assay(dms_id, checkpoints, parquet_path, seeds, args.num_decoding_orders)
         if r:
             results.append(r)
 
     # Summary table
     print("\n" + "=" * 72)
     print("SUMMARY — Spearman rho vs DMS_score (ESMFold-local predicted structures)")
+    if len(seeds) > 1:
+        print(f"         mean ± std over {len(seeds)} seeds {seeds}")
     print("=" * 72)
-    header = f"{'assay':<34}" + "".join(f"{c:>10}" for c in checkpoints)
+    header = f"{'assay':<34}" + "".join(f"{c:>16}" for c in checkpoints)
     print(header)
     print("-" * len(header))
     for r in results:
-        row = f"{r['dms_id']:<34}" + "".join(
-            f"{r['checkpoints'][c]['spearman']:>+10.4f}" for c in checkpoints
-        )
-        print(row)
+        cells = []
+        for c in checkpoints:
+            ck = r["checkpoints"][c]
+            cell = (f"{ck['spearman_mean']:+.3f}±{ck['spearman_std']:.3f}"
+                    if len(seeds) > 1 else f"{ck['spearman_mean']:+.4f}")
+            cells.append(f"{cell:>16}")
+        print(f"{r['dms_id']:<34}" + "".join(cells))
     if results:
         print("-" * len(header))
         means = [
-            sum(r["checkpoints"][c]["spearman"] for r in results) / len(results)
+            sum(r["checkpoints"][c]["spearman_mean"] for r in results) / len(results)
             for c in checkpoints
         ]
-        print(f"{'MEAN':<34}" + "".join(f"{m:>+10.4f}" for m in means))
+        print(f"{'MEAN':<34}" + "".join(f"{m:>+16.4f}" for m in means))
         best_idx = int(np.argmax(means))
         print(f"\nBest mean checkpoint: {checkpoints[best_idx]} (mean rho {means[best_idx]:+.4f})")
+        if len(seeds) == 1:
+            print("NOTE: single seed — this run cannot separate checkpoint effect from "
+                  "decoding-order noise. Re-run with --seeds 37,38,39 for a proper band.")
 
     with open(args.out, "w") as f:
-        json.dump({"checkpoints": checkpoints, "assays": results}, f, indent=2)
+        json.dump(
+            {"checkpoints": checkpoints, "seeds": seeds,
+             "num_decoding_orders": args.num_decoding_orders, "assays": results},
+            f, indent=2,
+        )
     print(f"Saved -> {args.out}")
 
 

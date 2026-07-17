@@ -49,6 +49,16 @@ imports `orchestrator.mutation_scan` and `orchestrator.backends.esmfold`).
 
 All positive, all highly significant, 0 rows skipped in any assay.
 
+> **Annotation (2026-07-16): figures above are from the unseeded scorer.** These ρ were
+> produced before the ProteinMPNN `--seed 0` determinism fix (`Process/mutation-determinism-fix.md`),
+> i.e. a single random decoding order per assay — not reproducible. The **verdict (gate
+> PASS) is unaffected**: the effect dwarfs the seed noise. For the record, the seeded +
+> averaged scorer (seed 37, 8 decoding orders; from the Task-7 re-run on the same
+> `v_48_020` default) gives:
+> `TCRG1 +0.7559 ±0.0006` · `ESTA +0.4340 ±0.0006` · `CCDB +0.3273 ±0.0006` — each within
+> ~0.01 of the values above, so every conclusion in this write-up stands. The exact table
+> here was not re-generated in place; treat the seeded values as the reproducible ones.
+
 ## Interpretation
 
 - **Gate cleared.** The plan's bar was "not near-zero / not negative on our own

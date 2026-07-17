@@ -93,6 +93,11 @@ GNINA_BIN = os.getenv("GNINA_BIN", "gnina")
 # git clone https://github.com/dauparas/ProteinMPNN.git — weights (~26MB) ship in the clone
 PROTEINMPNN_PATH = os.getenv("PROTEINMPNN_PATH", "")
 PROTEINMPNN_MODEL_NAME = os.getenv("PROTEINMPNN_MODEL_NAME", "v_48_020")
+# Scoring reproducibility. SEED MUST BE NON-ZERO — ProteinMPNN's `if args.seed:` treats
+# 0 as "unset" and randomizes, making scores non-reproducible (mutation_scan.py guards it).
+PROTEINMPNN_SEED = int(os.getenv("PROTEINMPNN_SEED", "37"))
+# Random decoding orders averaged per scan. Higher = less noise, linearly more compute.
+PROTEINMPNN_NUM_DECODING_ORDERS = int(os.getenv("PROTEINMPNN_NUM_DECODING_ORDERS", "8"))
 
 # Agentic refinement loop (Stage D — requires ANTHROPIC_API_KEY)
 AGENT_ENABLED = os.getenv("AGENT_ENABLED", "False") == "True"

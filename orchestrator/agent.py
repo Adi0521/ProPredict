@@ -16,6 +16,8 @@ from config import (
     AGENT_MAX_MUTATIONS,
     PROTEINMPNN_PATH,
     PROTEINMPNN_MODEL_NAME,
+    PROTEINMPNN_SEED,
+    PROTEINMPNN_NUM_DECODING_ORDERS,
 )
 from models.schemas import StructurePrediction, PostProcessingResult
 from orchestrator.backends.boltz import call_boltz
@@ -369,6 +371,8 @@ def _execute_agent_tool(
                 top_k=top_k,
                 proteinmpnn_dir=PROTEINMPNN_PATH,
                 model_name=PROTEINMPNN_MODEL_NAME,
+                seed=PROTEINMPNN_SEED,
+                num_decoding_orders=PROTEINMPNN_NUM_DECODING_ORDERS,
             )
         except Exception as e:
             return json.dumps({"error": f"mutation scan failed: {e}"})

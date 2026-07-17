@@ -291,7 +291,9 @@ def test_scan_mutations_happy_path(mock_score):
     ]
     mock_score.return_value = candidates
     with patch("orchestrator.agent.PROTEINMPNN_PATH", "/opt/ProteinMPNN"), \
-         patch("orchestrator.agent.PROTEINMPNN_MODEL_NAME", "v_48_020"):
+         patch("orchestrator.agent.PROTEINMPNN_MODEL_NAME", "v_48_020"), \
+         patch("orchestrator.agent.PROTEINMPNN_SEED", 37), \
+         patch("orchestrator.agent.PROTEINMPNN_NUM_DECODING_ORDERS", 8):
         state = _base_state("ACDEF")
         out = _scan({"positions": [1, 3], "top_k": 2}, state)
 
@@ -302,6 +304,7 @@ def test_scan_mutations_happy_path(mock_score):
         "ATOM_ORIG", "ACDEF",
         positions=[1, 3], top_k=2,
         proteinmpnn_dir="/opt/ProteinMPNN", model_name="v_48_020",
+        seed=37, num_decoding_orders=8,
     )
 
 

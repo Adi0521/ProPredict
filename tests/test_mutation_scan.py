@@ -118,6 +118,55 @@ def test_missing_npz_output_raises(mock_srun, tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# Determinism fix — seed guard, CLI construction, decoding-order averaging
+# (see mutation-plans/Process-plan-determinism-fix.md)
+# ---------------------------------------------------------------------------
+
+def test_seed_zero_raises():
+    # ProteinMPNN's `if args.seed:` treats 0 as unset -> random seed. Must fail fast,
+    # before any filesystem work, so no run_script stub is needed.
+    with pytest.raises(ValueError, match="seed=0"):
+        _run_proteinmpnn_conditional_probs("PDBSTR", "/nonexistent", "/nonexistent", seed=0)
+
+
+@patch("orchestrator.mutation_scan.subprocess.run")
+def test_cmd_passes_nonzero_seed_and_decoding_orders(mock_srun, tmp_path):
+    (tmp_path / "protein_mpnn_run.py").write_text("# stub")
+    # Pre-create the .npz the (mocked) runner would have produced: [3, L, 21].
+    npz_dir = tmp_path / "mpnn_out" / "conditional_probs_only"
+    npz_dir.mkdir(parents=True)
+    np.savez(npz_dir / "out.npz", log_p=np.zeros((3, 2, 21)))
+    mock_srun.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+    _run_proteinmpnn_conditional_probs(
+        "PDBSTR", str(tmp_path), str(tmp_path), seed=37, num_decoding_orders=3
+    )
+
+    cmd = mock_srun.call_args[0][0]
+    assert cmd[cmd.index("--seed") + 1] == "37"
+    assert cmd[cmd.index("--num_seq_per_target") + 1] == "3"
+
+
+@patch("orchestrator.mutation_scan.subprocess.run")
+def test_averages_over_decoding_orders(mock_srun, tmp_path):
+    # The [N, L, 21] stack must be MEAN-averaged over axis 0, not sliced to [0].
+    (tmp_path / "protein_mpnn_run.py").write_text("# stub")
+    npz_dir = tmp_path / "mpnn_out" / "conditional_probs_only"
+    npz_dir.mkdir(parents=True)
+    log_p = np.arange(3 * 2 * 21, dtype=float).reshape(3, 2, 21)
+    np.savez(npz_dir / "out.npz", log_p=log_p)
+    mock_srun.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+    out = _run_proteinmpnn_conditional_probs(
+        "PDBSTR", str(tmp_path), str(tmp_path), seed=37, num_decoding_orders=3
+    )
+    assert out.shape == (2, 21)
+    np.testing.assert_allclose(out, log_p.mean(axis=0))
+    # Guard against a regression to the old `log_p[0]` single-sample behavior.
+    assert not np.allclose(out, log_p[0])
+
+
+# ---------------------------------------------------------------------------
 # Integration — real ProteinMPNN clone (skipped unless explicitly configured)
 # ---------------------------------------------------------------------------
 
@@ -148,3 +197,11 @@ def test_score_candidate_mutations_integration():
     for c in res:
         assert set(c) == {"position", "from_aa", "to_aa", "score"}
         assert isinstance(c["score"], float)
+
+    # Determinism: the same (seed, num_decoding_orders, structure) must reproduce
+    # bit-for-bit. This is the test that would have caught the --seed 0 bug — the old
+    # scorer randomized the decoding order every call. Use a small num_decoding_orders
+    # to keep the second real ProteinMPNN pass fast.
+    kw = dict(top_k=5, proteinmpnn_dir=mpnn_dir, seed=37, num_decoding_orders=2)
+    assert score_candidate_mutations(pdb_str, seq, **kw) == \
+        score_candidate_mutations(pdb_str, seq, **kw)
