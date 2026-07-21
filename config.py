@@ -99,6 +99,14 @@ PROTEINMPNN_SEED = int(os.getenv("PROTEINMPNN_SEED", "37"))
 # Random decoding orders averaged per scan. Higher = less noise, linearly more compute.
 PROTEINMPNN_NUM_DECODING_ORDERS = int(os.getenv("PROTEINMPNN_NUM_DECODING_ORDERS", "8"))
 
+# Combinatorial / multi-site mutation search (hand-rolled AdaLead over a ProteinMPNN
+# oracle). Cheap tier-2 score_only search loop, budget-capped tier-3 re-fold validation.
+MUTATION_SEARCH_ENABLED = os.getenv("MUTATION_SEARCH_ENABLED", "False") == "True"
+MUTATION_SEARCH_ROUNDS = int(os.getenv("MUTATION_SEARCH_ROUNDS", "10"))                              # AdaLead rounds
+MUTATION_SEARCH_CANDIDATES_PER_ROUND = int(os.getenv("MUTATION_SEARCH_CANDIDATES_PER_ROUND", "20"))  # AdaLead lambda: candidates proposed/evaluated per round
+MUTATION_SEARCH_MAX_SITES = int(os.getenv("MUTATION_SEARCH_MAX_SITES", "3"))                         # cap on simultaneous mutations k
+MUTATION_SEARCH_MAX_REFOLDS = int(os.getenv("MUTATION_SEARCH_MAX_REFOLDS", "5"))                     # tier-3 re-fold validation budget (the only expensive knob)
+
 # Agentic refinement loop (Stage D — requires ANTHROPIC_API_KEY)
 AGENT_ENABLED = os.getenv("AGENT_ENABLED", "False") == "True"
 AGENT_API_KEY = os.getenv("AGENT_API_KEY", "")

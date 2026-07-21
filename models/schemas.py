@@ -127,6 +127,25 @@ class PostProcessingResult(BaseModel):
     decision: str  # "accept", "refine", "escalate"
 
 
+class MutationCandidate(BaseModel):
+    """One multi-site mutant proposed by the combinatorial mutation search."""
+    mutations: List[str]   # e.g. ["A12V", "G45S"] — <wt><1-indexed pos><mut>, one per mutated site
+    sequence: str          # full mutant sequence
+    score: float           # oracle fitness (higher = better)
+    oracle: str            # which oracle produced `score`: "additive" | "score_only" | "refold"
+
+
+class MutationSearchResult(BaseModel):
+    """Ranked output of a combinatorial / multi-site mutation search (AdaLead over a
+    ProteinMPNN oracle)."""
+    wild_type_sequence: str
+    candidates: List[MutationCandidate]  # ranked best-first
+    oracle: str                          # primary oracle used for the search loop
+    rounds: int                          # AdaLead rounds run
+    total_evaluated: int                 # distinct candidates scored across all rounds
+    refolds_used: int = 0                # tier-3 re-fold validations spent (0 until the re-fold funnel is wired)
+
+
 class PredictionResponse(BaseModel):
     """Response schema for prediction."""
     run_id: str
