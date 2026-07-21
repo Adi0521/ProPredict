@@ -111,7 +111,13 @@ class StructurePrediction(BaseModel):
     pae_scores: Optional[List[List[float]]] = None  # Predicted aligned error (not returned by ESMFold)
     seed: int
     model_name: str = "esmfold"  # which backend produced this prediction
-    affinity_score: Optional[float] = None  # Boltz-2 binding affinity (kcal/mol); None for non-Boltz or no ligand
+    # Boltz-2 affinity_pred_value: log10(IC50) with IC50 in uM — NOT kcal/mol. Lower =
+    # tighter predicted binding. None for non-Boltz predictions or when no ligand is present.
+    affinity_score: Optional[float] = None
+    # Boltz-2 affinity_probability_binary: probability the ligand is a binder rather than a
+    # decoy. A separate head trained on different data than affinity_score — a hit-discovery
+    # signal, not a potency estimate. Do not mix the two in one comparison.
+    affinity_probability: Optional[float] = None
 
 
 class PostProcessingResult(BaseModel):

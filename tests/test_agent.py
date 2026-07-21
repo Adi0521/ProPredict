@@ -15,7 +15,7 @@ from orchestrator.agent import _execute_agent_tool, run_agent_refinement
 from models.schemas import StructurePrediction
 
 
-def _fake_pred(pdb="ATOM_MUT", plddt=None, mean=80.0, affinity=None):
+def _fake_pred(pdb="ATOM_MUT", plddt=None, mean=80.0, affinity=None, affinity_prob=None):
     return StructurePrediction(
         structure_pdb=pdb,
         plddt_scores=plddt or [80.0, 80.0, 80.0],
@@ -23,6 +23,7 @@ def _fake_pred(pdb="ATOM_MUT", plddt=None, mean=80.0, affinity=None):
         seed=0,
         model_name="esmfold_local",
         affinity_score=affinity,
+        affinity_probability=affinity_prob,
     )
 
 
@@ -158,14 +159,18 @@ def test_backend_failure_rolls_back(mock_esm):
 def test_boltz_enabled_routes_to_boltz(mock_esm, mock_boltz, mock_clash):
     with patch("orchestrator.agent.BOLTZ_ENABLED", True), \
          patch("orchestrator.agent.AGENT_MAX_MUTATIONS", 3):
-        mock_boltz.return_value = _fake_pred(mean=90.0, affinity=-8.4)
+        mock_boltz.return_value = _fake_pred(mean=90.0, affinity=-1.35, affinity_prob=0.91)
         state = _base_state("ACDEF")
         out = _apply({"position": 1, "to_aa": "G"}, state)
 
     mock_boltz.assert_called_once()
     assert mock_boltz.call_args.args[0] == "GCDEF"
     mock_esm.assert_not_called()
-    assert out["affinity_kcal_mol"] == -8.4
+    # Boltz-2 reports log10(IC50 in uM), not kcal/mol — the key names the real unit so the
+    # agent cannot misread the number as a binding free energy.
+    assert out["affinity_log10_ic50_um"] == -1.35
+    assert out["affinity_binder_probability"] == 0.91
+    assert "affinity_kcal_mol" not in out
 
 
 # ---------------------------------------------------------------------------

@@ -200,6 +200,9 @@ Available prediction backends:
 If Boltz-2 produced the current prediction, prefer its structure for downstream refinement.
 If ESMFold produced the current prediction and quality is poor, consider run_boltz_prediction before escalating.
 When ligands are present and Boltz-2 predicted an affinity score, include it in your reasoning.
+Boltz-2's affinity value is log10(IC50) with IC50 in micromolar — NOT kcal/mol, and LOWER means
+tighter predicted binding. Its binder probability is a separate binder-vs-decoy head trained on
+different data; treat the two as distinct signals and never combine them into one number.
 
 Guidelines:
 - mean_pLDDT >= 75 AND <= 2 clashes -> accept unless context requires simulation
@@ -343,7 +346,9 @@ def _execute_agent_tool(
                 "best_seed": best.seed,
             }
             if best.affinity_score is not None:
-                result["affinity_kcal_mol"] = round(best.affinity_score, 3)
+                result["affinity_log10_ic50_um"] = round(best.affinity_score, 3)
+            if best.affinity_probability is not None:
+                result["affinity_binder_probability"] = round(best.affinity_probability, 3)
             return json.dumps(result)
         except Exception as e:
             return json.dumps({"error": str(e)})
@@ -446,7 +451,9 @@ def _execute_agent_tool(
             "num_clashes": state["num_clashes"],
         }
         if pred.affinity_score is not None:
-            result["affinity_kcal_mol"] = round(pred.affinity_score, 3)
+            result["affinity_log10_ic50_um"] = round(pred.affinity_score, 3)
+        if pred.affinity_probability is not None:
+            result["affinity_binder_probability"] = round(pred.affinity_probability, 3)
         return json.dumps(result)
 
     if tool_name in ("accept_structure", "escalate_structure"):
@@ -512,10 +519,17 @@ def run_agent_refinement(
         if inter_model_data.get("disagreement_regions"):
             disagreement_lines += f"\n  High-disagreement regions: {inter_model_data['disagreement_regions']}"
 
-    affinity_line = (
-        f"\nBinding affinity (Boltz-2): {prediction.affinity_score:.3f} kcal/mol"
-        if prediction.affinity_score is not None else ""
-    )
+    affinity_line = ""
+    if prediction.affinity_score is not None:
+        affinity_line = (
+            f"\nBinding affinity (Boltz-2): {prediction.affinity_score:.3f} "
+            "log10(IC50 in uM) — lower means tighter predicted binding"
+        )
+    if prediction.affinity_probability is not None:
+        affinity_line += (
+            f"\nBinder probability (Boltz-2): {prediction.affinity_probability:.3f} "
+            "(binder-vs-decoy; separate head from the affinity value)"
+        )
 
     user_msg = (
         f"Assess this predicted protein structure:\n\n"

@@ -216,7 +216,7 @@ def _run_prediction_core(
                     predictions.append(boltz_pred)
                     logger.info(
                         f"[boltz2] seed={seed}: mean pLDDT={boltz_pred.mean_plddt:.2f}"
-                        + (f", affinity={boltz_pred.affinity_score:.3f} kcal/mol"
+                        + (f", affinity={boltz_pred.affinity_score:.3f} log10(IC50 uM)"
                            if boltz_pred.affinity_score is not None else "")
                     )
                 except (RuntimeError, FileNotFoundError, ValueError) as e:

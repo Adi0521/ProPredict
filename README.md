@@ -496,13 +496,13 @@ Two traps:
 
 An honest list of what is incomplete or wrong today.
 
-- **Boltz-2 affinity is always `None`.** `orchestrator/backends/boltz.py` reads
-  `aff_data.get("affinity")`, but Boltz-2 writes `affinity_pred_value` and
-  `affinity_probability_binary` — there is no `affinity` key. Every downstream affinity branch
-  (the success log line, `apply_mutation`'s affinity comparison) has therefore never fired. The
-  log line also claims kcal/mol; `affinity_pred_value` is actually **log10(IC50) with IC50 in
-  µM**. Diagnosis and fix in
-  [`research_plan/rowA-boltz-affinity-invariance.md`](research_plan/rowA-boltz-affinity-invariance.md).
+- **Boltz-2 affinity is fixed but not yet confirmed on real output.** The backend now reads
+  `affinity_pred_value` and `affinity_probability_binary` (it previously read a key called
+  `affinity`, which Boltz never writes — so `affinity_score` was `None` on every run ever). The
+  value is **log10(IC50) with IC50 in µM**, not kcal/mol; all labels were corrected, since the
+  agent reasons over that number. Local coverage is mock-only — and a mock encoding the wrong
+  key is what hid the bug for months — so a ligand-bearing Modal run is still needed to confirm
+  the keys end-to-end. See [`Process/boltz-affinity-key-fix.md`](Process/boltz-affinity-key-fix.md).
 - **`call_boltz` can only build one protein chain**, so obligate homodimers (e.g. HIV-1 protease,
   whose active site forms at the dimer interface) cannot be modelled at all. Boltz accepts
   `id: [A, B]`; the backend needs a chain-multiplicity argument and ligand chain IDs shifted to

@@ -134,18 +134,35 @@ def call_boltz(
 
         mean_plddt = sum(plddt_scores) / len(plddt_scores)
 
+        # Boltz-2 writes affinity_pred_value (log10 IC50, IC50 in uM — NOT kcal/mol) and
+        # affinity_probability_binary (binder-vs-decoy probability, a separate head trained
+        # on different data). There is no key called "affinity"; reading one silently
+        # yielded None on every run until 2026-07-21. Verified against boltz 2.2.1,
+        # src/boltz/data/write/writer.py:308-326.
         affinity_score: Optional[float] = None
+        affinity_probability: Optional[float] = None
         if affinity_binder:
-            aff_hits = glob.glob(os.path.join(out_dir, "**", "*affinity*.json"), recursive=True)
+            # Kept as a broad *affinity*.json match because Boltz's exact filename is
+            # record-id dependent (affinity_<id>.json / <id>_affinity_<n>.json). Excluding
+            # "pae" guards the one collision that would otherwise sort ahead of the real
+            # file; sorted() keeps the pick deterministic across filesystems.
+            aff_hits = sorted(
+                p for p in glob.glob(os.path.join(out_dir, "**", "*affinity*.json"), recursive=True)
+                if "pae" not in os.path.basename(p).lower()
+            )
             aff_path = aff_hits[0] if aff_hits else None
             if aff_path and os.path.exists(aff_path):
                 with open(aff_path) as fh:
                     aff_data = json.load(fh)
-                affinity_score = aff_data.get("affinity")
+                affinity_score = aff_data.get("affinity_pred_value")
+                affinity_probability = aff_data.get("affinity_probability_binary")
 
         logger.info(
             f"Boltz-2 succeeded. Mean pLDDT: {mean_plddt:.2f}"
-            + (f", affinity: {affinity_score:.3f} kcal/mol" if affinity_score is not None else "")
+            + (f", affinity: {affinity_score:.3f} log10(IC50 uM)"
+               if affinity_score is not None else "")
+            + (f", binder probability: {affinity_probability:.3f}"
+               if affinity_probability is not None else "")
         )
 
         return StructurePrediction(
@@ -155,4 +172,5 @@ def call_boltz(
             seed=seed,
             model_name="boltz2",
             affinity_score=affinity_score,
+            affinity_probability=affinity_probability,
         )

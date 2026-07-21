@@ -425,7 +425,11 @@ def test_boltz_gpu(sequence: str = "MKTAYIAKQRQISFVKSHFSRQDILDLWQYVQG") -> dict:
         "mean_plddt": round(result.mean_plddt, 2),
         "num_residues_scored": len(result.plddt_scores),
         "plddt_scores_first10": [round(s, 1) for s in result.plddt_scores[:10]],
+        # Both stay None here — this smoke test folds a bare sequence with no ligand, so
+        # Boltz-2 never runs the affinity head. Confirming the affinity keys parse needs a
+        # ligand-bearing run (see test_boltz_affinity_gpu).
         "affinity_score": result.affinity_score,
+        "affinity_probability": result.affinity_probability,
         "pdb_lines": result.structure_pdb.count("\n"),
     }
     print(summary)

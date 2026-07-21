@@ -26,7 +26,12 @@ SAMPLE_CONFIDENCE = {
 }
 EXPECTED_PLDDT = SAMPLE_CONFIDENCE["plddt"]
 
-SAMPLE_AFFINITY = {"affinity": -8.42, "affinity_probability_binary": 0.91}
+# Real Boltz-2 affinity keys (boltz 2.2.1, src/boltz/data/write/writer.py:308-326).
+# affinity_pred_value is log10(IC50) with IC50 in uM, so a sub-micromolar binder is
+# negative. This fixture previously used a key called "affinity", which Boltz never
+# writes — the mock agreed with the bug, so the suite stayed green while
+# affinity_score was None on every real run.
+SAMPLE_AFFINITY = {"affinity_pred_value": -1.35, "affinity_probability_binary": 0.91}
 
 # Minimal CIF content that BioPython can parse for a single CA atom
 SAMPLE_CIF = """\
@@ -226,7 +231,32 @@ def test_call_boltz_parses_affinity(tmp_path):
     with patch("orchestrator.backends.boltz.subprocess.run", side_effect=fake_run):
         result = call_boltz(SAMPLE_SEQUENCE, context=ctx, seed=0)
 
-    assert result.affinity_score == pytest.approx(-8.42)
+    # Regression guard: assert populated, not just equal. An `is not None` check here
+    # would have caught the wrong-key bug on day one.
+    assert result.affinity_score is not None
+    assert result.affinity_score == pytest.approx(-1.35)
+    assert result.affinity_probability == pytest.approx(0.91)
+
+
+def test_call_boltz_ignores_pae_affinity_file(tmp_path):
+    """A pae_affinity_*.json must not be mistaken for the affinity summary."""
+    from orchestrator.backends.boltz import call_boltz
+
+    ctx = {"ligands": [{"name": "ATP", "smiles": "C1=NC2=C(N1)N=CN=C2N"}]}
+
+    def fake_run(cmd, **kwargs):
+        out_idx = cmd.index("--out_dir") + 1
+        out_dir = cmd[out_idx]
+        pred_dir = _make_fake_results_dir(out_dir, SAMPLE_CONFIDENCE, affinity_data=SAMPLE_AFFINITY)
+        # Sorts ahead of input_affinity_0.json and carries none of the real keys.
+        with open(os.path.join(pred_dir, "input_pae_affinity_0.json"), "w") as f:
+            json.dump({"pae": [[0.1]]}, f)
+        return _mock_subprocess_success()
+
+    with patch("orchestrator.backends.boltz.subprocess.run", side_effect=fake_run):
+        result = call_boltz(SAMPLE_SEQUENCE, context=ctx, seed=0)
+
+    assert result.affinity_score == pytest.approx(-1.35)
 
 
 def test_call_boltz_raises_on_subprocess_failure():
@@ -323,3 +353,6 @@ def test_call_boltz_affinity_integration():
     assert result.model_name == "boltz2"
     assert result.affinity_score is not None
     assert isinstance(result.affinity_score, float)
+    # The probability head ships alongside the value in the same summary JSON.
+    assert result.affinity_probability is not None
+    assert 0.0 <= result.affinity_probability <= 1.0
