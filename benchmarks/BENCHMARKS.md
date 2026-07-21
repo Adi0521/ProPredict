@@ -113,6 +113,63 @@ Iterative attempts to get MSA working through the ColabFold server. Runs 007–0
 
 ---
 
+## Run 011 — Affinity capability verification (NOT a quality run)
+
+**Date:** 2026-07-21
+**Commit:** `3206d7e` — "Fixed bug in Boltz Affinity score always showing 0" (+ uncommitted glob anchor)
+**Backend:** Boltz-2, 1 diffusion sample, 200 sampling steps, no MSA, A10G
+**Target:** none — a 33-aa synthetic peptide + ethanol (`CCO`), no reference structure
+**Changes from previous:** affinity JSON key fix (`affinity` → `affinity_pred_value`)
+
+| Metric | Value |
+|---|---|
+| TM-score | **N/A** — no reference structure |
+| RMSD | **N/A** — no reference structure |
+| pLDDT | 91.2 |
+| `affinity_pred_value` | +1.216 → IC50 ≈ 16 µM |
+| `affinity_probability_binary` | 0.166 |
+
+**This is deliberately not a quality benchmark and must not be read as one.** There is no
+reference structure, the "target" is a synthetic peptide with no binding pocket, and the
+ligand is ethanol. It is logged here for one reason: it is the **first run in this project's
+history that produced an affinity number at all**, and it establishes what correct affinity
+plumbing looks like. It is not appended to `results.jsonl` — that schema is for target-based
+quality runs and this has no TM/RMSD to record.
+
+Run via `modal run modal_app.py::test_boltz_affinity_gpu`, which reads the raw Boltz-2 output
+directly (not through `call_boltz`) to get ground truth on filenames and JSON keys, then
+checks our parser against it.
+
+**Notes:**
+- Ground truth: Boltz writes exactly one affinity file, `affinity_<record_id>.json`
+  (here `affinity_input.json`), with keys `affinity_pred_value`,
+  `affinity_probability_binary`, and `*1`/`*2` ensemble-member variants. We read the
+  un-suffixed pair.
+- Values are directionally sane: ethanol against a pocket-less peptide should be weak
+  (16 µM) and improbable as a binder (p=0.17). That is the only signal being claimed here.
+- `affinity_pred_value` is **log10(IC50), IC50 in µM — not kcal/mol**, and lower = tighter.
+  Every prior label in the codebase said kcal/mol.
+
+**Takeaways:**
+- **Every affinity number in this repo's history before this run was `None`.** The backend
+  read a JSON key Boltz never writes, so `StructurePrediction.affinity_score` was always
+  null. No previously recorded benchmark is affected — none of Runs 001–010 measured
+  affinity — but any earlier *reasoning* that assumed affinity was available was operating
+  on nothing.
+- The unit error is the more dangerous half: the agent reasons over this number, and
+  "−8.4 kcal/mol" vs "1.2 log10(IC50 µM)" are opposite claims about binding strength.
+- A real affinity benchmark still needs a system with measured binding data. The obvious
+  candidate (HIV-1 protease, `benchmarks/hiv_pr_resistance_dataset.json`) is **blocked**:
+  `call_boltz` builds one protein chain, and HIV-PR is an obligate homodimer whose active
+  site forms at the dimer interface — a monomer has no pocket. See
+  `research_plan/rowA-boltz-affinity-invariance.md` Bug 2.
+- Reproducibility caveat surfaced while doing this: the Modal image installs boltz from
+  **unpinned git HEAD** (`modal_app.py:42`), so the version behind Runs 001–011 is whatever
+  HEAD was at first image build and is not recorded. Worth pinning before the next
+  quality run.
+
+---
+
 <!-- Template for new entries:
 
 ## Run XXX — [Short description]

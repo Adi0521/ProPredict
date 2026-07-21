@@ -395,6 +395,65 @@ def test_gnina_modal() -> dict:
     return results
 
 
+@app.function(timeout=300)
+def report_boltz_version() -> dict:
+    """
+    Report exactly which Boltz-2 build is baked into the cached image. CPU-only, seconds.
+
+    Why this exists: the image installs boltz from UNPINNED git HEAD
+    (`pip_install("git+https://github.com/jwohlwend/boltz.git")`), and Modal caches that
+    layer — so the version behind every benchmark run to date is whatever HEAD happened to
+    be at first image build, recorded nowhere. This recovers it so the pin can target the
+    build that actually produced those numbers instead of guessing.
+
+    pip writes the resolved VCS commit into the distribution's direct_url.json, which is
+    what makes an exact answer possible.
+
+    Run with:
+        modal run modal_app.py::report_boltz_version
+    """
+    import importlib.metadata as md
+    import json
+    import shutil
+    import subprocess
+
+    out: dict = {}
+
+    try:
+        out["boltz_version"] = md.version("boltz")
+    except Exception as e:  # noqa: BLE001
+        out["boltz_version_error"] = repr(e)
+
+    # The exact commit pip resolved from git HEAD at image-build time.
+    try:
+        raw = md.distribution("boltz").read_text("direct_url.json")
+        out["direct_url"] = json.loads(raw) if raw else None
+        if isinstance(out["direct_url"], dict):
+            out["resolved_commit"] = out["direct_url"].get("vcs_info", {}).get("commit_id")
+    except Exception as e:  # noqa: BLE001
+        out["direct_url_error"] = repr(e)
+
+    out["boltz_cli_on_path"] = shutil.which("boltz") is not None
+
+    # Context that also affects reproducibility of the recorded benchmarks.
+    for pkg in ("torch", "numpy", "scipy"):
+        try:
+            out[f"{pkg}_version"] = md.version(pkg)
+        except Exception:  # noqa: BLE001
+            out[f"{pkg}_version"] = None
+
+    try:
+        out["pip_freeze_boltz"] = subprocess.run(
+            ["pip", "freeze"], capture_output=True, text=True, timeout=120
+        ).stdout.strip().splitlines()
+        out["pip_freeze_boltz"] = [l for l in out["pip_freeze_boltz"] if "boltz" in l.lower()]
+    except Exception as e:  # noqa: BLE001
+        out["pip_freeze_error"] = repr(e)
+
+    print(json.dumps(out, indent=2, default=str))
+    return out
+
+
 @app.function(
     timeout=600,
     gpu="A10G",
