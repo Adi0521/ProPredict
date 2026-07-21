@@ -5,6 +5,13 @@ Mirrors tests/test_mutation_scan.py: the additive oracle and mutation helpers ar
 tested directly against synthetic arrays; the score_only oracle is mocked at the subprocess
 boundary — the fake subprocess.run writes ProteinMPNN-shaped '*_fasta_N.npz' files so the
 output-parsing / ordering logic is exercised without weights or a GPU.
+
+The AdaLead-lite search (adalead_search) is tested against an in-memory oracle — no
+ProteinMPNN — on a planted HIDDEN-SYNERGY landscape (see `_landscape` below). The headline
+test is the ablation: the search fuses an epistatic pair that naive top-N single-site
+stacking provably cannot. Because the search is stochastic, epistasis is asserted over a
+FIXED set of seeds with a safe majority margin (deterministic: fixed seeds -> fixed count),
+while the k-cap, per-round budget, and reproducibility properties get hard assertions.
 """
 import os
 from unittest.mock import patch
@@ -13,6 +20,7 @@ import numpy as np
 import pytest
 
 from orchestrator.mutation_search import (
+    adalead_search,
     additive_oracle,
     apply_mutations,
     format_mutation,
@@ -207,3 +215,142 @@ def test_score_only_missing_run_script_raises(tmp_path):
     # tmp_path has no protein_mpnn_run.py -> isfile() is False, raised before any subprocess.
     with pytest.raises(RuntimeError, match="protein_mpnn_run.py not found"):
         _run_proteinmpnn_score_only("PDBSTR", ["ACDE"], str(tmp_path), str(tmp_path))
+
+
+# ---------------------------------------------------------------------------
+# adalead_search — against an in-memory planted landscape (no ProteinMPNN)
+# ---------------------------------------------------------------------------
+
+_WT = "AAAAAAAA"  # 8-residue wild type, fitness 0
+
+
+def _landscape(seq: str) -> float:
+    """
+    Planted HIDDEN-SYNERGY landscape (fair + winnable, unlike a deceptive needle):
+      pos1->C (+1.0), pos8->C (+1.0): the BEST singles, purely additive -> the decoys a
+        naive top-N single-site stacker picks.
+      pos3->D (+0.6), pos6->K (+0.6): individually DECENT (so they stay in the elite band)
+        but not top-ranked; TOGETHER an extra +3.0 synergy bonus.
+      any other substitution: -0.5
+    The epistatic pair D3+K6 (+4.2) strictly beats any additive stack of the best singles
+    (naive k=3 stack = +2.6); its components rank below the decoys, so naive stacking never
+    fuses them. Global optimum under k=3 is D3+K6+one decoy = +5.2.
+    """
+    f = 0.0
+    for i, (w, c) in enumerate(zip(_WT, seq)):
+        if w == c:
+            continue
+        if i == 0 and c == "C":
+            f += 1.0
+        elif i == 7 and c == "C":
+            f += 1.0
+        elif i == 2 and c == "D":
+            f += 0.6
+        elif i == 5 and c == "K":
+            f += 0.6
+        else:
+            f += -0.5
+    if seq[2] == "D" and seq[5] == "K":
+        f += 3.0
+    return f
+
+
+def _oracle(seqs):
+    return [_landscape(s) for s in seqs]
+
+
+# Naive top-N single-site stacker: the strawman the epistasis-aware search must beat. It
+# scores every single mutation, greedily stacks the best distinct-position ones up to the
+# k-cap, and evaluates the combination — the standard additive strategy.
+_NAIVE_STACK_FITNESS = 2.6  # C1 + C8 + one decent single; never fuses D3+K6
+
+
+def _has_epistatic_pair(candidate) -> bool:
+    return candidate.sequence[2] == "D" and candidate.sequence[5] == "K"
+
+
+def test_adalead_fuses_epistatic_pair_representative_seed():
+    # Seed 0 is representative (7/8 of seeds 0..7 succeed), not lucky: it lands the global
+    # optimum D3+K6+decoy and beats the naive additive stack.
+    res = adalead_search(_WT, _oracle, rounds=25, candidates_per_round=30, max_sites=3,
+                         seed=0, oracle_name="score_only")
+    top = res.candidates[0]
+    assert _has_epistatic_pair(top), f"expected D3+K6 fused, got {top.mutations}"
+    assert top.score > _NAIVE_STACK_FITNESS
+    assert set(top.mutations) >= {"A3D", "A6K"}
+    assert res.oracle == "score_only" and res.rounds == 25 and res.refolds_used == 0
+
+
+def test_adalead_beats_naive_stacking_over_fixed_seeds():
+    # Deterministic (fixed seeds -> fixed count). Empirically 7/8 here; assert a safe
+    # majority so a future tweak that makes it knife-edge trips this test.
+    found = 0
+    best_overall = float("-inf")
+    for s in range(8):
+        res = adalead_search(_WT, _oracle, rounds=25, candidates_per_round=30, max_sites=3,
+                             seed=s, oracle_name="score_only")
+        top = res.candidates[0]
+        found += _has_epistatic_pair(top)
+        best_overall = max(best_overall, top.score)
+    assert found >= 6, f"epistatic pair found in only {found}/8 seeds — search regressed"
+    assert best_overall > _NAIVE_STACK_FITNESS
+
+
+def test_adalead_respects_k_cap():
+    # No candidate may exceed max_sites mutations, across every returned candidate.
+    res = adalead_search(_WT, _oracle, rounds=20, candidates_per_round=25, max_sites=2,
+                         seed=0, top_k=25)
+    assert res.candidates, "expected some candidates"
+    assert all(len(c.mutations) <= 2 for c in res.candidates)
+
+
+def test_adalead_respects_per_round_budget():
+    # One batched oracle call per round (+1 for the initial seeds), each batch <= lambda.
+    calls = []
+
+    def counting_oracle(seqs):
+        calls.append(len(seqs))
+        return _oracle(seqs)
+
+    rounds, lam = 10, 15
+    adalead_search(_WT, counting_oracle, rounds=rounds, candidates_per_round=lam,
+                   max_sites=3, seed=0)
+    assert len(calls) == 1 + rounds            # initial seeds + one per round
+    assert calls[0] == 1                        # default initial_sequences == [wild_type]
+    assert all(n <= lam for n in calls[1:]), f"a round exceeded lambda={lam}: {calls}"
+
+
+def test_adalead_is_deterministic():
+    kw = dict(rounds=15, candidates_per_round=20, max_sites=3, seed=7, oracle_name="t")
+    r1 = adalead_search(_WT, _oracle, **kw)
+    r2 = adalead_search(_WT, _oracle, **kw)
+    assert [(c.sequence, c.score) for c in r1.candidates] == \
+           [(c.sequence, c.score) for c in r2.candidates]
+
+
+def test_adalead_excludes_wild_type_from_candidates():
+    res = adalead_search(_WT, _oracle, rounds=10, candidates_per_round=15, max_sites=3, seed=0)
+    assert all(c.sequence != _WT for c in res.candidates)
+    assert all(c.mutations for c in res.candidates)  # every candidate has >=1 mutation
+
+
+def test_adalead_additive_landscape_stacks_to_k_cap():
+    # Sanity: on a DENSE additive landscape (any mutation at positions 1-3 is +1.0, elsewhere
+    # -0.5) the search cleanly stacks k-cap-many beneficial mutations. Dense so discovery
+    # isn't itself a needle hunt — this checks stacking, not exploration. (A landscape with
+    # two SPECIFIC point optima is actually harder here: without a synergy gradient pulling
+    # them together, each must be independently discovered among 19*L substitutions.)
+    def additive(seq):
+        f = 0.0
+        for i, (w, c) in enumerate(zip(_WT, seq)):
+            if w == c:
+                continue
+            f += 1.0 if i in (0, 1, 2) else -0.5
+        return f
+
+    res = adalead_search(_WT, lambda ss: [additive(s) for s in ss],
+                         rounds=15, candidates_per_round=20, max_sites=3, seed=0)
+    top = res.candidates[0]
+    positions = {int(m[1:-1]) for m in top.mutations}
+    assert len(top.mutations) == 3 and positions <= {1, 2, 3}
+    assert top.score == pytest.approx(3.0)

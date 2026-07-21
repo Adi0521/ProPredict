@@ -36,9 +36,11 @@ import re
 import subprocess
 import sys
 import tempfile
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 import numpy as np
+
+from models.schemas import MutationCandidate, MutationSearchResult
 
 # Reuse mutation_scan's verified alphabet and conditional-probs runner so the two modules
 # can never drift (same [L,21] ordering, same seed guard, same decoding-order averaging).
@@ -284,3 +286,194 @@ def score_only_oracle(
         )
     # global_score is a mean NLL (lower = better fit); negate so higher = better everywhere.
     return [-g for g in global_scores]
+
+
+# ---------------------------------------------------------------------------
+# AdaLead-lite — hand-rolled combinatorial search over an oracle
+# ---------------------------------------------------------------------------
+#
+# This is AdaLead-INSPIRED, not textbook AdaLead. Two deliberate deviations, both
+# documented here because both are load-bearing for the epistasis result:
+#
+#   (1) No greedy rollout. Textbook AdaLead grows each candidate by mutating one residue
+#       at a time and keeping the step only if it improves — scored against a cheap
+#       SURROGATE MODEL (`model.get_fitness`), which is what makes a query-per-step
+#       affordable. This search is MODEL-FREE: ProteinMPNN is simultaneously the scorer and
+#       the thing being optimized, so a rollout would necessarily hit the expensive oracle
+#       once per mutation step. Dropping it is therefore the honest consequence of having no
+#       surrogate, not merely a subprocess-saving trick. The cost is sample efficiency: we
+#       lose intra-round exploitation and lean harder on λ, rounds, and crossover to
+#       assemble multi-site combos. Between-round elitism (the elite band re-seeds each
+#       round's parent pool) recovers the "greedy-around-best" behavior across rounds — the
+#       correct model-free approximation. What remains is essentially an elitist GA with
+#       uniform crossover and capped random mutation.
+#
+#   (2) Range-normalized elite band. FLEXS thresholds the parent pool multiplicatively:
+#       `fitness >= top * (1 - sign(top)*kappa)` (default kappa=0.05). That degenerates when
+#       the max fitness is ~0 — the band collapses to [0, 0] and excludes every negative
+#       sequence, so an epistatic pair whose two halves each score BELOW the current best
+#       could never enter the recombination pool to be fused. We instead use a band
+#       normalized by the observed fitness RANGE: `fitness >= max - kappa*(max - min)`, which
+#       is sign-agnostic and keeps below-best singles eligible as parents. Because the knob
+#       geometry differs, `kappa` here is NOT comparable to FLEXS's 0.05: kappa=0.5 means
+#       "top half of the observed fitness range," a deliberately wide default, described on
+#       its own terms.
+#
+# Determinism: every random draw goes through np.random.default_rng(seed) AND samples only
+# from ORDERED structures (the insertion-ordered `measured` dict, or lists). Never sample by
+# iterating a Python set — set iteration order is subject to hash randomization across
+# processes, which would make "same seed -> same result" flake in a fresh interpreter.
+
+
+def _elite_parents(measured: Dict[str, float], kappa: float) -> List[str]:
+    """
+    The recombination/mutation parent pool: sequences whose fitness lies in the top `kappa`
+    fraction of the observed fitness RANGE (see deviation (2) above). Returned as an ordered
+    list (from `measured`'s insertion order) so downstream sampling is reproducible.
+    Guaranteed non-empty — the max-fitness sequence always qualifies.
+    """
+    fits = list(measured.values())
+    hi, lo = max(fits), min(fits)
+    cutoff = hi - kappa * (hi - lo)   # hi==lo -> cutoff==hi -> every seq qualifies
+    return [seq for seq, fit in measured.items() if fit >= cutoff]
+
+
+def _recombine(parent_a: str, parent_b: str, rng: np.random.Generator) -> str:
+    """Uniform crossover: each position independently taken from one parent (0.5 each).
+    recombine(WT, WT) == WT, so a singleton round-1 pool is safe."""
+    return "".join(
+        parent_a[i] if rng.random() < 0.5 else parent_b[i]
+        for i in range(len(parent_a))
+    )
+
+
+def _mutate(sequence: str, n_mutations: int, rng: np.random.Generator) -> str:
+    """Apply `n_mutations` random point substitutions (each to a residue different from the
+    current one). Positions may repeat across draws; that only reduces the effective count,
+    which is fine."""
+    chars = list(sequence)
+    length = len(chars)
+    for _ in range(n_mutations):
+        idx = int(rng.integers(length))
+        choices = [aa for aa in _STANDARD_AA if aa != chars[idx]]
+        chars[idx] = choices[int(rng.integers(len(choices)))]
+    return "".join(chars)
+
+
+def _enforce_k_cap(
+    sequence: str, wild_type: str, max_sites: int, rng: np.random.Generator
+) -> str:
+    """Revert random excess mutations back to WT so at most `max_sites` positions differ.
+    Reverting to WT (not to a parent) keeps the operation self-contained and unbiased."""
+    diff = [i for i in range(len(sequence)) if sequence[i] != wild_type[i]]
+    if len(diff) <= max_sites:
+        return sequence
+    n_revert = len(diff) - max_sites
+    revert_idx = rng.choice(diff, size=n_revert, replace=False)  # diff is ordered -> reproducible
+    chars = list(sequence)
+    for i in revert_idx:
+        chars[int(i)] = wild_type[int(i)]
+    return "".join(chars)
+
+
+def adalead_search(
+    wild_type: str,
+    oracle: Callable[[List[str]], List[float]],
+    rounds: int,
+    candidates_per_round: int,
+    max_sites: int,
+    seed: int,
+    initial_sequences: Optional[List[str]] = None,
+    oracle_name: str = "score_only",
+    kappa: float = 0.5,
+    mutations_per_child: int = 1,
+    recombination_rate: float = 0.5,
+    top_k: int = 10,
+) -> MutationSearchResult:
+    """
+    AdaLead-inspired combinatorial mutation search (see the module-level note for the two
+    deviations from textbook AdaLead and the determinism contract).
+
+    Parameters
+    ----------
+    wild_type : the reference sequence; all candidates are substitutions of it (equal length)
+    oracle : batched fitness function, `List[str] -> List[float]`, HIGHER = better. Called
+             once per round on that round's new candidates (plus once on `initial_sequences`).
+    rounds : number of search rounds (oracle is called `1 + rounds` times total)
+    candidates_per_round : λ — max NEW candidates proposed & evaluated per round
+    max_sites : k-cap on simultaneous mutations per candidate
+    seed : RNG seed; identical (inputs, seed) -> identical result
+    initial_sequences : starting measured set (default [wild_type])
+    oracle_name : label recorded on each returned candidate ("additive"/"score_only"/"refold")
+    kappa : elite-band width as a fraction of the observed fitness RANGE (0.5 = top half)
+    mutations_per_child : random point substitutions added per generated child
+    recombination_rate : probability a child is bred by crossover of two parents (else it is
+             bred by mutating a single parent)
+    top_k : number of ranked candidates to return
+
+    Returns
+    -------
+    MutationSearchResult with candidates ranked best-first (WT itself excluded), the total
+    number of distinct sequences scored, and rounds run. `refolds_used` stays 0 — tier-3
+    re-fold validation is wired in a later task.
+    """
+    rng = np.random.default_rng(seed)
+    length = len(wild_type)
+
+    seeds = initial_sequences if initial_sequences is not None else [wild_type]
+    seeds = list(dict.fromkeys(seeds))  # de-dup, preserve order
+    # measured is insertion-ordered (dict) so all later sampling from it is reproducible.
+    measured: Dict[str, float] = {}
+    seed_fits = oracle(seeds)
+    for s, f in zip(seeds, seed_fits):
+        measured[s] = f
+
+    max_attempts = candidates_per_round * 25  # cap generation so dedup starvation can't spin
+    for _ in range(rounds):
+        parents = _elite_parents(measured, kappa)
+        batch: List[str] = []
+        seen_this_round: set = set()
+        attempts = 0
+        while len(batch) < candidates_per_round and attempts < max_attempts:
+            attempts += 1
+            if recombination_rate > 0 and rng.random() < recombination_rate:
+                a = parents[int(rng.integers(len(parents)))]
+                b = parents[int(rng.integers(len(parents)))]
+                child = _recombine(a, b, rng)
+            else:
+                child = parents[int(rng.integers(len(parents)))]
+            child = _mutate(child, mutations_per_child, rng)
+            child = _enforce_k_cap(child, wild_type, max_sites, rng)
+            if child == wild_type or child in measured or child in seen_this_round:
+                continue
+            seen_this_round.add(child)
+            batch.append(child)
+
+        if not batch:
+            continue  # pool exhausted under the k-cap; nothing new to score this round
+        fits = oracle(batch)
+        for s, f in zip(batch, fits):
+            measured[s] = f
+
+    # Rank all scored mutants (exclude WT), best-first; tie-break by sequence for determinism.
+    ranked = sorted(
+        ((s, f) for s, f in measured.items() if s != wild_type),
+        key=lambda sf: (-sf[1], sf[0]),
+    )
+    candidates = [
+        MutationCandidate(
+            mutations=mutations_from_sequences(wild_type, s),
+            sequence=s,
+            score=round(f, 4),
+            oracle=oracle_name,
+        )
+        for s, f in ranked[:top_k]
+    ]
+    return MutationSearchResult(
+        wild_type_sequence=wild_type,
+        candidates=candidates,
+        oracle=oracle_name,
+        rounds=rounds,
+        total_evaluated=len(measured),  # distinct sequences scored, incl. seeds and WT
+        refolds_used=0,
+    )
