@@ -58,7 +58,33 @@ trained on different data: binder-vs-decoy detection, the right output for hit d
 whereas `affinity_pred_value` is the one for SAR / Δ work. Both the schema comment and the
 agent system prompt say explicitly that the two must not be combined into one number.
 
-### Decision — the glob was NOT anchored to `affinity_*.json`
+### Decision — the glob, resolved by the GPU run (2026-07-21)
+
+**Superseded by verification.** The section below records why the glob was initially left
+broad; the A10G run settled it and the glob is now anchored to `affinity_*.json`.
+
+Ground truth from `modal_app.py::test_boltz_affinity_gpu`:
+
+```json
+"all_json_basenames": ["affinity_input.json", "confidence_input_model_0.json",
+                       "manifest.json", "input.json"],
+"affinity_json_keys": {"affinity_input.json": [
+    "affinity_pred_value",  "affinity_pred_value1",  "affinity_pred_value2",
+    "affinity_probability_binary", "affinity_probability_binary1", "affinity_probability_binary2"]},
+"keys_match_our_parser": true, "affinity_score": 1.2158, "affinity_probability": 0.1659,
+"PASS": true
+```
+
+Boltz writes exactly one affinity file, `affinity_<record_id>.json`. So the plan's original
+suggestion was right, and the caution below was defending against a filename
+(`input_affinity_0.json`) that **only ever existed in the fabricated mock** — a third instance
+of the same root cause: the fixture was written from imagination rather than observation. The
+fixture now uses the real filename, the real key set (including the `*1`/`*2` ensemble
+members), and values captured from the run.
+
+**Lesson to carry forward: pin fixtures to observed output, never to what the code expects.**
+
+### Original reasoning (pre-verification) — the glob was NOT anchored to `affinity_*.json`
 
 The plan suggested tightening `*affinity*.json` to `affinity_*.json`. **Not done**, and this is
 the one place the plan should not be followed literally. Boltz's affinity filename is
@@ -87,9 +113,28 @@ Boltz-2 actually writes; that rests on the research plan's reading of the 2.2.1 
 
 **The fix is not confirmed against real output yet.** `modal_app.py::test_boltz_gpu` folds a
 bare sequence with no ligand, so Boltz never runs the affinity head and both fields stay
-`None` there. Confirming this end-to-end needs a ligand-bearing run on Modal —
-`tests/test_boltz.py::test_call_boltz_affinity_integration` is written for it but skips
-without the boltz CLI. That run is the outstanding follow-up.
+`None` there — it cannot catch a wrong key.
+
+`modal_app.py::test_boltz_affinity_gpu` was added to close this, and is the outstanding
+follow-up to actually run:
+
+```bash
+modal run modal_app.py::test_boltz_affinity_gpu
+```
+
+It deliberately **does not trust our own parser**. Part 1 runs the `boltz predict` CLI
+directly (not through `call_boltz`) on a protein + ligand with an `affinity` property, then
+reports the real output filenames and the top-level JSON keys of every `*affinity*` file —
+ground truth that nothing in our code can influence. Part 2 runs `call_boltz` on the same
+input and checks that both `affinity_score` and `affinity_probability` come back populated.
+`PASS` is true only if the raw keys contain `affinity_pred_value` **and** both fields parsed.
+
+Two GPU runs; the ground-truth one drops to 50 sampling steps since it only needs the file
+layout, not a good structure.
+
+Its `affinity_file_basenames` output also settles the open glob question above — whether
+Boltz writes `affinity_<id>.json` or `<id>_affinity_<n>.json`. Once that is known, the glob
+can be anchored properly instead of relying on the `pae` exclusion.
 
 ## Tests
 

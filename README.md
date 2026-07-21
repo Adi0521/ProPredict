@@ -226,6 +226,11 @@ Implementation notes worth knowing before touching this code:
 
 - **Boltz-2 runs as a CLI subprocess** (`boltz predict` on a generated YAML), not via a Python
   API. Output CIF is converted to PDB in `_cif_to_pdb`.
+- **Boltz-2 binding affinity** is populated only when the context carries a ligand.
+  `affinity_score` is `affinity_pred_value` = **log10(IC50) with IC50 in µM** — *not* kcal/mol,
+  and **lower means tighter** binding. `affinity_probability` is a separate binder-vs-decoy
+  head; the two are different quantities trained on different data, so never combine them.
+  Verified end-to-end on an A10G via `modal run modal_app.py::test_boltz_affinity_gpu`.
 - **pLDDT is always 0–100** in this codebase. ESMFold writes 0–1 in the B-factor column, so the
   parser multiplies by 100.
 - **PDB files are strings**, held in task results and Postgres `result_json` — never written to
@@ -401,6 +406,7 @@ itself.
 ```bash
 modal run modal_app.py::run_prediction        # single prediction on an A10G
 modal run modal_app.py::test_boltz_gpu --sequence MKTAYIAK
+modal run modal_app.py::test_boltz_affinity_gpu  # ligand run: verifies the affinity keys
 modal run modal_app.py::test_membrane_modal   # real insane.py / CHARMM36m coverage
 modal run modal_app.py::test_ligands_modal    # real ACPYPE / Vina / RDKit / OpenFF coverage
 modal run modal_app.py::test_gnina_modal      # real GNINA on a dedicated CUDA image (T4)
@@ -496,13 +502,6 @@ Two traps:
 
 An honest list of what is incomplete or wrong today.
 
-- **Boltz-2 affinity is fixed but not yet confirmed on real output.** The backend now reads
-  `affinity_pred_value` and `affinity_probability_binary` (it previously read a key called
-  `affinity`, which Boltz never writes — so `affinity_score` was `None` on every run ever). The
-  value is **log10(IC50) with IC50 in µM**, not kcal/mol; all labels were corrected, since the
-  agent reasons over that number. Local coverage is mock-only — and a mock encoding the wrong
-  key is what hid the bug for months — so a ligand-bearing Modal run is still needed to confirm
-  the keys end-to-end. See [`Process/boltz-affinity-key-fix.md`](Process/boltz-affinity-key-fix.md).
 - **`call_boltz` can only build one protein chain**, so obligate homodimers (e.g. HIV-1 protease,
   whose active site forms at the dimer interface) cannot be modelled at all. Boltz accepts
   `id: [A, B]`; the backend needs a chain-multiplicity argument and ligand chain IDs shifted to

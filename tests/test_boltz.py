@@ -26,12 +26,22 @@ SAMPLE_CONFIDENCE = {
 }
 EXPECTED_PLDDT = SAMPLE_CONFIDENCE["plddt"]
 
-# Real Boltz-2 affinity keys (boltz 2.2.1, src/boltz/data/write/writer.py:308-326).
-# affinity_pred_value is log10(IC50) with IC50 in uM, so a sub-micromolar binder is
-# negative. This fixture previously used a key called "affinity", which Boltz never
-# writes — the mock agreed with the bug, so the suite stayed green while
-# affinity_score was None on every real run.
-SAMPLE_AFFINITY = {"affinity_pred_value": -1.35, "affinity_probability_binary": 0.91}
+# Real Boltz-2 affinity keys and values, captured from an actual A10G run
+# (modal_app.py::test_boltz_affinity_gpu, 2026-07-21). The *1/*2 keys are the individual
+# ensemble members; the un-suffixed pair is what we read. affinity_pred_value is
+# log10(IC50) with IC50 in uM, so a sub-micromolar binder is negative.
+#
+# This fixture previously used a key called "affinity", which Boltz never writes — the mock
+# agreed with the bug, so the suite stayed green while affinity_score was None on every real
+# run. Keep this fixture pinned to observed output, never to what the code expects.
+SAMPLE_AFFINITY = {
+    "affinity_pred_value": -1.35,
+    "affinity_probability_binary": 0.91,
+    "affinity_pred_value1": -1.30,
+    "affinity_probability_binary1": 0.89,
+    "affinity_pred_value2": -1.40,
+    "affinity_probability_binary2": 0.93,
+}
 
 # Minimal CIF content that BioPython can parse for a single CA atom
 SAMPLE_CIF = """\
@@ -184,7 +194,10 @@ def _make_fake_results_dir(base_dir, plddt_data, affinity_data=None):
         json.dump(plddt_data, f)
 
     if affinity_data is not None:
-        with open(os.path.join(pred_dir, "input_affinity_0.json"), "w") as f:
+        # Real filename, verified on an A10G run: affinity_<record_id>.json, NOT the
+        # input_affinity_0.json this fixture used to invent. The fabricated name is why the
+        # glob could not be anchored until the GPU run settled it.
+        with open(os.path.join(pred_dir, "affinity_input.json"), "w") as f:
             json.dump(affinity_data, f)
 
     return pred_dir

@@ -142,14 +142,13 @@ def call_boltz(
         affinity_score: Optional[float] = None
         affinity_probability: Optional[float] = None
         if affinity_binder:
-            # Kept as a broad *affinity*.json match because Boltz's exact filename is
-            # record-id dependent (affinity_<id>.json / <id>_affinity_<n>.json). Excluding
-            # "pae" guards the one collision that would otherwise sort ahead of the real
-            # file; sorted() keeps the pick deterministic across filesystems.
-            aff_hits = sorted(
-                p for p in glob.glob(os.path.join(out_dir, "**", "*affinity*.json"), recursive=True)
-                if "pae" not in os.path.basename(p).lower()
-            )
+            # Anchored to the affinity_ prefix. Verified against a real A10G run
+            # (modal_app.py::test_boltz_affinity_gpu, 2026-07-21): Boltz writes exactly one
+            # affinity file, named affinity_<record_id>.json — e.g. "affinity_input.json"
+            # alongside "confidence_input_model_0.json". Anchoring keeps a future
+            # pae_affinity_*.json from sorting ahead of it; sorted() keeps the pick
+            # deterministic across filesystems.
+            aff_hits = sorted(glob.glob(os.path.join(out_dir, "**", "affinity_*.json"), recursive=True))
             aff_path = aff_hits[0] if aff_hits else None
             if aff_path and os.path.exists(aff_path):
                 with open(aff_path) as fh:

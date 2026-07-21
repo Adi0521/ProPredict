@@ -434,3 +434,119 @@ def test_boltz_gpu(sequence: str = "MKTAYIAKQRQISFVKSHFSRQDILDLWQYVQG") -> dict:
     }
     print(summary)
     return summary
+
+
+@app.function(
+    timeout=1800,
+    gpu="A10G",
+)
+def test_boltz_affinity_gpu(
+    sequence: str = "MKTAYIAKQRQISFVKSHFSRQDILDLWQYVQG",
+    smiles: str = "CCO",
+) -> dict:
+    """
+    Ligand-bearing GPU test that closes the verification gap on the affinity fix
+    (Process/boltz-affinity-key-fix.md).
+
+    test_boltz_gpu folds a bare sequence, so Boltz-2 never runs the affinity head and
+    affinity_score stays None there — it cannot catch a wrong key. The local unit tests
+    are mocked, and a mock encoding the WRONG key is precisely what hid the original bug
+    for months. So this function deliberately does not trust our own parser: it first
+    reads the raw Boltz-2 output and reports the actual filenames and JSON keys as
+    ground truth, then checks that call_boltz's parse agrees.
+
+    Two GPU runs (the ground-truth one uses fewer sampling steps, since it only needs
+    the file layout, not a good structure).
+
+    Run with:
+        modal run modal_app.py::test_boltz_affinity_gpu
+        modal run modal_app.py::test_boltz_affinity_gpu --smiles "CC(=O)Oc1ccccc1C(=O)O"
+    """
+    import glob
+    import json
+    import os
+    import subprocess
+    import tempfile
+
+    import yaml
+
+    os.environ["BOLTZ_ENABLED"] = "True"
+    os.environ["BOLTZ_DIFFUSION_SAMPLES"] = "1"
+    os.environ["BOLTZ_SAMPLING_STEPS"] = "200"
+    os.environ["BOLTZ_USE_MSA"] = "False"
+
+    results: dict = {"smiles": smiles, "sequence_length": len(sequence)}
+
+    # ------------------------------------------------------------------
+    # Part 1 — ground truth: what does Boltz-2 actually write?
+    # Runs the CLI directly (not via call_boltz) so nothing our code believes about
+    # filenames or key names can influence the answer.
+    # ------------------------------------------------------------------
+    with tempfile.TemporaryDirectory() as tmpdir:
+        boltz_input = {
+            "version": 1,
+            "sequences": [
+                {"protein": {"id": "A", "sequence": sequence, "msa": "empty"}},
+                {"ligand": {"id": "B", "smiles": smiles}},
+            ],
+            "properties": [{"affinity": {"binder": "B"}}],
+        }
+        yaml_path = os.path.join(tmpdir, "input.yaml")
+        out_dir = os.path.join(tmpdir, "output")
+        os.makedirs(out_dir)
+        with open(yaml_path, "w") as fh:
+            yaml.dump(boltz_input, fh, default_flow_style=False)
+
+        proc = subprocess.run(
+            [
+                "boltz", "predict", yaml_path,
+                "--out_dir", out_dir,
+                "--diffusion_samples", "1",
+                "--sampling_steps", "50",   # layout only — no need for a good structure
+                "--seed", "0",
+            ],
+            capture_output=True, text=True, timeout=1500,
+        )
+        results["groundtruth_returncode"] = proc.returncode
+        if proc.returncode != 0:
+            results["groundtruth_stderr"] = proc.stderr[-2000:]
+        else:
+            all_json = sorted(glob.glob(os.path.join(out_dir, "**", "*.json"), recursive=True))
+            results["all_json_basenames"] = [os.path.basename(p) for p in all_json]
+
+            aff_files = [p for p in all_json if "affinity" in os.path.basename(p).lower()]
+            results["affinity_file_basenames"] = [os.path.basename(p) for p in aff_files]
+            # THE question this whole function exists to answer.
+            results["affinity_json_keys"] = {
+                os.path.basename(p): sorted(json.load(open(p)).keys()) for p in aff_files
+            }
+            results["keys_match_our_parser"] = any(
+                "affinity_pred_value" in keys
+                for keys in results["affinity_json_keys"].values()
+            )
+
+    # ------------------------------------------------------------------
+    # Part 2 — does call_boltz's parse actually pick those values up?
+    # ------------------------------------------------------------------
+    from orchestrator.backends.boltz import call_boltz
+
+    ctx = {"ligands": [{"name": "ligand", "smiles": smiles}]}
+    try:
+        pred = call_boltz(sequence, context=ctx, seed=0)
+        results["call_boltz_mean_plddt"] = round(pred.mean_plddt, 2)
+        results["affinity_score"] = pred.affinity_score
+        results["affinity_probability"] = pred.affinity_probability
+        # The assertions that matter: both must be populated, or the fix is not working.
+        results["affinity_score_populated"] = pred.affinity_score is not None
+        results["affinity_probability_populated"] = pred.affinity_probability is not None
+    except Exception as e:  # noqa: BLE001
+        results["call_boltz_error"] = repr(e)
+
+    results["PASS"] = bool(
+        results.get("keys_match_our_parser")
+        and results.get("affinity_score_populated")
+        and results.get("affinity_probability_populated")
+    )
+
+    print(json.dumps(results, indent=2, default=str))
+    return results
