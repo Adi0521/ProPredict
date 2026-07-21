@@ -1,2 +1,6 @@
 -r requirements.txt
-boltz @ git+https://github.com/jwohlwend/boltz
+# Boltz-2, PINNED to an exact commit — keep in lockstep with modal_app.py's pin.
+# b1ebfc46 reports version "2.2.1" but is 6 commits AHEAD of the v2.2.1 tag, including two
+# numerics fixes (autocast device type, cpu float32 precision). `boltz==2.2.1` from PyPI is
+# a DIFFERENT build and would silently change results. See Process/boltz-version-pin.md.
+boltz @ git+https://github.com/jwohlwend/boltz@b1ebfc46ecf57f5414e0d1a6f9027bbb122c53bc

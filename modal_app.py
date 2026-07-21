@@ -38,8 +38,23 @@ image = (
 
     .pip_install("cuequivariance-torch")
 
-    # Boltz-2 from source — not yet on PyPI as boltz-2, install from GitHub
-    .pip_install("git+https://github.com/jwohlwend/boltz.git")
+    # Boltz-2, PINNED to an exact commit. Do not relax this to a bare git URL or to
+    # `boltz==2.2.1` without reading the note below.
+    #
+    # b1ebfc46 (2026-05-29) is the build every benchmark from Run 002 onward was produced
+    # on, recovered from the cached image's direct_url.json via report_boltz_version().
+    # It reports version string "2.2.1" but is **6 commits AHEAD of the v2.2.1 tag**
+    # (cb04aecc), including two numerics fixes — 83bb04c4 "disable autocast using active
+    # device type" and 63000a7c "cpu-float32-precision". So `boltz==2.2.1` from PyPI is
+    # NOT this build and would silently change results.
+    #
+    # Previously this was unpinned git HEAD; Modal cached the layer, so the version behind
+    # the benchmark record was whatever HEAD happened to be at first build and was recorded
+    # nowhere. Bump deliberately, and re-run the CASP15 baseline when you do.
+    .pip_install(
+        "git+https://github.com/jwohlwend/boltz.git"
+        "@b1ebfc46ecf57f5414e0d1a6f9027bbb122c53bc"
+    )
 
     # ProteinMPNN clone (MIT, ~26MB incl. weights) for the structural mutation scorer
     # (orchestrator/mutation_scan.py, exposed to the agent as scan_mutations). torch is

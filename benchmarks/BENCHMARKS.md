@@ -2,6 +2,22 @@
 
 Tracking Boltz-2 prediction quality across changes. Each run is logged to `results.jsonl` with full config and metrics; this file captures the human-readable takeaways.
 
+## Boltz-2 build provenance (read before comparing runs across dates)
+
+Until 2026-07-21 the Modal image installed Boltz-2 from **unpinned git HEAD**, and Modal
+cached that layer — so the version behind any given run was whatever HEAD happened to be
+when the image was last built, and it was recorded nowhere. That has now been pinned to
+commit **`b1ebfc46`** (2026-05-29) in both `modal_app.py` and `requirements-gpu.txt`.
+
+`b1ebfc46` reports version string `2.2.1` but is **6 commits ahead of the `v2.2.1` tag**,
+including two numerics fixes (autocast device type, cpu float32 precision) — so
+`boltz==2.2.1` from PyPI is a *different* build and is not what produced these numbers.
+
+**Consequence for the record below:** Run 001 (2026-05-19) predates commit `b1ebfc46`
+(2026-05-29), so it ran on an older Boltz build than Runs 002–011. Runs from 002 onward are
+consistent with each other and with the pin. Any future version bump should be treated as a
+new baseline and re-benchmarked, not compared directly against these rows.
+
 ---
 
 ## Run 001 — Baseline Boltz-2 (CASP15)
@@ -20,6 +36,13 @@ Tracking Boltz-2 prediction quality across changes. Each run is logged to `resul
 **TM-score distribution:** 32/74 >= 0.5, 25/74 >= 0.7
 
 **Notes:** Baseline run with default settings. No MSA server, no refinement, no ensemble. 14 failures mostly from oversized targets (>1000 aa) or missing PDB files. The long-tail RMSD is dragged up by a few very poor predictions on large multi-domain proteins.
+
+> **Boltz build caveat (added 2026-07-21).** This run predates commit `b1ebfc46` (2026-05-29),
+> the build pinned in `modal_app.py` today, so it ran on an **older, unrecorded** Boltz-2.
+> The exact build cannot be recovered — the image layer it used has since been replaced.
+> This makes the Run 001 ↔ Run 006 agreement below a *cross-version* reproduction rather
+> than a same-build one. That is arguably a stronger result (the pipeline was stable across
+> a Boltz change), but it is not what "reproducible" was originally claiming here.
 
 **Takeaways:**
 - Median TM-score of 0.40 suggests many targets are near the noise floor — MSA and ensemble seeds should help here
@@ -60,6 +83,12 @@ These runs were iterative development runs while wiring up Weights & Biases logg
 **Takeaways:**
 - Baseline is reproducible across runs — stochasticity in Boltz-2 diffusion sampling is minimal at 200 steps
 - New harness is working correctly with full CASP15 coverage
+
+> **Amended 2026-07-21:** this reproduction was **cross-version**, not same-build — Run 001
+> ran on a pre-`b1ebfc46` Boltz (see the caveat under Run 001). Matching Run 001 to within
+> 0.0003 TM across both a harness change *and* a Boltz change is a stronger stability result
+> than originally claimed, but the "stochasticity is minimal" conclusion is now confounded
+> with version drift and should not be read as a clean seed-noise measurement.
 
 ---
 
