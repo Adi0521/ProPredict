@@ -142,7 +142,12 @@ Iterative attempts to get MSA working through the ColabFold server. Runs 007–0
 
 ---
 
-## Run 011 — Affinity capability verification (NOT a quality run)
+## Verification A — Affinity capability (unnumbered; NOT in results.jsonl)
+
+> **Numbering note.** `run-NNN` ids are assigned by `log_benchmark._next_run_id()` from the
+> **line count of `results.jsonl`**. Entries that are not logged there must therefore not
+> claim a number — this write-up originally did, and collided with the real `run-011` below.
+> Unlogged verification entries get a letter.
 
 **Date:** 2026-07-21
 **Commit:** `3206d7e` — "Fixed bug in Boltz Affinity score always showing 0" (+ uncommitted glob anchor)
@@ -196,6 +201,54 @@ checks our parser against it.
   **unpinned git HEAD** (`modal_app.py:42`), so the version behind Runs 001–011 is whatever
   HEAD was at first image build and is not recorded. Worth pinning before the next
   quality run.
+
+---
+
+## Run 011 — Post-pin image rebuild verification (3-target subset, MSA)
+
+**Date:** 2026-07-21
+**Commit:** `0e65cf1` — "continuing work on stamping with specific boltz version"
+**Backend:** Boltz-2 `2.2.1@b1ebfc46ecf5`, 1 sample, 200 steps, **MSA enabled**, A10G
+**Targets:** 3 CASP15 (2 succeeded, 1 failed — 7TY5 is the perennial PDB 404)
+**Changes from previous:** boltz pinned to an exact commit → **the Modal image rebuilt**;
+first run with `backend_build` provenance stamping.
+
+| Metric | Value |
+|---|---|
+| TM-score mean | 0.9778 |
+| RMSD mean (Å) | 1.04 |
+| pLDDT mean | 94.2 |
+
+**Purpose: verify the rebuild changed nothing.** Pinning boltz altered the image definition
+string, which invalidated that layer and everything after it. Since the image also contains
+many *still-unpinned* packages, the rebuild could have silently shifted results.
+
+**Head-to-head vs Run 010 (same MSA config, same targets):**
+
+| Target | TM (r010) | TM (r011) | Δ | pLDDT (r010) | pLDDT (r011) |
+|---|---|---|---|---|---|
+| 7TY4 | 0.9893 | 0.9893 | **±0.0000** | 95.07 | 95.07 |
+| 7UL4 | 0.9671 | 0.9663 | −0.0008 | 93.37 | 93.42 |
+
+**Notes:**
+- **7TY4 reproduced bit-identically** across the rebuild — same TM to 4 dp, same pLDDT to
+  2 dp. 7UL4 moved by −0.0008 TM, consistent with MSA-server/GPU nondeterminism rather than
+  a build change.
+- `report_boltz_version` confirmed the rebuilt image resolves to exactly
+  `b1ebfc46ecf57f5414e0d1a6f9027bbb122c53bc`, with torch `2.6.0+cu126`, numpy `1.26.4`,
+  scipy `1.13.1` — all identical to the pre-rebuild snapshot.
+- **This is a 3-target subset and not comparable to the 88-target baselines.** It answers
+  "did the rebuild change anything", not "how good is the model".
+- MSA was ON (inherited from `.env`), so Run 010 is the correct comparison, not Run 006.
+
+**Takeaways:**
+- The pin does what it was meant to do: a full image rebuild reproduced prior results.
+- `backend_build` provenance works end-to-end — this is the **first row in the file that
+  records which Boltz build produced it** (`2.2.1@b1ebfc46ecf5`), sourced from the worker
+  that actually ran the fold rather than guessed locally.
+- Still unpinned in the image and therefore still able to drift on a future rebuild:
+  `cuequivariance-*`, the whole micromamba layer (openmm/rdkit/openff/vina/ambertools), and
+  the `--depth 1` ProteinMPNN clone. Worth pinning before the next result that matters.
 
 ---
 

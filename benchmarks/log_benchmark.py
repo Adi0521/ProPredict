@@ -262,12 +262,39 @@ def log_run(
 
 
 def _log_wandb(entry: dict, project: str, entity: str | None = None):
+    """
+    Mirror an entry to Weights & Biases. Best-effort by design: results.jsonl is already
+    written by the time this runs, so nothing here may raise — a telemetry hiccup must not
+    destroy a benchmark run that just spent GPU-minutes producing numbers.
+    """
     try:
         import wandb
     except ImportError:
         print("  [warn] wandb not installed, skipping W&B logging. pip install wandb")
         return
 
+    # `import wandb` can SUCCEED and still be useless: this repo has a local wandb/ run
+    # artifact directory, and when the real package is absent (e.g. running from the wrong
+    # conda env) Python resolves that directory as a NAMESPACE PACKAGE. The ImportError
+    # guard above passes and the failure surfaces much later as
+    # `AttributeError: module 'wandb' has no attribute 'init'` — after the GPU work is done.
+    if not hasattr(wandb, "init"):
+        where = getattr(wandb, "__path__", None) or getattr(wandb, "__file__", "?")
+        print(f"  [warn] 'wandb' resolved to {where}, which is the local run-artifact "
+              "directory rather than the installed package — skipping W&B logging.")
+        print("         Activate the env that has wandb installed (the ProPredict env), "
+              "or run from outside the repo root.")
+        return
+
+    try:
+        _log_wandb_inner(entry, wandb, project, entity)
+    except Exception as e:  # noqa: BLE001 — telemetry must never fail the run
+        print(f"  [warn] W&B logging failed: {type(e).__name__}: {e}")
+        print(f"         The results.jsonl entry ({entry['run_id']}) was already written "
+              "and is unaffected.")
+
+
+def _log_wandb_inner(entry: dict, wandb, project: str, entity: str | None = None):
     good = [r for r in entry["per_target"] if r["status"] == "ok"]
 
     run = wandb.init(
