@@ -251,6 +251,94 @@ def test_call_boltz_parses_affinity(tmp_path):
     assert result.affinity_probability == pytest.approx(0.91)
 
 
+class TestBoltzBuildInfo:
+    """
+    get_boltz_build_info() identifies the build that produced a structure. The COMMIT is the
+    load-bearing part: the version string "2.2.1" describes both the v2.2.1 tag and the
+    commit 6 ahead of it that this project pins (Process/boltz-version-pin.md).
+    """
+
+    def _patch_md(self, version=None, direct_url=None):
+        """
+        Patch importlib.metadata's functions, NOT the module in sys.modules:
+        `import importlib.metadata as md` binds via getattr on the already-imported
+        `importlib` package, so a sys.modules swap is silently ignored.
+        """
+        from contextlib import ExitStack
+
+        stack = ExitStack()
+        if version is None:
+            stack.enter_context(patch("importlib.metadata.version",
+                                      side_effect=Exception("PackageNotFoundError")))
+        else:
+            stack.enter_context(patch("importlib.metadata.version", return_value=version))
+        dist = MagicMock()
+        dist.read_text.return_value = direct_url
+        stack.enter_context(patch("importlib.metadata.distribution", return_value=dist))
+        return stack
+
+    def test_reports_version_and_commit_from_vcs_install(self):
+        from orchestrator.backends.boltz import get_boltz_build_info
+
+        direct_url = json.dumps({
+            "url": "https://github.com/jwohlwend/boltz.git",
+            "vcs_info": {"vcs": "git", "commit_id": "b1ebfc46ecf57f5414e0d1a6f9027bbb122c53bc"},
+        })
+        with self._patch_md("2.2.1", direct_url):
+            info = get_boltz_build_info()
+
+        assert info["version"] == "2.2.1"
+        assert info["commit"] == "b1ebfc46ecf57f5414e0d1a6f9027bbb122c53bc"
+        assert info["label"] == "2.2.1@b1ebfc46ecf5"
+
+    def test_falls_back_to_bare_version_without_vcs_info(self):
+        """A wheel/sdist install has no direct_url.json — record what we do know."""
+        from orchestrator.backends.boltz import get_boltz_build_info
+
+        with self._patch_md("2.2.1", None):
+            info = get_boltz_build_info()
+
+        assert info["version"] == "2.2.1"
+        assert info["commit"] is None
+        assert info["label"] == "2.2.1"
+
+    def test_all_none_when_boltz_not_installed(self):
+        """The normal case on a dev machine — must not raise."""
+        from orchestrator.backends.boltz import get_boltz_build_info
+
+        with self._patch_md(version=None):
+            info = get_boltz_build_info()
+
+        assert info == {"version": None, "commit": None, "label": None}
+
+    def test_malformed_direct_url_does_not_crash_a_prediction(self):
+        from orchestrator.backends.boltz import get_boltz_build_info
+
+        with self._patch_md("2.2.1", "{not valid json"):
+            info = get_boltz_build_info()
+
+        assert info["version"] == "2.2.1"
+        assert info["commit"] is None
+
+
+def test_call_boltz_stamps_backend_version(tmp_path):
+    """The stamp must reach the StructurePrediction, not just be computable."""
+    from orchestrator.backends.boltz import call_boltz
+
+    def fake_run(cmd, **kwargs):
+        out_idx = cmd.index("--out_dir") + 1
+        _make_fake_results_dir(cmd[out_idx], SAMPLE_CONFIDENCE)
+        return _mock_subprocess_success()
+
+    with patch("orchestrator.backends.boltz.subprocess.run", side_effect=fake_run), \
+         patch("orchestrator.backends.boltz.get_boltz_build_info",
+               return_value={"version": "2.2.1", "commit": "b1ebfc46" * 5,
+                             "label": "2.2.1@b1ebfc46ecf5"}):
+        result = call_boltz(SAMPLE_SEQUENCE, seed=0)
+
+    assert result.backend_version == "2.2.1@b1ebfc46ecf5"
+
+
 def test_call_boltz_ignores_pae_affinity_file(tmp_path):
     """A pae_affinity_*.json must not be mistaken for the affinity summary."""
     from orchestrator.backends.boltz import call_boltz
