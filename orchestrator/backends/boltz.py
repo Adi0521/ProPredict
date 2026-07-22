@@ -31,6 +31,43 @@ def _cif_to_pdb(cif_path: str) -> str:
     return out.getvalue()
 
 
+def get_boltz_build_info() -> Dict[str, Optional[str]]:
+    """
+    Identify the installed Boltz-2 build: version string AND resolved git commit.
+
+    The commit is the part that matters. Boltz's version string does not uniquely identify
+    a build — the commit this project pins reports "2.2.1" while sitting 6 commits ahead of
+    the v2.2.1 tag, including two numerics fixes (Process/boltz-version-pin.md). Recording
+    only the version would therefore be recording nothing useful.
+
+    pip stores the resolved commit for VCS installs in the distribution's direct_url.json,
+    which is what makes an exact answer possible here.
+
+    Returns {"version", "commit", "label"}; values are None when boltz is not installed
+    (the normal case on a dev machine, where predictions run remotely). `label` is the
+    compact form meant for storage: "2.2.1@b1ebfc46ecf5".
+    """
+    import importlib.metadata as md
+
+    info: Dict[str, Optional[str]] = {"version": None, "commit": None, "label": None}
+
+    try:
+        info["version"] = md.version("boltz")
+    except Exception:  # noqa: BLE001 — not installed, or metadata unreadable
+        return info
+
+    try:
+        raw = md.distribution("boltz").read_text("direct_url.json")
+        if raw:
+            info["commit"] = (json.loads(raw).get("vcs_info") or {}).get("commit_id")
+    except Exception:  # noqa: BLE001 — installed from a wheel/sdist, so no VCS info
+        pass
+
+    commit = info["commit"]
+    info["label"] = f"{info['version']}@{commit[:12]}" if commit else info["version"]
+    return info
+
+
 def call_boltz(
     sequence: str,
     context: Optional[Dict[str, Any]] = None,
@@ -172,4 +209,5 @@ def call_boltz(
             model_name="boltz2",
             affinity_score=affinity_score,
             affinity_probability=affinity_probability,
+            backend_version=get_boltz_build_info()["label"],
         )

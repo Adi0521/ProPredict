@@ -88,6 +88,9 @@ def _call_esmfold_remote(sequence: str, seed: int = 0) -> StructurePrediction:
                 mean_plddt=mean_plddt,
                 seed=seed,
                 model_name="esmfold",
+                # The hosted API does not report which checkpoint served the request, so
+                # name the endpoint rather than invent a version we cannot verify.
+                backend_version=f"esmatlas-api:{ESMFOLD_API_URL}",
             )
 
         except requests.exceptions.RequestException as e:
@@ -134,6 +137,8 @@ def call_esmfold_local(sequence: str, seed: int = 0) -> StructurePrediction:
         mean_plddt=mean_plddt,
         seed=seed,
         model_name="esmfold_local",
+        # The checkpoint is what determines the output here, so that is the version.
+        backend_version=ESMFOLD_MODEL_NAME,
     )
 
 

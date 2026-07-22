@@ -17,6 +17,7 @@ import json
 import math
 import os
 import platform
+import re
 import statistics
 import subprocess
 import sys
@@ -70,12 +71,37 @@ def _environment_info() -> dict:
             env["cuda_version"] = torch.version.cuda or ""
     except ImportError:
         pass
-    try:
-        import boltz
-        env["boltz_version"] = getattr(boltz, "__version__", "installed (unknown version)")
-    except ImportError:
-        pass
+    # NOTE: no `import boltz` probe here. log_run() executes on the dispatching machine
+    # (a laptop), never in the GPU container, so that import always failed and silently
+    # wrote nothing — every historical row lacks it. Worse, boltz.__version__ would report
+    # "2.2.1" for builds that are commits apart. The build is captured properly via the
+    # `backend_build` argument, reported by the workers that actually ran it.
     return env
+
+
+# Matches the pinned commit in modal_app.py / requirements-gpu.txt. Deliberately duplicated
+# from scripts/check_boltz_updates.py rather than imported: benchmarks/ importing from
+# scripts/ would couple two unrelated entry points for one regex.
+_BOLTZ_PIN_RE = re.compile(r"jwohlwend/boltz(?:\.git)?@([0-9a-f]{40})\b")
+
+
+def _declared_boltz_pin() -> str | None:
+    """
+    Fall back to the Boltz commit *declared* in the repo when no worker reported one
+    (e.g. every target failed, or a re-log of an old results file).
+
+    Marked `declared:` in the record because it is weaker evidence than a worker report:
+    it says what the source pins, not what actually ran.
+    """
+    root = Path(__file__).parent.parent
+    for name in ("modal_app.py", "requirements-gpu.txt"):
+        try:
+            found = set(_BOLTZ_PIN_RE.findall((root / name).read_text()))
+        except OSError:
+            continue
+        if len(found) == 1:
+            return f"declared:{found.pop()[:12]}"
+    return None
 
 
 def _next_run_id() -> str:
@@ -183,11 +209,19 @@ def log_run(
     backend: str = "boltz-2",
     notes: str = "",
     duration_seconds: float | None = None,
+    backend_build: str | None = None,
     wandb_project: str | None = None,
     wandb_entity: str | None = None,
 ) -> dict:
     """
     Append a paper-ready benchmark entry to results.jsonl.
+
+    `backend_build` identifies the exact backend that produced these numbers, e.g.
+    "2.2.1@b1ebfc46ecf5" (version + resolved git commit), as reported by the workers that
+    ran it. Falls back to the commit declared in the repo, prefixed `declared:`. Without it
+    a row is not reproducible: Boltz's version string does not uniquely identify a build,
+    and rows 001-011 were recorded against builds that can no longer be identified
+    (Process/boltz-version-pin.md).
 
     If wandb_project is set (or WANDB_PROJECT env var), also logs to W&B.
     Returns the logged entry dict.
@@ -203,6 +237,7 @@ def log_run(
         "git": git,
         "source": source,
         "backend": backend,
+        "backend_build": backend_build or _declared_boltz_pin() or "unknown",
         "config": config,
         "environment": _environment_info(),
         "duration_seconds": round(duration_seconds, 1) if duration_seconds else None,
@@ -243,6 +278,7 @@ def _log_wandb(entry: dict, project: str, entity: str | None = None):
             **entry["git"],
             "source": entry["source"],
             "backend": entry["backend"],
+            "backend_build": entry["backend_build"],
             **entry["config"],
             **entry["environment"],
         },

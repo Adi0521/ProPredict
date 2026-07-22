@@ -261,12 +261,12 @@ def _run_prediction_core(
                 inter_model_data=inter_model_data or None,
             )
             if updated_pdb:
-                best_prediction = StructurePrediction(
-                    structure_pdb=updated_pdb,
-                    plddt_scores=best_prediction.plddt_scores,
-                    mean_plddt=best_prediction.mean_plddt,
-                    seed=best_prediction.seed,
-                    model_name=best_prediction.model_name,
+                # model_copy, not a fresh StructurePrediction: rebuilding field-by-field
+                # silently dropped everything not listed (affinity_score, affinity_probability,
+                # backend_version), so the relaxed structure lost its provenance and its
+                # affinity. Only the coordinates changed here — carry the rest forward.
+                best_prediction = best_prediction.model_copy(
+                    update={"structure_pdb": updated_pdb}
                 )
             logger.info(
                 f"Agent decision: {post_proc.decision} — {post_proc.agent_reasoning or '(no reasoning)'}"
@@ -320,13 +320,14 @@ def _run_prediction_core(
                         else:
                             relaxed_mean = best_prediction.mean_plddt
                         if relaxed_mean >= best_prediction.mean_plddt:
-                            best_prediction = StructurePrediction(
-                                structure_pdb=relaxed_pdb,
-                                plddt_scores=relaxed_plddt or best_prediction.plddt_scores,
-                                mean_plddt=relaxed_mean,
-                                seed=best_prediction.seed,
-                                model_name=best_prediction.model_name,
-                            )
+                            # See the note on the agent branch above: model_copy preserves
+                            # affinity and backend_version, which the old field-by-field
+                            # rebuild dropped on every relax.
+                            best_prediction = best_prediction.model_copy(update={
+                                "structure_pdb": relaxed_pdb,
+                                "plddt_scores": relaxed_plddt or best_prediction.plddt_scores,
+                                "mean_plddt": relaxed_mean,
+                            })
                             improved = True
                         post_proc.rosetta_energy = rosetta_score
                         logger.info(f"Rosetta relax: score={rosetta_score:.1f}, pLDDT={relaxed_mean:.2f}")

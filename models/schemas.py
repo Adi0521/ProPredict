@@ -118,6 +118,12 @@ class StructurePrediction(BaseModel):
     # decoy. A separate head trained on different data than affinity_score — a hit-discovery
     # signal, not a potency estimate. Do not mix the two in one comparison.
     affinity_probability: Optional[float] = None
+    # Which build of the backend produced this structure, e.g. "2.2.1@b1ebfc46ecf5" (Boltz-2
+    # version + resolved git commit) or "facebook/esmfold_v1". Stamped so a stored structure
+    # can always be traced to the code that generated it: Boltz's version string alone is
+    # ambiguous (see Process/boltz-version-pin.md), and results have already been recorded
+    # against an unidentifiable build once. None when the backend cannot report one.
+    backend_version: Optional[str] = None
 
 
 class PostProcessingResult(BaseModel):
