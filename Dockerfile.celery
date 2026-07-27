@@ -16,7 +16,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # ProteinMPNN clone (MIT, ~26MB incl. weights) for the structural mutation scorer
 # (orchestrator/mutation_scan.py, exposed to the agent as scan_mutations). torch is
 # installed via requirements.txt below, so the subprocess scorer runs in-place.
-RUN git clone --depth 1 https://github.com/dauparas/ProteinMPNN.git /opt/ProteinMPNN
+#
+# PINNED to 8907e66 (2023-06-27) — keep in lockstep with modal_app.py. The model WEIGHTS
+# ship inside this repo, so an unpinned clone could change mutation SCORES, not just code.
+# Full clone + checkout, not --depth 1: a shallow clone cannot check out an arbitrary
+# commit. See Process/proteinmpnn-version-pin.md.
+RUN git clone https://github.com/dauparas/ProteinMPNN.git /opt/ProteinMPNN \
+    && git -C /opt/ProteinMPNN checkout 8907e6671bfbfc92303b5f79c4b5e6ce47cdef57
 ENV PROTEINMPNN_PATH=/opt/ProteinMPNN
 
 # Install CHARMM36m force field (Feb 2026, CGenFF 5.0) into the GROMACS data directory.

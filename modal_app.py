@@ -60,7 +60,17 @@ image = (
     # (orchestrator/mutation_scan.py, exposed to the agent as scan_mutations). torch is
     # already in this image, so the subprocess scorer runs in-place. No .env is copied
     # into the image, so this image env var is the authoritative PROTEINMPNN_PATH here.
-    .run_commands("git clone --depth 1 https://github.com/dauparas/ProteinMPNN.git /opt/ProteinMPNN")
+    #
+    # PINNED to 8907e66 (2023-06-27) — keep in lockstep with Dockerfile.celery.
+    # The model WEIGHTS ship inside this repo, so an unpinned clone could change mutation
+    # SCORES, not merely code. 8907e66 is the commit the ProteinGym validation gate and the
+    # checkpoint benchmark were run against (Process/proteinmpnn-version-pin.md).
+    # Full clone + checkout, not --depth 1: a shallow clone cannot check out an arbitrary
+    # commit, and `--depth 1` alone silently tracks whatever HEAD happens to be at build time.
+    .run_commands(
+        "git clone https://github.com/dauparas/ProteinMPNN.git /opt/ProteinMPNN",
+        "git -C /opt/ProteinMPNN checkout 8907e6671bfbfc92303b5f79c4b5e6ce47cdef57",
+    )
     .env({"PROTEINMPNN_PATH": "/opt/ProteinMPNN"})
 
     #.run_commands("boltz download", timeout=1200)
@@ -465,6 +475,49 @@ def report_boltz_version() -> dict:
     except Exception as e:  # noqa: BLE001
         out["pip_freeze_error"] = repr(e)
 
+    print(json.dumps(out, indent=2, default=str))
+    return out
+
+
+@app.function(timeout=300)
+def report_proteinmpnn_version() -> dict:
+    """
+    Report which ProteinMPNN commit is baked into the image. CPU-only, seconds.
+
+    Counterpart to report_boltz_version(). This matters more than it looks: the model
+    weights live inside the cloned repo, so the commit determines the SCORES the mutation
+    scanner produces — not just its code. The ProteinGym validation gate and the checkpoint
+    benchmark are only meaningful against the commit they were run on (8907e66).
+
+    Run with:
+        modal run modal_app.py::report_proteinmpnn_version
+    """
+    import json
+    import os
+    import subprocess
+
+    PINNED = "8907e6671bfbfc92303b5f79c4b5e6ce47cdef57"
+    path = os.environ.get("PROTEINMPNN_PATH", "/opt/ProteinMPNN")
+    out: dict = {"proteinmpnn_path": path, "expected_commit": PINNED}
+
+    def _git(*args) -> str:
+        return subprocess.run(
+            ["git", "-C", path, *args], capture_output=True, text=True, timeout=60
+        ).stdout.strip()
+
+    out["path_exists"] = os.path.isdir(path)
+    if out["path_exists"]:
+        out["commit"] = _git("rev-parse", "HEAD") or None
+        out["commit_date"] = _git("log", "-1", "--format=%cd", "--date=short") or None
+        out["matches_pin"] = out["commit"] == PINNED
+        # The weights are the reason this pin exists — confirm they actually arrived.
+        weights = os.path.join(path, "vanilla_model_weights")
+        out["weights_present"] = os.path.isdir(weights)
+        out["weight_files"] = sorted(os.listdir(weights))[:8] if out["weights_present"] else []
+        out["run_script_present"] = os.path.isfile(os.path.join(path, "protein_mpnn_run.py"))
+
+    out["PASS"] = bool(out.get("matches_pin") and out.get("weights_present")
+                       and out.get("run_script_present"))
     print(json.dumps(out, indent=2, default=str))
     return out
 
