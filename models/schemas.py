@@ -34,6 +34,11 @@ class Context(BaseModel):
     ligands: Optional[List[LigandContext]] = None
     mutations: Optional[List[Dict[str, Any]]] = None  # e.g., [{"pos": 12, "from": "A", "to": "V"}]
     constraints: Optional[Dict[str, Any]] = None  # e.g., crosslinks, distance constraints
+    # Number of identical protein chains (homo-oligomer count). 1 = monomer. Only Boltz-2
+    # consumes this; obligate homodimers (e.g. HIV-1 protease) have no binding pocket as a
+    # monomer, so the dimer must be modelled explicitly. Capped at 26 (single-letter chain
+    # IDs); the combined protein+ligand chain count is checked in the Boltz backend.
+    protein_copies: int = Field(default=1, ge=1, le=26)
 
     model_config = ConfigDict(json_schema_extra={
         "example": {
