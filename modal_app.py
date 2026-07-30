@@ -71,9 +71,28 @@ image = (
         "git clone https://github.com/dauparas/ProteinMPNN.git /opt/ProteinMPNN",
         "git -C /opt/ProteinMPNN checkout 8907e6671bfbfc92303b5f79c4b5e6ce47cdef57",
     )
-    .env({"PROTEINMPNN_PATH": "/opt/ProteinMPNN"})
+    # BOLTZ_CACHE pins the weight cache to an ABSOLUTE path so the build-time download and
+    # the runtime lookup resolve to the same place regardless of $HOME (which Modal sets
+    # differently, or not at all, between build and run). boltz reads this via
+    # get_cache_path() (src/boltz/main.py) before falling back to ~/.boltz; call_boltz
+    # passes no --cache, so this env var is the only thing steering it.
+    .env({"PROTEINMPNN_PATH": "/opt/ProteinMPNN", "BOLTZ_CACHE": "/opt/boltz-cache"})
 
-    #.run_commands("boltz download", timeout=1200)
+    # Bake the Boltz-2 weights into the image so cold containers don't each re-download a
+    # few GB on first predict. There is NO `boltz download` CLI command (the CLI is a click
+    # group with a single `predict` command) — weights are fetched lazily inside predict via
+    # download_boltz2(cache). We call that function directly at build time: CPU-only, pulls
+    # both the conf and affinity checkpoints + CCD + mols. mkdir first because
+    # download_boltz2 (unlike predict) does not create the cache dir itself.
+    #
+    # This layer sits AFTER the boltz pip_install, so bumping the boltz pin invalidates it
+    # and re-bakes weights matching the new build. If a future boltz moves download_boltz2
+    # out of boltz.main, this step fails LOUDLY at build — which is the correct outcome.
+    .run_commands(
+        "mkdir -p /opt/boltz-cache",
+        "python -c 'from pathlib import Path; from boltz.main import download_boltz2; "
+        "download_boltz2(Path(\"/opt/boltz-cache\"))'",
+    )
     # Ship local source packages into the image
     .add_local_dir("orchestrator", remote_path="/root/orchestrator")
     .add_local_dir("models", remote_path="/root/models")
@@ -439,6 +458,7 @@ def report_boltz_version() -> dict:
     """
     import importlib.metadata as md
     import json
+    import os
     import shutil
     import subprocess
 
@@ -459,6 +479,20 @@ def report_boltz_version() -> dict:
         out["direct_url_error"] = repr(e)
 
     out["boltz_cli_on_path"] = shutil.which("boltz") is not None
+
+    # Confirm the weights are baked into the image (see the BOLTZ_CACHE bake step). If this
+    # reports missing/empty, cold containers will silently re-download on first predict and
+    # the bake did not take.
+    # download_boltz2 writes exactly these two checkpoints plus the mols/ CCD dir (boltz2
+    # uses mols/, not boltz1's ccd.pkl — verified against src/boltz/main.py:198-250).
+    cache_dir = os.environ.get("BOLTZ_CACHE", os.path.expanduser("~/.boltz"))
+    out["boltz_cache_dir"] = cache_dir
+    expected = ["boltz2_conf.ckpt", "boltz2_aff.ckpt"]
+    present = {name: os.path.isfile(os.path.join(cache_dir, name)) for name in expected}
+    has_mols = os.path.isdir(os.path.join(cache_dir, "mols"))
+    out["boltz_cache_files"] = present
+    out["boltz_cache_has_mols"] = has_mols
+    out["weights_baked"] = all(present.values()) and has_mols
 
     # Context that also affects reproducibility of the recorded benchmarks.
     for pkg in ("torch", "numpy", "scipy"):
