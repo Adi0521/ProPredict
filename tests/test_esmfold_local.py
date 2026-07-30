@@ -83,6 +83,11 @@ def test_call_esmfold_local_returns_structure_prediction():
     assert abs(result.mean_plddt - sum(EXPECTED_PLDDT) / len(EXPECTED_PLDDT)) < 1e-6
     assert result.structure_pdb == SAMPLE_PDB
     assert result.seed == 0
+    # Provenance stamp: for ESMFold the checkpoint is what determines the output, so that
+    # is the version recorded. Read from config rather than hardcoded so overriding
+    # ESMFOLD_MODEL_NAME cannot silently mis-stamp results.
+    from config import ESMFOLD_MODEL_NAME
+    assert result.backend_version == ESMFOLD_MODEL_NAME
 
 
 def test_call_esmfold_local_raises_on_empty_pdb():

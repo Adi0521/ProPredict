@@ -1,0 +1,168 @@
+# Weekly check for Boltz-2 upstream commits past our pinned build.
+#
+# Boltz-2 is pinned to an exact commit in modal_app.py AND requirements-gpu.txt so the
+# benchmark record stays reproducible (Process/boltz-version-pin.md). The cost of pinning is
+# that upstream fixes are invisible until someone looks — this is the automated look.
+#
+# Report-only by design: it never bumps the pin. Adopting a bump requires re-running the
+# CASP15 baseline, which is a human decision, not something a cron job should trigger.
+name: Boltz-2 version check
+
+on:
+  schedule:
+    # Mondays 14:00 UTC = 9am America/Chicago (CDT) / 8am (CST — cron is fixed UTC, so this
+    # shifts by an hour across DST; harmless for a weekly check).
+    - cron: "0 14 * * 1"
+  workflow_dispatch:        # lets you run it on demand from the Actions tab
+
+permissions:
+  contents: read            # checkout only
+  issues: write             # open/comment the report issue
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # No pip install step: check_boltz_updates.py is deliberately stdlib-only
+      # (urllib/json/re/argparse) so this job needs no dependencies.
+
+      - name: Check for upstream Boltz-2 commits
+        id: check
+        env:
+          # Lifts the unauthenticated GitHub API limit (60/hr) to 1000/hr for this repo.
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          python3 scripts/check_boltz_updates.py --json > result.json
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+          set -e
+          cat result.json
+
+      - name: Summarise in the run log
+        if: always()
+        run: |
+          {
+            echo "### Boltz-2 version check"
+            echo ""
+            echo "Exit code: \`${{ steps.check.outputs.exit_code }}\` "
+            echo "(0 = up to date, 1 = behind upstream, 2 = could not determine)"
+            echo ""
+            echo '```json'
+            cat result.json 2>/dev/null || echo "(no output — the script failed to run)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Exit 0 is the expected weekly outcome and stays silent — a notification every week
+      # for "nothing changed" is a notification nobody reads.
+      - name: Open or update the report issue
+        if: steps.check.outputs.exit_code != '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            let data = null;
+            try {
+              data = JSON.parse(fs.readFileSync('result.json', 'utf8'));
+            } catch (e) {
+              core.warning(`could not parse result.json: ${e}`);
+            }
+
+            const failed = '${{ steps.check.outputs.exit_code }}' === '2';
+            const MARKER = '<!-- boltz-version-check -->';   // identifies our own issue
+
+            let title, body;
+
+            if (failed || !data) {
+              // Exit 2 is an ERROR, not an available update. The nastiest case it covers is
+              // the two pin sites disagreeing — which means Modal and local GPU installs
+              // would silently run different Boltz builds.
+              title = 'Boltz-2 upstream check FAILED';
+              body = [
+                MARKER,
+                '## Boltz-2 version check could not complete',
+                '',
+                'Exit code `2`. Causes, in order of seriousness:',
+                '',
+                '1. **The two pin sites disagree** (`modal_app.py` vs `requirements-gpu.txt`)',
+                '   — Modal runs and local GPU installs would use *different* Boltz builds.',
+                '2. GitHub API unreachable or rate-limited.',
+                '',
+                'See the workflow run log for the exact message.',
+                '',
+                `_Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}_`,
+              ].join('\n');
+            } else {
+              const notable = data.notable_numerics_commits || [];
+              const commits = (data.commits || [])
+                .map(c => `- \`${c.sha}\` ${notable.includes(c.sha) ? '**⚠️ numerics** ' : ''}${c.subject}`)
+                .join('\n');
+
+              title = `Boltz-2 upstream update available — behind by ${data.behind_by} commit(s)`;
+              body = [
+                MARKER,
+                `## Pinned build is ${data.behind_by} commit(s) behind upstream \`main\``,
+                '',
+                `| | |`,
+                `|---|---|`,
+                `| pinned | \`${data.pinned}\` |`,
+                `| latest main | \`${data.latest_main}\` |`,
+                `| latest release | ${data.latest_release || '—'} |`,
+                '',
+                '### New commits',
+                commits || '_(none listed)_',
+                '',
+                notable.length
+                  ? `### ⚠️ ${notable.length} commit(s) look numerics-related\nThese can move results. Treat a bump as a **new baseline**, not a free upgrade.`
+                  : '_No commits flagged as numerics-related._',
+                '',
+                '### Adopting this bump',
+                '1. Update the SHA in **both** `modal_app.py` and `requirements-gpu.txt` — they must stay in lockstep.',
+                '2. Re-run the CASP15 baseline and log it as a **new run** in `benchmarks/BENCHMARKS.md`.',
+                '3. Do **not** compare results across the version boundary.',
+                '4. Never substitute `boltz==2.2.1` for the pinned commit — the version string does not',
+                '   uniquely identify a build. See `Process/boltz-version-pin.md`.',
+                '',
+                `_Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}_`,
+              ].join('\n');
+            }
+
+            // One issue per upstream state, not one per week: reuse our existing open issue
+            // and only comment when the SHA it records has actually changed.
+            const existing = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              per_page: 100,
+            });
+            const ours = existing.find(i => (i.body || '').includes(MARKER));
+
+            if (!ours) {
+              const created = await github.rest.issues.create({
+                owner: context.repo.owner, repo: context.repo.repo, title, body,
+              });
+              core.notice(`Opened issue #${created.data.number}`);
+              return;
+            }
+
+            const alreadyKnown = data && (ours.body || '').includes(data.latest_main);
+            if (alreadyKnown) {
+              core.notice(`Issue #${ours.number} already reports ${data.latest_main} — staying quiet.`);
+              return;
+            }
+
+            await github.rest.issues.update({
+              owner: context.repo.owner, repo: context.repo.repo,
+              issue_number: ours.number, title, body,
+            });
+            await github.rest.issues.createComment({
+              owner: context.repo.owner, repo: context.repo.repo,
+              issue_number: ours.number,
+              body: `${MARKER}\nUpstream moved again — updated above to \`${data ? data.latest_main : 'n/a'}\`.`,
+            });
+            core.notice(`Updated issue #${ours.number}`);

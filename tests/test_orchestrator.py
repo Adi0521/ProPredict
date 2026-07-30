@@ -385,6 +385,7 @@ def _accept_prediction():
         mean_plddt=95.0,
         seed=0,
         model_name="esmfold",
+        backend_version="facebook/esmfold_v1",
     )
 
 
@@ -419,3 +420,81 @@ class TestRunPredictionCoreProgress:
 
         result = self._run(boom)  # must not raise
         assert result["status"] == "completed"
+
+    def test_backend_version_survives_to_the_result(self):
+        """
+        The stamp is worthless if the pipeline drops it before storage. The backend itself
+        is mocked here, so this pins propagation only — that the value the backend stamped
+        reaches both `predictions[]` and `ensemble_result`. The stamping itself is covered
+        in tests/test_esmfold_local.py and tests/test_boltz.py.
+        """
+        result = self._run(lambda pct, stage: None)
+        assert result["ensemble_result"]["backend_version"] == "facebook/esmfold_v1"
+        assert result["predictions"][0]["backend_version"] == "facebook/esmfold_v1"
+
+
+# ---------------------------------------------------------------------------
+# 9. Provenance is preserved when a prediction is rebuilt mid-pipeline
+# ---------------------------------------------------------------------------
+
+class TestPredictionFieldPreservation:
+    """
+    Rosetta relax and the agent branch replace `best_prediction` mid-run. They used to
+    rebuild it field-by-field, which silently dropped every field not listed —
+    affinity_score, affinity_probability, backend_version. The bug was invisible while
+    affinity was always None; fixing the affinity key made it live. model_copy() is the fix,
+    and these tests pin the behaviour so a future field cannot regress it.
+    """
+
+    def _boltz_pred(self):
+        from models.schemas import StructurePrediction
+        return StructurePrediction(
+            structure_pdb="ATOM_ORIG",
+            plddt_scores=[50.0],
+            mean_plddt=50.0,        # below accept -> triggers the refinement loop
+            seed=7,
+            model_name="boltz2",
+            affinity_score=-1.35,
+            affinity_probability=0.91,
+            backend_version="2.2.1@b1ebfc46ecf5",
+        )
+
+    def test_rosetta_relax_preserves_affinity_and_build(self):
+        from unittest.mock import patch, MagicMock
+        import orchestrator.tasks as tasks
+
+        fake_redis = MagicMock()
+        fake_redis.get.return_value = None
+
+        # Relax returns a better structure, so the rebuild branch is taken.
+        with patch.object(tasks, "_get_redis", return_value=fake_redis), \
+             patch.object(tasks, "call_esmfold_api", return_value=self._boltz_pred()), \
+             patch.object(tasks, "AGENT_ENABLED", False), \
+             patch.object(tasks, "ROSETTA_ENABLED", True), \
+             patch.object(tasks, "BOLTZ_ENABLED", False), \
+             patch.object(tasks, "run_rosetta_relax", return_value=("ATOM_RELAXED", -123.4)), \
+             patch.object(tasks, "_parse_plddt_from_pdb", return_value=[80.0]), \
+             patch("orchestrator.scoring.count_clashes", return_value=0):
+            result = tasks._run_prediction_core(
+                {"run_id": "t-relax", "sequence": "MKTAYIAK", "context": {}}
+            )
+
+        ens = result["ensemble_result"]
+        assert ens["structure_pdb"] == "ATOM_RELAXED"   # the relax did happen
+        assert ens["mean_plddt"] == 80.0
+        # ...and none of the provenance was lost on the way through.
+        assert ens["affinity_score"] == -1.35
+        assert ens["affinity_probability"] == 0.91
+        assert ens["backend_version"] == "2.2.1@b1ebfc46ecf5"
+        assert ens["seed"] == 7
+        assert ens["model_name"] == "boltz2"
+
+    def test_model_copy_carries_every_unlisted_field(self):
+        """Direct guard on the mechanism, independent of pipeline wiring."""
+        pred = self._boltz_pred()
+        updated = pred.model_copy(update={"structure_pdb": "ATOM_NEW"})
+
+        assert updated.structure_pdb == "ATOM_NEW"
+        for field in ("affinity_score", "affinity_probability", "backend_version",
+                      "seed", "model_name", "plddt_scores", "mean_plddt"):
+            assert getattr(updated, field) == getattr(pred, field), f"{field} was dropped"

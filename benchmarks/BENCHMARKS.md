@@ -2,6 +2,22 @@
 
 Tracking Boltz-2 prediction quality across changes. Each run is logged to `results.jsonl` with full config and metrics; this file captures the human-readable takeaways.
 
+## Boltz-2 build provenance (read before comparing runs across dates)
+
+Until 2026-07-21 the Modal image installed Boltz-2 from **unpinned git HEAD**, and Modal
+cached that layer — so the version behind any given run was whatever HEAD happened to be
+when the image was last built, and it was recorded nowhere. That has now been pinned to
+commit **`b1ebfc46`** (2026-05-29) in both `modal_app.py` and `requirements-gpu.txt`.
+
+`b1ebfc46` reports version string `2.2.1` but is **6 commits ahead of the `v2.2.1` tag**,
+including two numerics fixes (autocast device type, cpu float32 precision) — so
+`boltz==2.2.1` from PyPI is a *different* build and is not what produced these numbers.
+
+**Consequence for the record below:** Run 001 (2026-05-19) predates commit `b1ebfc46`
+(2026-05-29), so it ran on an older Boltz build than Runs 002–011. Runs from 002 onward are
+consistent with each other and with the pin. Any future version bump should be treated as a
+new baseline and re-benchmarked, not compared directly against these rows.
+
 ---
 
 ## Run 001 — Baseline Boltz-2 (CASP15)
@@ -20,6 +36,13 @@ Tracking Boltz-2 prediction quality across changes. Each run is logged to `resul
 **TM-score distribution:** 32/74 >= 0.5, 25/74 >= 0.7
 
 **Notes:** Baseline run with default settings. No MSA server, no refinement, no ensemble. 14 failures mostly from oversized targets (>1000 aa) or missing PDB files. The long-tail RMSD is dragged up by a few very poor predictions on large multi-domain proteins.
+
+> **Boltz build caveat (added 2026-07-21).** This run predates commit `b1ebfc46` (2026-05-29),
+> the build pinned in `modal_app.py` today, so it ran on an **older, unrecorded** Boltz-2.
+> The exact build cannot be recovered — the image layer it used has since been replaced.
+> This makes the Run 001 ↔ Run 006 agreement below a *cross-version* reproduction rather
+> than a same-build one. That is arguably a stronger result (the pipeline was stable across
+> a Boltz change), but it is not what "reproducible" was originally claiming here.
 
 **Takeaways:**
 - Median TM-score of 0.40 suggests many targets are near the noise floor — MSA and ensemble seeds should help here
@@ -60,6 +83,12 @@ These runs were iterative development runs while wiring up Weights & Biases logg
 **Takeaways:**
 - Baseline is reproducible across runs — stochasticity in Boltz-2 diffusion sampling is minimal at 200 steps
 - New harness is working correctly with full CASP15 coverage
+
+> **Amended 2026-07-21:** this reproduction was **cross-version**, not same-build — Run 001
+> ran on a pre-`b1ebfc46` Boltz (see the caveat under Run 001). Matching Run 001 to within
+> 0.0003 TM across both a harness change *and* a Boltz change is a stronger stability result
+> than originally claimed, but the "stochasticity is minimal" conclusion is now confounded
+> with version drift and should not be read as a clean seed-noise measurement.
 
 ---
 
@@ -110,6 +139,116 @@ Iterative attempts to get MSA working through the ColabFold server. Runs 007–0
 - Next step: full 88-target run with MSA to get comparable numbers against the Run 001/006 baseline
 - 3 failures (7TY5 = PDB 404 as always, 7UXC = Boltz stderr error, 7VDL = new failure to investigate)
 - ~2.5x slower with MSA — acceptable tradeoff given the quality improvement
+
+---
+
+## Verification A — Affinity capability (unnumbered; NOT in results.jsonl)
+
+> **Numbering note.** `run-NNN` ids are assigned by `log_benchmark._next_run_id()` from the
+> **line count of `results.jsonl`**. Entries that are not logged there must therefore not
+> claim a number — this write-up originally did, and collided with the real `run-011` below.
+> Unlogged verification entries get a letter.
+
+**Date:** 2026-07-21
+**Commit:** `3206d7e` — "Fixed bug in Boltz Affinity score always showing 0" (+ uncommitted glob anchor)
+**Backend:** Boltz-2, 1 diffusion sample, 200 sampling steps, no MSA, A10G
+**Target:** none — a 33-aa synthetic peptide + ethanol (`CCO`), no reference structure
+**Changes from previous:** affinity JSON key fix (`affinity` → `affinity_pred_value`)
+
+| Metric | Value |
+|---|---|
+| TM-score | **N/A** — no reference structure |
+| RMSD | **N/A** — no reference structure |
+| pLDDT | 91.2 |
+| `affinity_pred_value` | +1.216 → IC50 ≈ 16 µM |
+| `affinity_probability_binary` | 0.166 |
+
+**This is deliberately not a quality benchmark and must not be read as one.** There is no
+reference structure, the "target" is a synthetic peptide with no binding pocket, and the
+ligand is ethanol. It is logged here for one reason: it is the **first run in this project's
+history that produced an affinity number at all**, and it establishes what correct affinity
+plumbing looks like. It is not appended to `results.jsonl` — that schema is for target-based
+quality runs and this has no TM/RMSD to record.
+
+Run via `modal run modal_app.py::test_boltz_affinity_gpu`, which reads the raw Boltz-2 output
+directly (not through `call_boltz`) to get ground truth on filenames and JSON keys, then
+checks our parser against it.
+
+**Notes:**
+- Ground truth: Boltz writes exactly one affinity file, `affinity_<record_id>.json`
+  (here `affinity_input.json`), with keys `affinity_pred_value`,
+  `affinity_probability_binary`, and `*1`/`*2` ensemble-member variants. We read the
+  un-suffixed pair.
+- Values are directionally sane: ethanol against a pocket-less peptide should be weak
+  (16 µM) and improbable as a binder (p=0.17). That is the only signal being claimed here.
+- `affinity_pred_value` is **log10(IC50), IC50 in µM — not kcal/mol**, and lower = tighter.
+  Every prior label in the codebase said kcal/mol.
+
+**Takeaways:**
+- **Every affinity number in this repo's history before this run was `None`.** The backend
+  read a JSON key Boltz never writes, so `StructurePrediction.affinity_score` was always
+  null. No previously recorded benchmark is affected — none of Runs 001–010 measured
+  affinity — but any earlier *reasoning* that assumed affinity was available was operating
+  on nothing.
+- The unit error is the more dangerous half: the agent reasons over this number, and
+  "−8.4 kcal/mol" vs "1.2 log10(IC50 µM)" are opposite claims about binding strength.
+- A real affinity benchmark still needs a system with measured binding data. The obvious
+  candidate (HIV-1 protease, `benchmarks/hiv_pr_resistance_dataset.json`) is **blocked**:
+  `call_boltz` builds one protein chain, and HIV-PR is an obligate homodimer whose active
+  site forms at the dimer interface — a monomer has no pocket. See
+  `research_plan/rowA-boltz-affinity-invariance.md` Bug 2.
+- Reproducibility caveat surfaced while doing this: the Modal image installs boltz from
+  **unpinned git HEAD** (`modal_app.py:42`), so the version behind Runs 001–011 is whatever
+  HEAD was at first image build and is not recorded. Worth pinning before the next
+  quality run.
+
+---
+
+## Run 011 — Post-pin image rebuild verification (3-target subset, MSA)
+
+**Date:** 2026-07-21
+**Commit:** `0e65cf1` — "continuing work on stamping with specific boltz version"
+**Backend:** Boltz-2 `2.2.1@b1ebfc46ecf5`, 1 sample, 200 steps, **MSA enabled**, A10G
+**Targets:** 3 CASP15 (2 succeeded, 1 failed — 7TY5 is the perennial PDB 404)
+**Changes from previous:** boltz pinned to an exact commit → **the Modal image rebuilt**;
+first run with `backend_build` provenance stamping.
+
+| Metric | Value |
+|---|---|
+| TM-score mean | 0.9778 |
+| RMSD mean (Å) | 1.04 |
+| pLDDT mean | 94.2 |
+
+**Purpose: verify the rebuild changed nothing.** Pinning boltz altered the image definition
+string, which invalidated that layer and everything after it. Since the image also contains
+many *still-unpinned* packages, the rebuild could have silently shifted results.
+
+**Head-to-head vs Run 010 (same MSA config, same targets):**
+
+| Target | TM (r010) | TM (r011) | Δ | pLDDT (r010) | pLDDT (r011) |
+|---|---|---|---|---|---|
+| 7TY4 | 0.9893 | 0.9893 | **±0.0000** | 95.07 | 95.07 |
+| 7UL4 | 0.9671 | 0.9663 | −0.0008 | 93.37 | 93.42 |
+
+**Notes:**
+- **7TY4 reproduced bit-identically** across the rebuild — same TM to 4 dp, same pLDDT to
+  2 dp. 7UL4 moved by −0.0008 TM, consistent with MSA-server/GPU nondeterminism rather than
+  a build change.
+- `report_boltz_version` confirmed the rebuilt image resolves to exactly
+  `b1ebfc46ecf57f5414e0d1a6f9027bbb122c53bc`, with torch `2.6.0+cu126`, numpy `1.26.4`,
+  scipy `1.13.1` — all identical to the pre-rebuild snapshot.
+- **This is a 3-target subset and not comparable to the 88-target baselines.** It answers
+  "did the rebuild change anything", not "how good is the model".
+- MSA was ON (inherited from `.env`), so Run 010 is the correct comparison, not Run 006.
+
+**Takeaways:**
+- The pin does what it was meant to do: a full image rebuild reproduced prior results.
+- `backend_build` provenance works end-to-end — this is the **first row in the file that
+  records which Boltz build produced it** (`2.2.1@b1ebfc46ecf5`), sourced from the worker
+  that actually ran the fold rather than guessed locally.
+- Still unpinned in the image and therefore still able to drift on a future rebuild:
+  `cuequivariance-*`, the whole micromamba layer (openmm/rdkit/openff/vina/ambertools), and
+  the `--depth 1` ProteinMPNN clone. Worth pinning before the next result that matters.
 
 ---
 

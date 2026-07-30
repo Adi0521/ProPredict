@@ -105,24 +105,24 @@ chain-multiplicity argument and ligand chain IDs shifted off `B` to avoid collis
 API change deserving its own review and write-up, per `CLAUDE.md`'s step-by-step rule. It
 remains a blocker for the Row A experiment.
 
-## Verification status — read this before trusting the fix
+## Verification status — CONFIRMED on real output (2026-07-21)
 
-Local coverage is **mock-only**, and mocks are exactly what hid this bug for months. The
-mocked tests now assert the corrected keys, but a mock cannot prove those keys match what
-Boltz-2 actually writes; that rests on the research plan's reading of the 2.2.1 source.
+**`modal run modal_app.py::test_boltz_affinity_gpu` → `PASS: true` on an A10G.** The full
+output is in the glob section above and logged as Run 011 in `benchmarks/BENCHMARKS.md`.
+Confirmed: the keys are `affinity_pred_value` / `affinity_probability_binary`, the file is
+`affinity_<record_id>.json`, and `call_boltz` now returns both values populated
+(`affinity_score=1.216`, `affinity_probability=0.166` for ethanol vs a 33-mer — weak and
+improbable, which is the correct answer for that pair).
 
-**The fix is not confirmed against real output yet.** `modal_app.py::test_boltz_gpu` folds a
-bare sequence with no ligand, so Boltz never runs the affinity head and both fields stay
-`None` there — it cannot catch a wrong key.
+This mattered because local coverage is **mock-only**, and mocks are exactly what hid this bug
+for months. The mocked tests assert the corrected keys, but a mock cannot prove those keys
+match what Boltz-2 writes — before this run, that rested entirely on the research plan's
+reading of the 2.2.1 source. It also could not have been caught by `modal_app.py::test_boltz_gpu`,
+which folds a bare sequence with no ligand, so Boltz never runs the affinity head and both
+fields stay `None` there regardless of whether the parser is right.
 
-`modal_app.py::test_boltz_affinity_gpu` was added to close this, and is the outstanding
-follow-up to actually run:
-
-```bash
-modal run modal_app.py::test_boltz_affinity_gpu
-```
-
-It deliberately **does not trust our own parser**. Part 1 runs the `boltz predict` CLI
+The verification function deliberately **does not trust our own parser**. Part 1 runs the
+`boltz predict` CLI
 directly (not through `call_boltz`) on a protein + ligand with an `affinity` property, then
 reports the real output filenames and the top-level JSON keys of every `*affinity*` file —
 ground truth that nothing in our code can influence. Part 2 runs `call_boltz` on the same
@@ -132,12 +132,26 @@ input and checks that both `affinity_score` and `affinity_probability` come back
 Two GPU runs; the ground-truth one drops to 50 sampling steps since it only needs the file
 layout, not a good structure.
 
-Its `affinity_file_basenames` output also settles the open glob question above — whether
-Boltz writes `affinity_<id>.json` or `<id>_affinity_<n>.json`. Once that is known, the glob
-can be anchored properly instead of relying on the `pae` exclusion.
+Keep this function around: it is the only check in the tree that can catch a Boltz-side
+rename, and it costs one A10G run.
+
+## Still open after this change
+
+- **Homodimer support (Bug 2)** — see above. Blocks the Row A / HIV-PR affinity experiment,
+  which is the only planned use with real measured binding data to validate against.
+- **boltz is installed from unpinned git HEAD** (`modal_app.py:42`,
+  `pip_install("git+https://github.com/jwohlwend/boltz.git")`). Modal caches the layer, so the
+  version behind every benchmark to date is whatever HEAD was at first image build, and it is
+  not recorded anywhere. Pin it before the next quality run; also a prerequisite for baking
+  weights into the image via `boltz download` (currently commented out at `modal_app.py:51`).
 
 ## Tests
 
 ```
-pytest tests/ --ignore=tests/test_api.py     # 166 passed, 4 skipped
+pytest tests/ --ignore=tests/test_api.py -k "not integration"    # 166 passed, 4 deselected
+modal run modal_app.py::test_boltz_affinity_gpu                  # PASS (A10G, 2026-07-21)
 ```
+
+Note: a bare `pytest tests/` hangs — `tests/test_esmfold_local.py`'s integration test loads
+the real ESMFold model. Pre-existing, unrelated to this change, but it means `-k "not
+integration"` is the usable local loop.

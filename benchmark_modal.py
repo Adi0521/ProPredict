@@ -294,6 +294,11 @@ def benchmark_one(target: dict) -> dict:
         "name": target.get("name", pdb_id),
         "length": len(seq),
         "mean_plddt": round(result.mean_plddt, 2),
+        # Which Boltz build actually produced this number. Reported from inside the
+        # container because that is the only place the truth exists — the local entrypoint
+        # has no boltz installed, which is why log_benchmark's `import boltz` probe silently
+        # recorded nothing for every run to date. run_benchmark lifts this to the run level.
+        "_backend_version": result.backend_version,
         **scores,
     }
 
@@ -416,11 +421,23 @@ def run_benchmark(
         "max_targets": max_targets,
     }
     effective_source = "custom" if pdb_ids else source
+
+    # Lift the backend build reported by the workers to the run level. Every target in a run
+    # uses the same image, so the first reported value is the run's build; if they ever
+    # disagree the run spanned two images and the record must say so rather than pick one.
+    reported = {r.get("_backend_version") for r in results if r.get("_backend_version")}
+    if len(reported) > 1:
+        backend_build = "MIXED:" + ",".join(sorted(reported))
+        print(f"  WARNING: targets ran on differing backend builds: {sorted(reported)}")
+    else:
+        backend_build = next(iter(reported), None)
+
     log_run(
         results, config_snapshot,
         source=effective_source,
         notes=notes,
         duration_seconds=duration_seconds,
+        backend_build=backend_build,
         wandb_project=wandb_project or None,
         wandb_entity=wandb_entity or None,
     )

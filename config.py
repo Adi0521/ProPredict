@@ -90,7 +90,11 @@ MEMBRANE_FF = os.getenv("MEMBRANE_FF", "charmm36-feb2026_cgenff-5.0")
 GNINA_BIN = os.getenv("GNINA_BIN", "gnina")
 
 # Structure-aware mutation scoring (ProteinMPNN — MIT license)
-# git clone https://github.com/dauparas/ProteinMPNN.git — weights (~26MB) ship in the clone
+# git clone https://github.com/dauparas/ProteinMPNN.git — weights (~26MB) ship in the clone.
+# The container images pin the clone to commit 8907e66 (2023-06-27); a LOCAL clone is not
+# pinned by anything, so check it matches before comparing scores against the ProteinGym
+# validation or checkpoint benchmark numbers:
+#   git -C "$PROTEINMPNN_PATH" rev-parse HEAD   # expect 8907e6671bfbfc92303b5f79c4b5e6ce47cdef57
 PROTEINMPNN_PATH = os.getenv("PROTEINMPNN_PATH", "")
 PROTEINMPNN_MODEL_NAME = os.getenv("PROTEINMPNN_MODEL_NAME", "v_48_020")
 # Scoring reproducibility. SEED MUST BE NON-ZERO — ProteinMPNN's `if args.seed:` treats

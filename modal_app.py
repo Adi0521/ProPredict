@@ -38,17 +38,61 @@ image = (
 
     .pip_install("cuequivariance-torch")
 
-    # Boltz-2 from source — not yet on PyPI as boltz-2, install from GitHub
-    .pip_install("git+https://github.com/jwohlwend/boltz.git")
+    # Boltz-2, PINNED to an exact commit. Do not relax this to a bare git URL or to
+    # `boltz==2.2.1` without reading the note below.
+    #
+    # b1ebfc46 (2026-05-29) is the build every benchmark from Run 002 onward was produced
+    # on, recovered from the cached image's direct_url.json via report_boltz_version().
+    # It reports version string "2.2.1" but is **6 commits AHEAD of the v2.2.1 tag**
+    # (cb04aecc), including two numerics fixes — 83bb04c4 "disable autocast using active
+    # device type" and 63000a7c "cpu-float32-precision". So `boltz==2.2.1` from PyPI is
+    # NOT this build and would silently change results.
+    #
+    # Previously this was unpinned git HEAD; Modal cached the layer, so the version behind
+    # the benchmark record was whatever HEAD happened to be at first build and was recorded
+    # nowhere. Bump deliberately, and re-run the CASP15 baseline when you do.
+    .pip_install(
+        "git+https://github.com/jwohlwend/boltz.git"
+        "@b1ebfc46ecf57f5414e0d1a6f9027bbb122c53bc"
+    )
 
     # ProteinMPNN clone (MIT, ~26MB incl. weights) for the structural mutation scorer
     # (orchestrator/mutation_scan.py, exposed to the agent as scan_mutations). torch is
     # already in this image, so the subprocess scorer runs in-place. No .env is copied
     # into the image, so this image env var is the authoritative PROTEINMPNN_PATH here.
-    .run_commands("git clone --depth 1 https://github.com/dauparas/ProteinMPNN.git /opt/ProteinMPNN")
-    .env({"PROTEINMPNN_PATH": "/opt/ProteinMPNN"})
+    #
+    # PINNED to 8907e66 (2023-06-27) — keep in lockstep with Dockerfile.celery.
+    # The model WEIGHTS ship inside this repo, so an unpinned clone could change mutation
+    # SCORES, not merely code. 8907e66 is the commit the ProteinGym validation gate and the
+    # checkpoint benchmark were run against (Process/proteinmpnn-version-pin.md).
+    # Full clone + checkout, not --depth 1: a shallow clone cannot check out an arbitrary
+    # commit, and `--depth 1` alone silently tracks whatever HEAD happens to be at build time.
+    .run_commands(
+        "git clone https://github.com/dauparas/ProteinMPNN.git /opt/ProteinMPNN",
+        "git -C /opt/ProteinMPNN checkout 8907e6671bfbfc92303b5f79c4b5e6ce47cdef57",
+    )
+    # BOLTZ_CACHE pins the weight cache to an ABSOLUTE path so the build-time download and
+    # the runtime lookup resolve to the same place regardless of $HOME (which Modal sets
+    # differently, or not at all, between build and run). boltz reads this via
+    # get_cache_path() (src/boltz/main.py) before falling back to ~/.boltz; call_boltz
+    # passes no --cache, so this env var is the only thing steering it.
+    .env({"PROTEINMPNN_PATH": "/opt/ProteinMPNN", "BOLTZ_CACHE": "/opt/boltz-cache"})
 
-    #.run_commands("boltz download", timeout=1200)
+    # Bake the Boltz-2 weights into the image so cold containers don't each re-download a
+    # few GB on first predict. There is NO `boltz download` CLI command (the CLI is a click
+    # group with a single `predict` command) — weights are fetched lazily inside predict via
+    # download_boltz2(cache). We call that function directly at build time: CPU-only, pulls
+    # both the conf and affinity checkpoints + CCD + mols. mkdir first because
+    # download_boltz2 (unlike predict) does not create the cache dir itself.
+    #
+    # This layer sits AFTER the boltz pip_install, so bumping the boltz pin invalidates it
+    # and re-bakes weights matching the new build. If a future boltz moves download_boltz2
+    # out of boltz.main, this step fails LOUDLY at build — which is the correct outcome.
+    .run_commands(
+        "mkdir -p /opt/boltz-cache",
+        "python -c 'from pathlib import Path; from boltz.main import download_boltz2; "
+        "download_boltz2(Path(\"/opt/boltz-cache\"))'",
+    )
     # Ship local source packages into the image
     .add_local_dir("orchestrator", remote_path="/root/orchestrator")
     .add_local_dir("models", remote_path="/root/models")
@@ -393,6 +437,123 @@ def test_gnina_modal() -> dict:
 
     print(results)
     return results
+
+
+@app.function(timeout=300)
+def report_boltz_version() -> dict:
+    """
+    Report exactly which Boltz-2 build is baked into the cached image. CPU-only, seconds.
+
+    Why this exists: the image installs boltz from UNPINNED git HEAD
+    (`pip_install("git+https://github.com/jwohlwend/boltz.git")`), and Modal caches that
+    layer — so the version behind every benchmark run to date is whatever HEAD happened to
+    be at first image build, recorded nowhere. This recovers it so the pin can target the
+    build that actually produced those numbers instead of guessing.
+
+    pip writes the resolved VCS commit into the distribution's direct_url.json, which is
+    what makes an exact answer possible.
+
+    Run with:
+        modal run modal_app.py::report_boltz_version
+    """
+    import importlib.metadata as md
+    import json
+    import os
+    import shutil
+    import subprocess
+
+    out: dict = {}
+
+    try:
+        out["boltz_version"] = md.version("boltz")
+    except Exception as e:  # noqa: BLE001
+        out["boltz_version_error"] = repr(e)
+
+    # The exact commit pip resolved from git HEAD at image-build time.
+    try:
+        raw = md.distribution("boltz").read_text("direct_url.json")
+        out["direct_url"] = json.loads(raw) if raw else None
+        if isinstance(out["direct_url"], dict):
+            out["resolved_commit"] = out["direct_url"].get("vcs_info", {}).get("commit_id")
+    except Exception as e:  # noqa: BLE001
+        out["direct_url_error"] = repr(e)
+
+    out["boltz_cli_on_path"] = shutil.which("boltz") is not None
+
+    # Confirm the weights are baked into the image (see the BOLTZ_CACHE bake step). If this
+    # reports missing/empty, cold containers will silently re-download on first predict and
+    # the bake did not take.
+    # download_boltz2 writes exactly these two checkpoints plus the mols/ CCD dir (boltz2
+    # uses mols/, not boltz1's ccd.pkl — verified against src/boltz/main.py:198-250).
+    cache_dir = os.environ.get("BOLTZ_CACHE", os.path.expanduser("~/.boltz"))
+    out["boltz_cache_dir"] = cache_dir
+    expected = ["boltz2_conf.ckpt", "boltz2_aff.ckpt"]
+    present = {name: os.path.isfile(os.path.join(cache_dir, name)) for name in expected}
+    has_mols = os.path.isdir(os.path.join(cache_dir, "mols"))
+    out["boltz_cache_files"] = present
+    out["boltz_cache_has_mols"] = has_mols
+    out["weights_baked"] = all(present.values()) and has_mols
+
+    # Context that also affects reproducibility of the recorded benchmarks.
+    for pkg in ("torch", "numpy", "scipy"):
+        try:
+            out[f"{pkg}_version"] = md.version(pkg)
+        except Exception:  # noqa: BLE001
+            out[f"{pkg}_version"] = None
+
+    try:
+        out["pip_freeze_boltz"] = subprocess.run(
+            ["pip", "freeze"], capture_output=True, text=True, timeout=120
+        ).stdout.strip().splitlines()
+        out["pip_freeze_boltz"] = [l for l in out["pip_freeze_boltz"] if "boltz" in l.lower()]
+    except Exception as e:  # noqa: BLE001
+        out["pip_freeze_error"] = repr(e)
+
+    print(json.dumps(out, indent=2, default=str))
+    return out
+
+
+@app.function(timeout=300)
+def report_proteinmpnn_version() -> dict:
+    """
+    Report which ProteinMPNN commit is baked into the image. CPU-only, seconds.
+
+    Counterpart to report_boltz_version(). This matters more than it looks: the model
+    weights live inside the cloned repo, so the commit determines the SCORES the mutation
+    scanner produces — not just its code. The ProteinGym validation gate and the checkpoint
+    benchmark are only meaningful against the commit they were run on (8907e66).
+
+    Run with:
+        modal run modal_app.py::report_proteinmpnn_version
+    """
+    import json
+    import os
+    import subprocess
+
+    PINNED = "8907e6671bfbfc92303b5f79c4b5e6ce47cdef57"
+    path = os.environ.get("PROTEINMPNN_PATH", "/opt/ProteinMPNN")
+    out: dict = {"proteinmpnn_path": path, "expected_commit": PINNED}
+
+    def _git(*args) -> str:
+        return subprocess.run(
+            ["git", "-C", path, *args], capture_output=True, text=True, timeout=60
+        ).stdout.strip()
+
+    out["path_exists"] = os.path.isdir(path)
+    if out["path_exists"]:
+        out["commit"] = _git("rev-parse", "HEAD") or None
+        out["commit_date"] = _git("log", "-1", "--format=%cd", "--date=short") or None
+        out["matches_pin"] = out["commit"] == PINNED
+        # The weights are the reason this pin exists — confirm they actually arrived.
+        weights = os.path.join(path, "vanilla_model_weights")
+        out["weights_present"] = os.path.isdir(weights)
+        out["weight_files"] = sorted(os.listdir(weights))[:8] if out["weights_present"] else []
+        out["run_script_present"] = os.path.isfile(os.path.join(path, "protein_mpnn_run.py"))
+
+    out["PASS"] = bool(out.get("matches_pin") and out.get("weights_present")
+                       and out.get("run_script_present"))
+    print(json.dumps(out, indent=2, default=str))
+    return out
 
 
 @app.function(
