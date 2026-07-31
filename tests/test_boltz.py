@@ -78,34 +78,13 @@ END
 # Unit: YAML input generation
 # ---------------------------------------------------------------------------
 
-def _build_boltz_yaml(sequence, context=None):
-    """Call the YAML-building logic inside call_boltz without running subprocess."""
-    import yaml
-
-    ctx = context or {}
-    ligands = ctx.get("ligands") or []
-
-    sequences = [{
-        "protein": {
-            "id": "A",
-            "sequence": sequence,
-            "msa": "empty",
-        }
-    }]
-
-    affinity_binder = None
-    for i, lig in enumerate(ligands):
-        chain_id = chr(ord("B") + i)
-        smiles = lig.get("smiles") if isinstance(lig, dict) else lig.smiles
-        sequences.append({"ligand": {"id": chain_id, "smiles": smiles}})
-        if affinity_binder is None:
-            affinity_binder = chain_id
-
-    doc = {"version": 1, "sequences": sequences}
-    if affinity_binder:
-        doc["properties"] = [{"affinity": {"binder": affinity_binder}}]
-
-    return doc, affinity_binder
+# Test the REAL builder, not a copy. A previous version of this file reimplemented the
+# YAML-building logic here; that duplication is precisely how the affinity-key bug survived
+# (the test agreed with a copy, not with call_boltz). Import the actual function.
+def _build_boltz_yaml(sequence, context=None, protein_copies=1):
+    from orchestrator.backends.boltz import _build_boltz_input
+    return _build_boltz_input(sequence, context=context, protein_copies=protein_copies,
+                              use_msa=False)
 
 
 def test_yaml_protein_only():
@@ -114,6 +93,8 @@ def test_yaml_protein_only():
     assert len(doc["sequences"]) == 1
     assert doc["sequences"][0]["protein"]["sequence"] == SAMPLE_SEQUENCE
     assert doc["sequences"][0]["protein"]["msa"] == "empty"
+    # Monomer stays a scalar "A" — byte-identical to the pre-homomer YAML.
+    assert doc["sequences"][0]["protein"]["id"] == "A"
     assert binder is None
     assert "properties" not in doc
 
@@ -141,6 +122,96 @@ def test_yaml_multiple_ligands():
     assert doc["sequences"][2]["ligand"]["id"] == "C"
     # Affinity only wired to first ligand
     assert binder == "B"
+
+
+# ---------------------------------------------------------------------------
+# Unit: homo-oligomer (protein_copies) — the HIV-PR / homodimer fix
+# ---------------------------------------------------------------------------
+
+def test_yaml_homodimer_uses_id_list():
+    doc, binder = _build_boltz_yaml(SAMPLE_SEQUENCE, protein_copies=2)
+    assert len(doc["sequences"]) == 1
+    # Boltz's homomer form: a list of chain IDs on one protein entry.
+    assert doc["sequences"][0]["protein"]["id"] == ["A", "B"]
+    assert doc["sequences"][0]["protein"]["sequence"] == SAMPLE_SEQUENCE
+    assert binder is None
+
+
+def test_yaml_homodimer_with_ligand_shifts_ligand_chain():
+    """The collision fix: with 2 protein chains (A, B) the ligand must be C, not B."""
+    ctx = {"ligands": [{"name": "inhibitor", "smiles": "CC(C)CN"}]}
+    doc, binder = _build_boltz_yaml(SAMPLE_SEQUENCE, ctx, protein_copies=2)
+    assert doc["sequences"][0]["protein"]["id"] == ["A", "B"]
+    assert doc["sequences"][1]["ligand"]["id"] == "C"        # NOT "B"
+    assert binder == "C"
+    assert doc["properties"] == [{"affinity": {"binder": "C"}}]
+
+
+def test_yaml_trimer_chain_ids():
+    ctx = {"ligands": [{"name": "x", "smiles": "CCO"}]}
+    doc, _ = _build_boltz_yaml(SAMPLE_SEQUENCE, ctx, protein_copies=3)
+    assert doc["sequences"][0]["protein"]["id"] == ["A", "B", "C"]
+    assert doc["sequences"][1]["ligand"]["id"] == "D"
+
+
+def test_build_boltz_input_rejects_zero_copies():
+    from orchestrator.backends.boltz import _build_boltz_input
+    with pytest.raises(ValueError, match="protein_copies must be >= 1"):
+        _build_boltz_input(SAMPLE_SEQUENCE, protein_copies=0)
+
+
+def test_build_boltz_input_rejects_too_many_chains():
+    from orchestrator.backends.boltz import _build_boltz_input
+    ctx = {"ligands": [{"name": "x", "smiles": "CCO"}]}   # 26 proteins + 1 ligand = 27
+    with pytest.raises(ValueError, match="too many chains"):
+        _build_boltz_input(SAMPLE_SEQUENCE, context=ctx, protein_copies=26)
+
+
+def test_call_boltz_reads_protein_copies_from_context(tmp_path):
+    """context['protein_copies'] must reach the YAML with no explicit kwarg."""
+    from orchestrator.backends import boltz as boltz_mod
+
+    captured = {}
+
+    def fake_run(cmd, **kwargs):
+        out_idx = cmd.index("--out_dir") + 1
+        # capture the YAML that was written
+        yaml_path = cmd[2]
+        import yaml
+        with open(yaml_path) as fh:
+            captured["doc"] = yaml.safe_load(fh)
+        _make_fake_results_dir(cmd[out_idx], SAMPLE_CONFIDENCE)
+        return _mock_subprocess_success()
+
+    with patch("orchestrator.backends.boltz.subprocess.run", side_effect=fake_run), \
+         patch("orchestrator.backends.boltz.get_boltz_build_info",
+               return_value={"version": "2.2.1", "commit": None, "label": "2.2.1"}):
+        boltz_mod.call_boltz(SAMPLE_SEQUENCE, context={"protein_copies": 2}, seed=0)
+
+    assert captured["doc"]["sequences"][0]["protein"]["id"] == ["A", "B"]
+
+
+def test_call_boltz_kwarg_overrides_context(tmp_path):
+    from orchestrator.backends import boltz as boltz_mod
+
+    captured = {}
+
+    def fake_run(cmd, **kwargs):
+        out_idx = cmd.index("--out_dir") + 1
+        import yaml
+        with open(cmd[2]) as fh:
+            captured["doc"] = yaml.safe_load(fh)
+        _make_fake_results_dir(cmd[out_idx], SAMPLE_CONFIDENCE)
+        return _mock_subprocess_success()
+
+    with patch("orchestrator.backends.boltz.subprocess.run", side_effect=fake_run), \
+         patch("orchestrator.backends.boltz.get_boltz_build_info",
+               return_value={"version": "2.2.1", "commit": None, "label": "2.2.1"}):
+        # context says 3, explicit kwarg says 1 -> kwarg wins -> scalar "A"
+        boltz_mod.call_boltz(SAMPLE_SEQUENCE, context={"protein_copies": 3},
+                             seed=0, protein_copies=1)
+
+    assert captured["doc"]["sequences"][0]["protein"]["id"] == "A"
 
 
 # ---------------------------------------------------------------------------

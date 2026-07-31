@@ -5,7 +5,7 @@ import logging
 import os
 import subprocess
 import tempfile
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
 
 from config import (
     BOLTZ_DIFFUSION_SAMPLES,
@@ -68,10 +68,75 @@ def get_boltz_build_info() -> Dict[str, Optional[str]]:
     return info
 
 
+def _build_boltz_input(
+    sequence: str,
+    context: Optional[Dict[str, Any]] = None,
+    protein_copies: int = 1,
+    use_msa: Optional[bool] = None,
+) -> Tuple[Dict[str, Any], Optional[str]]:
+    """
+    Assemble the Boltz-2 YAML-input dict and return (input_dict, affinity_binder_chain_id).
+
+    This is the single source of truth for the input structure, shared by call_boltz and its
+    tests — do NOT reimplement it in a test helper. (An earlier duplicate copy in the tests
+    is exactly how the affinity-key bug stayed green for months: the test agreed with a copy,
+    not the code.)
+
+    `protein_copies` is the number of identical protein chains — a homo-oligomer count.
+    1 = monomer (default). >1 emits Boltz's homomer form `id: [A, B, ...]`. This exists
+    because obligate homodimers like HIV-1 protease have no binding pocket as a monomer —
+    the active site forms at the dimer interface (research_plan/rowA-boltz-affinity-invariance.md,
+    Bug 2). Verified against boltz schema.py:1094-1097, which accepts `id` as str or list.
+
+    Ligand chains are numbered AFTER the protein chains, which fixes a latent collision: the
+    old code always started ligands at "B", so a homodimer's second protein chain (also "B")
+    would clash with the first ligand.
+    """
+    if use_msa is None:
+        use_msa = BOLTZ_USE_MSA
+    ctx = context or {}
+    ligands = ctx.get("ligands") or []
+
+    if protein_copies < 1:
+        raise ValueError(f"protein_copies must be >= 1, got {protein_copies}")
+    total_chains = protein_copies + len(ligands)
+    if total_chains > 26:
+        raise ValueError(
+            f"too many chains for single-letter chain IDs: {protein_copies} protein "
+            f"cop{'y' if protein_copies == 1 else 'ies'} + {len(ligands)} ligand(s) = "
+            f"{total_chains} > 26. Boltz chain IDs here are single letters A-Z."
+        )
+
+    # Monomer keeps the scalar "A" so a single-chain run's YAML is byte-identical to the
+    # pre-homomer version — the reproducibility work depends on that not shifting.
+    protein_chain_ids = [chr(ord("A") + i) for i in range(protein_copies)]
+    protein_entry: Dict[str, Any] = {
+        "id": protein_chain_ids[0] if protein_copies == 1 else protein_chain_ids,
+        "sequence": sequence,
+    }
+    if not use_msa:
+        protein_entry["msa"] = "empty"
+    sequences: List[Dict[str, Any]] = [{"protein": protein_entry}]
+
+    affinity_binder: Optional[str] = None
+    for i, lig in enumerate(ligands):
+        chain_id = chr(ord("A") + protein_copies + i)  # after the protein chains
+        smiles = lig.get("smiles") if isinstance(lig, dict) else lig.smiles
+        sequences.append({"ligand": {"id": chain_id, "smiles": smiles}})
+        if affinity_binder is None:
+            affinity_binder = chain_id
+
+    boltz_input: Dict[str, Any] = {"version": 1, "sequences": sequences}
+    if affinity_binder:
+        boltz_input["properties"] = [{"affinity": {"binder": affinity_binder}}]
+    return boltz_input, affinity_binder
+
+
 def call_boltz(
     sequence: str,
     context: Optional[Dict[str, Any]] = None,
     seed: int = 0,
+    protein_copies: Optional[int] = None,
 ) -> StructurePrediction:
     """
     Run Boltz-2 prediction via CLI subprocess.
@@ -98,22 +163,17 @@ def call_boltz(
                 "Add smiles to the LigandContext or remove the ligand from context."
             )
 
-    protein_entry: dict = {"id": "A", "sequence": sequence}
-    if not BOLTZ_USE_MSA:
-        protein_entry["msa"] = "empty"
-    sequences: list = [{"protein": protein_entry}]
+    # protein_copies precedence: explicit kwarg > context["protein_copies"] > 1. The kwarg
+    # default is None (not 1) so an explicit call_boltz(..., protein_copies=1) is
+    # distinguishable from "unset" and still overrides a context value.
+    if protein_copies is None:
+        protein_copies = int(ctx.get("protein_copies", 1) or 1)
 
-    affinity_binder: Optional[str] = None
-    for i, lig in enumerate(ligands):
-        chain_id = chr(ord("B") + i)
-        smiles = lig.get("smiles") if isinstance(lig, dict) else lig.smiles
-        sequences.append({"ligand": {"id": chain_id, "smiles": smiles}})
-        if affinity_binder is None:
-            affinity_binder = chain_id
-
-    boltz_input: Dict[str, Any] = {"version": 1, "sequences": sequences}
-    if affinity_binder:
-        boltz_input["properties"] = [{"affinity": {"binder": affinity_binder}}]
+    boltz_input, affinity_binder = _build_boltz_input(
+        sequence, context=ctx, protein_copies=protein_copies
+    )
+    if protein_copies > 1:
+        logger.info(f"Boltz-2 homo-oligomer: {protein_copies} protein copies")
 
     with tempfile.TemporaryDirectory() as tmpdir:
         yaml_path = os.path.join(tmpdir, "input.yaml")

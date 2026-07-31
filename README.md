@@ -189,6 +189,7 @@ transports.
   "membrane": {"type": "POPC", "span": [20, 45]},
   "ligands": [{"name": "ATP", "smiles": "...", "binding_site": [45, 46]}],
   "mutations": [{"pos": 12, "from": "A", "to": "V"}],
+  "protein_copies": 1,
   "constraints": {}
 }
 ```
@@ -200,6 +201,7 @@ transports.
 | `ions` | ion species/concentration for `genion` / OpenMM solvation |
 | `membrane` | triggers insane.py (GROMACS) or Modeller `addMembrane` with CHARMM36m (OpenMM) |
 | `ligands` | SMILES → RDKit ETKDG conformer → GNINA or Vina docking → ACPYPE GAFF2 or OpenFF SMIRNOFF params |
+| `protein_copies` | number of identical protein chains (Boltz-2 only). 1 = monomer; ≥2 models a homo-oligomer via `id: [A,B,…]`. Needed for obligate homodimers (e.g. HIV-1 protease) whose pocket forms at the dimer interface |
 | `constraints` | reserved for a future constraint-driven backend (Chai-1); not consumed yet |
 
 Presence of `membrane` or `ligands` is what triggers the MD stage at all.
@@ -502,10 +504,11 @@ Two traps:
 
 An honest list of what is incomplete or wrong today.
 
-- **`call_boltz` can only build one protein chain**, so obligate homodimers (e.g. HIV-1 protease,
-  whose active site forms at the dimer interface) cannot be modelled at all. Boltz accepts
-  `id: [A, B]`; the backend needs a chain-multiplicity argument and ligand chain IDs shifted to
-  avoid collision.
+- **The HIV-PR affinity experiment is unblocked but not yet run.** Both original blockers are
+  fixed — the affinity key (above) and homodimer modelling (`context.protein_copies` ≥ 2 emits
+  Boltz's `id: [A,B]` form with ligand chains shifted past the protein chains). The remaining
+  step is refolding the standalone `benchmarks/benchmark_affinity_invariance.py` onto the fixed
+  `call_boltz` and running it on Modal — a separate task.
 - **The combinatorial mutation search is not wired into anything.** `adalead_search` and both
   oracles are implemented and tested against in-memory oracles, but nothing outside `tests/`
   imports `orchestrator.mutation_search`. Remaining: tier-3 re-fold funnel (P2-3), agent tool +
