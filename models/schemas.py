@@ -148,8 +148,18 @@ class MutationCandidate(BaseModel):
     """One multi-site mutant proposed by the combinatorial mutation search."""
     mutations: List[str]   # e.g. ["A12V", "G45S"] — <wt><1-indexed pos><mut>, one per mutated site
     sequence: str          # full mutant sequence
-    score: float           # oracle fitness (higher = better)
-    oracle: str            # which oracle produced `score`: "additive" | "score_only" | "refold"
+    score: float           # cheap-oracle fitness (higher = better); preserved even after re-folding
+    oracle: str            # which oracle produced `score`: "additive" | "score_only"
+    # Tier-3 re-fold validation metrics — None unless this candidate was re-folded through the
+    # real prediction path (see orchestrator/mutation_search.refold_validate).
+    refold_plddt: Optional[float] = None          # mean pLDDT 0-100 of the re-folded mutant (higher = better)
+    refold_num_clashes: Optional[int] = None      # CA-CA steric clashes (lower = better)
+    refold_score: Optional[float] = None          # structural quality = plddt - 5*clashes; the re-fold RANKING key
+    # Boltz-2 affinity is recorded as METADATA only, NOT used to rank: whether the affinity
+    # head even responds to point mutations is an open question (research_plan/
+    # rowA-boltz-affinity-invariance.md). Populated only for a Boltz re-fold with a ligand.
+    refold_affinity: Optional[float] = None            # affinity_pred_value: log10(IC50 uM), lower = tighter
+    refold_affinity_probability: Optional[float] = None  # affinity_probability_binary: binder-vs-decoy prob
 
 
 class MutationSearchResult(BaseModel):
