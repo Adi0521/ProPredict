@@ -1,0 +1,724 @@
+{
+  "targets": [
+    {
+      "pdb_id": "7TY4",
+      "name": "CASP15/7TY4",
+      "length": 515,
+      "A": {
+        "tm_score": 0.2249,
+        "rmsd": 24.705,
+        "n_aligned": 515,
+        "plddt": 49.29,
+        "boltz_calls": 1
+      },
+      "_backend_version": "2.2.1@b1ebfc46ecf5",
+      "C": {
+        "tm_score": 0.9612,
+        "rmsd": 2.153,
+        "n_aligned": 515,
+        "plddt": 92.96,
+        "decision": "accept",
+        "n_models": 2,
+        "total_predictions": 4,
+        "boltz_calls": 3,
+        "winner_model": "esmfold_local"
+      },
+      "E": {
+        "tm_score": 0.9612,
+        "rmsd": 2.153,
+        "n_aligned": 515,
+        "plddt": 92.96,
+        "model": "esmfold_local"
+      },
+      "B": {
+        "tm_score": 0.3402,
+        "rmsd": 18.586,
+        "n_aligned": 515,
+        "plddt": 50.27,
+        "boltz_calls": 3
+      }
+    },
+    {
+      "pdb_id": "7TY5",
+      "error": "PDB fetch failed: 404 Client Error: Not Found for url: https://files.rcsb.org/download/7TY5.pdb"
+    },
+    {
+      "pdb_id": "7UL4",
+      "name": "CASP15/7UL4",
+      "length": 286,
+      "A": {
+        "tm_score": 0.9611,
+        "rmsd": 1.363,
+        "n_aligned": 286,
+        "plddt": 91.13,
+        "boltz_calls": 1
+      },
+      "_backend_version": "2.2.1@b1ebfc46ecf5",
+      "C": {
+        "tm_score": 0.9605,
+        "rmsd": 1.34,
+        "n_aligned": 286,
+        "plddt": 91.72,
+        "decision": "accept",
+        "n_models": 2,
+        "total_predictions": 4,
+        "boltz_calls": 3,
+        "winner_model": "boltz2"
+      },
+      "E": {
+        "tm_score": 0.9448,
+        "rmsd": 1.701,
+        "n_aligned": 286,
+        "plddt": 85.05,
+        "model": "esmfold_local"
+      },
+      "B": {
+        "tm_score": 0.9658,
+        "rmsd": 1.268,
+        "n_aligned": 286,
+        "plddt": 91.93,
+        "boltz_calls": 3
+      }
+    },
+    {
+      "pdb_id": "7UL5",
+      "name": "CASP15/7UL5",
+      "length": 285,
+      "A": {
+        "tm_score": 0.9219,
+        "rmsd": 2.401,
+        "n_aligned": 285,
+        "plddt": 90.5,
+        "boltz_calls": 1
+      },
+      "_backend_version": "2.2.1@b1ebfc46ecf5",
+      "C": {
+        "tm_score": 0.9088,
+        "rmsd": 2.68,
+        "n_aligned": 285,
+        "plddt": 90.81,
+        "decision": "accept",
+        "n_models": 2,
+        "total_predictions": 4,
+        "boltz_calls": 3,
+        "winner_model": "boltz2"
+      },
+      "E": {
+        "tm_score": 0.9703,
+        "rmsd": 1.134,
+        "n_aligned": 285,
+        "plddt": 88.22,
+        "model": "esmfold_local"
+      },
+      "B": {
+        "tm_score": 0.9133,
+        "rmsd": 2.456,
+        "n_aligned": 285,
+        "plddt": 90.54,
+        "boltz_calls": 3
+      }
+    },
+    {
+      "pdb_id": "7UXB",
+      "name": "CASP15/7UXB",
+      "length": 246,
+      "A": {
+        "tm_score": 0.8725,
+        "rmsd": 2.921,
+        "n_aligned": 246,
+        "plddt": 77.17,
+        "boltz_calls": 1
+      },
+      "_backend_version": "2.2.1@b1ebfc46ecf5",
+      "C": {
+        "tm_score": 0.9832,
+        "rmsd": 0.866,
+        "n_aligned": 246,
+        "plddt": 95.32,
+        "decision": "accept",
+        "n_models": 2,
+        "total_predictions": 4,
+        "boltz_calls": 3,
+        "winner_model": "esmfold_local"
+      },
+      "E": {
+        "tm_score": 0.9832,
+        "rmsd": 0.866,
+        "n_aligned": 246,
+        "plddt": 95.32,
+        "model": "esmfold_local"
+      },
+      "B": {
+        "tm_score": 0.8645,
+        "rmsd": 3.094,
+        "n_aligned": 246,
+        "plddt": 78.19,
+        "boltz_calls": 3
+      }
+    },
+    {
+      "pdb_id": "7UXC",
+      "name": "CASP15/7UXC",
+      "length": 2188,
+      "A": {
+        "tm_score": 0.1872,
+        "rmsd": 48.704,
+        "n_aligned": 2188,
+        "plddt": 63.82,
+        "boltz_calls": 1
+      },
+      "_backend_version": "2.2.1@b1ebfc46ecf5",
+      "C": {
+        "error": "CUDA out of memory. Tried to allocate 156.09 GiB. GPU 0 has a total capacity of 79.25 GiB of which 41.36 GiB is free. Process 1 has 37.89 GiB memory in use. Of the allocated memory 37.33 GiB is allocated by PyTorch, and 65.88 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)"
+      },
+      "B": {
+        "error": "pipeline made no Boltz calls to compute-match"
+      }
+    },
+    {
+      "pdb_id": "7V3E",
+      "name": "CASP15/7V3E",
+      "length": 280,
+      "A": {
+        "tm_score": 0.8762,
+        "rmsd": 2.552,
+        "n_aligned": 280,
+        "plddt": 82.49,
+        "boltz_calls": 1
+      },
+      "_backend_version": "2.2.1@b1ebfc46ecf5",
+      "C": {
+        "tm_score": 0.8716,
+        "rmsd": 2.695,
+        "n_aligned": 280,
+        "plddt": 83.47,
+        "decision": "accept",
+        "n_models": 2,
+        "total_predictions": 4,
+        "boltz_calls": 3,
+        "winner_model": "boltz2"
+      },
+      "E": {
+        "tm_score": 0.831,
+        "rmsd": 3.534,
+        "n_aligned": 280,
+        "plddt": 74.62,
+        "model": "esmfold_local"
+      },
+      "B": {
+        "tm_score": 0.8693,
+        "rmsd": 2.604,
+        "n_aligned": 280,
+        "plddt": 84.27,
+        "boltz_calls": 3
+      }
+    },
+    {
+      "pdb_id": "7V3F",
+      "name": "CASP15/7V3F",
+      "length": 495,
+      "A": {
+        "tm_score": 0.1456,
+        "rmsd": 27.313,
+        "n_aligned": 495,
+        "plddt": 66.99,
+        "boltz_calls": 1
+      },
+      "_backend_version": "2.2.1@b1ebfc46ecf5",
+      "C": {
+        "tm_score": 0.2548,
+        "rmsd": 22.877,
+        "n_aligned": 495,
+        "plddt": 73.4,
+        "decision": "refine",
+        "n_models": 2,
+        "total_predictions": 5,
+        "boltz_calls": 4,
+        "winner_model": "boltz2"
+      },
+      "E": {
+        "tm_score": 0.2424,
+        "rmsd": 17.069,
+        "n_aligned": 495,
+        "plddt": 73.28,
+        "model": "esmfold_local"
+      },
+      "B": {
+        "tm_score": 0.2253,
+        "rmsd": 22.949,
+        "n_aligned": 495,
+        "plddt": 73.94,
+        "boltz_calls": 4
+      }
+    },
+    {
+      "pdb_id": "7VDL",
+      "name": "CASP15/7VDL",
+      "length": 215,
+      "A": {
+        "tm_score": 0.3948,
+        "rmsd": 10.992,
+        "n_aligned": 215,
+        "plddt": 78.8,
+        "boltz_calls": 1
+      },
+      "_backend_version": "2.2.1@b1ebfc46ecf5",
+      "C": {
+        "tm_score": 0.7655,
+        "rmsd": 4.172,
+        "n_aligned": 215,
+        "plddt": 79.77,
+        "decision": "accept",
+        "n_models": 2,
+        "total_predictions": 4,
+        "boltz_calls": 3,
+        "winner_model": "esmfold_local"
+      },
+      "E": {
+        "tm_score": 0.7655,
+        "rmsd": 4.172,
+        "n_aligned": 215,
+        "plddt": 79.77,
+        "model": "esmfold_local"
+      },
+      "B": {
+        "tm_score": 0.5597,
+        "rmsd": 6.589,
+        "n_aligned": 215,
+        "plddt": 76.9,
+        "boltz_calls": 3
+      }
+    },
+    {
+      "pdb_id": "7VDM",
+      "name": "CASP15/7VDM",
+      "length": 217,
+      "A": {
+        "tm_score": 0.4123,
+        "rmsd": 10.156,
+        "n_aligned": 217,
+        "plddt": 77.05,
+        "boltz_calls": 1
+      },
+      "_backend_version": "2.2.1@b1ebfc46ecf5",
+      "C": {
+        "tm_score": 0.4717,
+        "rmsd": 8.463,
+        "n_aligned": 217,
+        "plddt": 81.47,
+        "decision": "accept",
+        "n_models": 2,
+        "total_predictions": 4,
+        "boltz_calls": 3,
+        "winner_model": "boltz2"
+      },
+      "E": {
+        "tm_score": 0.7685,
+        "rmsd": 3.712,
+        "n_aligned": 217,
+        "plddt": 79.41,
+        "model": "esmfold_local"
+      },
+      "B": {
+        "tm_score": 0.3269,
+        "rmsd": 14.772,
+        "n_aligned": 217,
+        "plddt": 76.37,
+        "boltz_calls": 3
+      }
+    },
+    {
+      "pdb_id": "7VQ6",
+      "name": "CASP15/7VQ6",
+      "length": 175,
+      "A": {
+        "tm_score": 0.2453,
+        "rmsd": 14.002,
+        "n_aligned": 175,
+        "plddt": 36.96,
+        "boltz_calls": 1
+      },
+      "_backend_version": "2.2.1@b1ebfc46ecf5",
+      "C": {
+        "tm_score": 0.4035,
+        "rmsd": 9.081,
+        "n_aligned": 175,
+        "plddt": 86.89,
+        "decision": "accept",
+        "n_models": 2,
+        "total_predictions": 4,
+        "boltz_calls": 3,
+        "winner_model": "esmfold_local"
+      },
+      "E": {
+        "tm_score": 0.4035,
+        "rmsd": 9.081,
+        "n_aligned": 175,
+        "plddt": 86.89,
+        "model": "esmfold_local"
+      },
+      "B": {
+        "tm_score": 0.1969,
+        "rmsd": 15.492,
+        "n_aligned": 175,
+        "plddt": 37.88,
+        "boltz_calls": 3
+      }
+    },
+    {
+      "pdb_id": "7VQ7",
+      "name": "CASP15/7VQ7",
+      "length": 389,
+      "A": {
+        "tm_score": 0.2008,
+        "rmsd": 19.866,
+        "n_aligned": 389,
+        "plddt": 43.42,
+        "boltz_calls": 1
+      },
+      "_backend_version": "2.2.1@b1ebfc46ecf5",
+      "C": {
+        "tm_score": 0.9366,
+        "rmsd": 2.35,
+        "n_aligned": 389,
+        "plddt": 94.3,
+        "decision": "accept",
+        "n_models": 2,
+        "total_predictions": 4,
+        "boltz_calls": 3,
+        "winner_model": "esmfold_local"
+      },
+      "E": {
+        "tm_score": 0.9366,
+        "rmsd": 2.35,
+        "n_aligned": 389,
+        "plddt": 94.3,
+        "model": "esmfold_local"
+      },
+      "B": {
+        "tm_score": 0.269,
+        "rmsd": 18.865,
+        "n_aligned": 389,
+        "plddt": 46.6,
+        "boltz_calls": 3
+      }
+    },
+    {
+      "pdb_id": "7WGP",
+      "name": "CASP15/7WGP",
+      "length": 269,
+      "A": {
+        "tm_score": 0.9077,
+        "rmsd": 3.316,
+        "n_aligned": 269,
+        "plddt": 87.29,
+        "boltz_calls": 1
+      },
+      "_backend_version": "2.2.1@b1ebfc46ecf5",
+      "C": {
+        "tm_score": 0.9576,
+        "rmsd": 1.634,
+        "n_aligned": 269,
+        "plddt": 87.99,
+        "decision": "accept",
+        "n_models": 2,
+        "total_predictions": 4,
+        "boltz_calls": 3,
+        "winner_model": "boltz2"
+      },
+      "E": {
+        "tm_score": 0.8754,
+        "rmsd": 4.48,
+        "n_aligned": 269,
+        "plddt": 83.96,
+        "model": "esmfold_local"
+      },
+      "B": {
+        "tm_score": 0.9596,
+        "rmsd": 1.669,
+        "n_aligned": 269,
+        "plddt": 88.58,
+        "boltz_calls": 3
+      }
+    },
+    {
+      "pdb_id": "7WGQ",
+      "name": "CASP15/7WGQ",
+      "length": 277,
+      "A": {
+        "tm_score": 0.9487,
+        "rmsd": 1.79,
+        "n_aligned": 277,
+        "plddt": 91.34,
+        "boltz_calls": 1
+      },
+      "_backend_version": "2.2.1@b1ebfc46ecf5",
+      "C": {
+        "tm_score": 0.9467,
+        "rmsd": 1.757,
+        "n_aligned": 277,
+        "plddt": 91.64,
+        "decision": "accept",
+        "n_models": 2,
+        "total_predictions": 4,
+        "boltz_calls": 3,
+        "winner_model": "boltz2"
+      },
+      "E": {
+        "tm_score": 0.8748,
+        "rmsd": 4.1,
+        "n_aligned": 277,
+        "plddt": 80.1,
+        "model": "esmfold_local"
+      },
+      "B": {
+        "tm_score": 0.9481,
+        "rmsd": 1.725,
+        "n_aligned": 277,
+        "plddt": 91.31,
+        "boltz_calls": 3
+      }
+    },
+    {
+      "pdb_id": "7WV6",
+      "error": "PDB fetch failed: 404 Client Error: Not Found for url: https://files.rcsb.org/download/7WV6.pdb"
+    },
+    {
+      "pdb_id": "7WV7",
+      "error": "PDB fetch failed: 404 Client Error: Not Found for url: https://files.rcsb.org/download/7WV7.pdb"
+    },
+    {
+      "pdb_id": "7X26",
+      "name": "CASP15/7X26",
+      "length": 221,
+      "A": {
+        "tm_score": 0.8411,
+        "rmsd": 2.961,
+        "n_aligned": 221,
+        "plddt": 91.32,
+        "boltz_calls": 1
+      },
+      "_backend_version": "2.2.1@b1ebfc46ecf5",
+      "C": {
+        "tm_score": 0.7514,
+        "rmsd": 3.749,
+        "n_aligned": 221,
+        "plddt": 92.24,
+        "decision": "accept",
+        "n_models": 2,
+        "total_predictions": 4,
+        "boltz_calls": 3,
+        "winner_model": "boltz2"
+      },
+      "E": {
+        "tm_score": 0.7006,
+        "rmsd": 4.388,
+        "n_aligned": 221,
+        "plddt": 87.96,
+        "model": "esmfold_local"
+      },
+      "B": {
+        "tm_score": 0.6928,
+        "rmsd": 4.277,
+        "n_aligned": 221,
+        "plddt": 92.24,
+        "boltz_calls": 3
+      }
+    },
+    "Function call was cancelled by user or a failure.",
+    {
+      "pdb_id": "7XPT",
+      "name": "CASP15/7XPT",
+      "length": 375,
+      "A": {
+        "tm_score": 0.2886,
+        "rmsd": 16.916,
+        "n_aligned": 375,
+        "plddt": 39.93,
+        "boltz_calls": 1
+      },
+      "_backend_version": "2.2.1@b1ebfc46ecf5",
+      "C": {
+        "tm_score": 0.9777,
+        "rmsd": 1.283,
+        "n_aligned": 375,
+        "plddt": 90.09,
+        "decision": "accept",
+        "n_models": 2,
+        "total_predictions": 4,
+        "boltz_calls": 3,
+        "winner_model": "esmfold_local"
+      },
+      "E": {
+        "tm_score": 0.9777,
+        "rmsd": 1.283,
+        "n_aligned": 375,
+        "plddt": 90.09,
+        "model": "esmfold_local"
+      },
+      "B": {
+        "tm_score": 0.2056,
+        "rmsd": 21.296,
+        "n_aligned": 375,
+        "plddt": 41.27,
+        "boltz_calls": 3
+      }
+    },
+    {
+      "pdb_id": "7XPU",
+      "name": "CASP15/7XPU",
+      "length": 371,
+      "A": {
+        "tm_score": 0.3807,
+        "rmsd": 15.834,
+        "n_aligned": 371,
+        "plddt": 40.06,
+        "boltz_calls": 1
+      },
+      "_backend_version": "2.2.1@b1ebfc46ecf5",
+      "C": {
+        "tm_score": 0.9858,
+        "rmsd": 0.861,
+        "n_aligned": 371,
+        "plddt": 90.86,
+        "decision": "accept",
+        "n_models": 2,
+        "total_predictions": 4,
+        "boltz_calls": 3,
+        "winner_model": "esmfold_local"
+      },
+      "E": {
+        "tm_score": 0.9858,
+        "rmsd": 0.861,
+        "n_aligned": 371,
+        "plddt": 90.86,
+        "model": "esmfold_local"
+      },
+      "B": {
+        "tm_score": 0.2755,
+        "rmsd": 17.521,
+        "n_aligned": 371,
+        "plddt": 42.52,
+        "boltz_calls": 3
+      }
+    }
+  ],
+  "errors": [
+    {
+      "pdb_id": "7TY5",
+      "arm_errors": {}
+    },
+    {
+      "pdb_id": "7UXC",
+      "arm_errors": {
+        "B": "pipeline made no Boltz calls to compute-match",
+        "C": "CUDA out of memory. Tried to allocate 156.09 GiB. GPU 0 has a total capacity of 79.25 GiB of which 41.36 GiB is free. Process 1 has 37.89 GiB memory in use. Of the allocated memory 37.33 GiB is allocated by PyTorch, and 65.88 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)"
+      }
+    },
+    {
+      "pdb_id": "7WV6",
+      "arm_errors": {}
+    },
+    {
+      "pdb_id": "7WV7",
+      "arm_errors": {}
+    },
+    "Function call was cancelled by user or a failure."
+  ],
+  "analysis": {
+    "n_paired": 15,
+    "tm": {
+      "C_vs_A": {
+        "n_paired": 15,
+        "mean_delta": 0.2343,
+        "median_delta": 0.1092,
+        "wins": 10,
+        "losses": 5,
+        "ties": 0,
+        "p_value": 0.01245,
+        "test": "wilcoxon-signed-rank"
+      },
+      "C_vs_B": {
+        "n_paired": 15,
+        "mean_delta": 0.2349,
+        "median_delta": 0.1187,
+        "wins": 11,
+        "losses": 4,
+        "ties": 0,
+        "p_value": 0.00427,
+        "test": "wilcoxon-signed-rank"
+      },
+      "E_vs_A": {
+        "n_paired": 15,
+        "mean_delta": 0.2399,
+        "median_delta": 0.1107,
+        "wins": 10,
+        "losses": 5,
+        "ties": 0,
+        "p_value": 0.01807,
+        "test": "wilcoxon-signed-rank"
+      },
+      "E_vs_B": {
+        "n_paired": 15,
+        "mean_delta": 0.2406,
+        "median_delta": 0.1187,
+        "wins": 11,
+        "losses": 4,
+        "ties": 0,
+        "p_value": 0.02155,
+        "test": "wilcoxon-signed-rank"
+      },
+      "C_vs_E": {
+        "n_paired": 15,
+        "mean_delta": -0.0056,
+        "median_delta": 0.0,
+        "wins": 6,
+        "losses": 2,
+        "ties": 7,
+        "p_value": 0.54688,
+        "test": "wilcoxon-signed-rank"
+      }
+    },
+    "rmsd": {
+      "C_vs_A": {
+        "n_paired": 15,
+        "mean_delta": -6.0751,
+        "median_delta": -2.055,
+        "wins": 12,
+        "losses": 3,
+        "ties": 0,
+        "p_value": 0.00427,
+        "test": "wilcoxon-signed-rank"
+      },
+      "C_vs_B": {
+        "n_paired": 15,
+        "mean_delta": -5.8135,
+        "median_delta": -2.228,
+        "wins": 11,
+        "losses": 4,
+        "ties": 0,
+        "p_value": 0.00836,
+        "test": "wilcoxon-signed-rank"
+      },
+      "C_vs_E": {
+        "n_paired": 15,
+        "mean_delta": 0.3385,
+        "median_delta": 0.0,
+        "wins": 5,
+        "losses": 3,
+        "ties": 7,
+        "p_value": 0.94531,
+        "test": "wilcoxon-signed-rank"
+      }
+    },
+    "boltz_calls": {
+      "A": 15,
+      "B": 46,
+      "C": 46
+    },
+    "C_winner_models": {
+      "esmfold_local": 7,
+      "boltz2": 8
+    }
+  }
+}
