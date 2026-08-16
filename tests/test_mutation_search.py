@@ -504,3 +504,28 @@ def test_search_and_validate_end_to_end():
     assert res.refolds_used == 3
     assert res.candidates[0].refold_score is not None
     assert res.oracle == "score_only"  # top-level oracle still names the SEARCH oracle
+
+
+# ---------------------------------------------------------------------------
+# CLI entrypoint (_cli) — stubbed oracle, no ProteinMPNN
+# ---------------------------------------------------------------------------
+
+def test_cli_prints_ranked_candidates(tmp_path, capsys):
+    from orchestrator import mutation_search as ms
+
+    pdb = tmp_path / "wt.pdb"
+    pdb.write_text(_MINIMAL_PDB)
+
+    # Stub the oracle so the cheap search runs in-memory (fewer mutations = higher fitness).
+    def fake_score_only(pdb_string, sequences, **kw):
+        return [-float(sum(a != b for a, b in zip(_WT, s))) for s in sequences]
+
+    argv = ["prog", "--pdb", str(pdb), "--sequence", _WT, "--proteinmpnn-dir", "/fake",
+            "--rounds", "5", "--candidates-per-round", "10", "--max-sites", "2", "--top-k", "5"]
+    with patch.object(ms, "score_only_oracle", side_effect=fake_score_only), \
+         patch("sys.argv", argv):
+        ms._cli()
+
+    out = capsys.readouterr().out
+    assert "candidates" in out and "refolds_used=0" in out
+    assert "score=" in out  # at least one ranked candidate line printed

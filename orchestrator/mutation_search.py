@@ -604,3 +604,70 @@ def search_and_validate(
         refold_fn or _default_refold_fn, seed,
     )
     return result.model_copy(update={"candidates": validated, "refolds_used": refolds_used})
+
+
+def _format_candidate_line(cand: MutationCandidate) -> str:
+    """One-line human summary of a ranked candidate for the CLI."""
+    muts = "+".join(cand.mutations) if cand.mutations else "(wild-type)"
+    line = f"{muts:<24} score={cand.score:+.4f}"
+    if cand.refold_score is not None:
+        line += (f"  refold_score={cand.refold_score:+.2f}"
+                 f" pLDDT={cand.refold_plddt:.2f} clashes={cand.refold_num_clashes}")
+        if cand.refold_affinity is not None:
+            line += f" affinity={cand.refold_affinity:.3f}"  # log10(IC50 uM); metadata only
+    return line
+
+
+def _cli() -> None:
+    """Offline entrypoint: python -m orchestrator.mutation_search --pdb X --sequence SEQ ...
+
+    Runs the combinatorial search over a PDB + sequence and prints ranked multi-site
+    candidates. --validate re-folds the top candidates through the real backend (needs the
+    ESMFold/Boltz deps + config), otherwise it is a pure cheap-oracle search.
+    """
+    import argparse
+
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--pdb", required=True, help="Path to the wild-type PDB")
+    ap.add_argument("--sequence", required=True, help="Wild-type sequence (matches the PDB)")
+    ap.add_argument("--proteinmpnn-dir", default=os.getenv("PROTEINMPNN_PATH", ""))
+    ap.add_argument("--model-name", default=os.getenv("PROTEINMPNN_MODEL_NAME", "v_48_020"))
+    ap.add_argument("--mpnn-seed", type=int, default=int(os.getenv("PROTEINMPNN_SEED", "37")),
+                    help="ProteinMPNN decoding seed (must be non-zero)")
+    ap.add_argument("--num-decoding-orders", type=int,
+                    default=int(os.getenv("PROTEINMPNN_NUM_DECODING_ORDERS", "8")))
+    ap.add_argument("--rounds", type=int, default=10)
+    ap.add_argument("--candidates-per-round", type=int, default=20)
+    ap.add_argument("--max-sites", type=int, default=3)
+    ap.add_argument("--top-k", type=int, default=10)
+    ap.add_argument("--seed", type=int, default=0, help="AdaLead RNG seed (search reproducibility)")
+    ap.add_argument("--validate", action="store_true",
+                    help="Re-fold top candidates and rank by structure quality")
+    ap.add_argument("--max-refolds", type=int, default=5)
+    args = ap.parse_args()
+
+    with open(args.pdb) as fh:
+        pdb_string = fh.read()
+
+    def oracle(sequences: List[str]) -> List[float]:
+        return score_only_oracle(
+            pdb_string, sequences, proteinmpnn_dir=args.proteinmpnn_dir,
+            model_name=args.model_name, seed=args.mpnn_seed,
+            num_decoding_orders=args.num_decoding_orders,
+        )
+
+    result = search_and_validate(
+        args.sequence, oracle,
+        rounds=args.rounds, candidates_per_round=args.candidates_per_round,
+        max_sites=args.max_sites, seed=args.seed, top_k=args.top_k,
+        max_refolds=(args.max_refolds if args.validate else 0),
+    )
+
+    print(f"# {len(result.candidates)} candidates | {result.total_evaluated} sequences "
+          f"evaluated | {result.rounds} rounds | refolds_used={result.refolds_used}")
+    for cand in result.candidates:
+        print(_format_candidate_line(cand))
+
+
+if __name__ == "__main__":
+    _cli()
