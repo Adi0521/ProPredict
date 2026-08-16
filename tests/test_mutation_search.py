@@ -19,6 +19,7 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
+from models.schemas import MutationCandidate, StructurePrediction
 from orchestrator.mutation_search import (
     adalead_search,
     additive_oracle,
@@ -26,7 +27,9 @@ from orchestrator.mutation_search import (
     format_mutation,
     mutations_from_sequences,
     parse_mutation,
+    refold_validate,
     score_only_oracle,
+    search_and_validate,
     _run_proteinmpnn_score_only,
 )
 
@@ -354,3 +357,175 @@ def test_adalead_additive_landscape_stacks_to_k_cap():
     positions = {int(m[1:-1]) for m in top.mutations}
     assert len(top.mutations) == 3 and positions <= {1, 2, 3}
     assert top.score == pytest.approx(3.0)
+
+
+# ---------------------------------------------------------------------------
+# refold_validate / search_and_validate — the tier-3 re-fold funnel (mocked backend)
+# ---------------------------------------------------------------------------
+
+def _cand(muts, score):
+    """A cheap-oracle candidate (no re-fold metrics yet)."""
+    seq = apply_mutations(_WT, muts)
+    return MutationCandidate(mutations=muts, sequence=seq, score=score, oracle="score_only")
+
+
+# Minimal single-CA PDB: real count_clashes parses it and returns 0 (needs >=2 CAs to clash).
+_MINIMAL_PDB = "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00  0.00           C\n"
+
+
+def _pred(plddt, structure_pdb=_MINIMAL_PDB, affinity=None, affinity_prob=None):
+    return StructurePrediction(
+        structure_pdb=structure_pdb, plddt_scores=[plddt], mean_plddt=plddt, seed=0,
+        affinity_score=affinity, affinity_probability=affinity_prob,
+    )
+
+
+def _refold_fn_from_map(plddt_by_seq, affinity_by_seq=None):
+    """Build a stub refold_fn that returns a controlled pLDDT (and optional affinity) per
+    sequence. structure_pdb is left empty so real count_clashes returns 0."""
+    def fn(sequence, context, seed):
+        aff = (affinity_by_seq or {}).get(sequence)
+        prob = None if affinity_by_seq is None else affinity_by_seq.get(sequence)
+        return _pred(plddt_by_seq[sequence], affinity=aff, affinity_prob=prob)
+    return fn
+
+
+def test_refold_validate_budget_cap():
+    # 6 candidates, budget 3 -> exactly 3 re-folds, 3 refold_score set, 3 left None.
+    cands = [_cand([f"A{i}C"], score=10 - i) for i in range(1, 7)]
+    plddt = {c.sequence: 80.0 for c in cands}
+    calls = []
+
+    def counting_fn(sequence, context, seed):
+        calls.append(sequence)
+        return _pred(plddt[sequence])
+
+    reordered, used = refold_validate(_WT, cands, {}, max_refolds=3, refold_fn=counting_fn)
+    assert used == 3 and len(calls) == 3
+    assert sum(c.refold_score is not None for c in reordered) == 3
+    assert sum(c.refold_score is None for c in reordered) == 3
+
+
+def test_refold_validate_reranks_by_structural_score():
+    # Cheap top-1 (best score) folds poorly; a lower-ranked cheap candidate folds best and
+    # must float to the front after validation.
+    a = _cand(["A1C"], score=9.0)   # cheap #1 but low pLDDT
+    b = _cand(["A2D"], score=8.0)
+    c = _cand(["A3E"], score=7.0)   # cheap #3 but highest pLDDT
+    fn = _refold_fn_from_map({a.sequence: 55.0, b.sequence: 70.0, c.sequence: 90.0})
+    reordered, used = refold_validate(_WT, [a, b, c], {}, max_refolds=3, refold_fn=fn)
+    assert used == 3
+    assert reordered[0].sequence == c.sequence          # highest pLDDT wins
+    assert reordered[0].refold_plddt == 90.0
+    assert [r.refold_score for r in reordered] == sorted(
+        [r.refold_score for r in reordered], reverse=True)
+
+
+def test_refold_validate_clash_penalty(monkeypatch):
+    # High pLDDT but many clashes must lose to a slightly-lower-pLDDT clean structure.
+    # refold_score = plddt - 5*clashes: 95 - 5*4 = 75  <  80 - 5*0 = 80.
+    a = _cand(["A1C"], score=9.0)
+    b = _cand(["A2D"], score=8.0)
+    plddt = {a.sequence: 95.0, b.sequence: 80.0}
+    clashes = {a.sequence: 4, b.sequence: 0}
+
+    def fn(sequence, context, seed):
+        # encode clash count in the pdb string; the patched count_clashes decodes it
+        return _pred(plddt[sequence], structure_pdb=sequence)
+
+    monkeypatch.setattr("orchestrator.mutation_search.count_clashes",
+                        lambda pdb: clashes[pdb])
+    reordered, _ = refold_validate(_WT, [a, b], {}, max_refolds=2, refold_fn=fn)
+    assert reordered[0].sequence == b.sequence          # clean structure wins
+    assert reordered[0].refold_score == 80.0
+    assert reordered[1].refold_score == 75.0
+
+
+def test_refold_validate_affinity_recorded_not_ranked():
+    # The candidate with the best (lowest) affinity but a worse structure must NOT rank first;
+    # affinity is recorded as metadata only.
+    a = _cand(["A1C"], score=9.0)   # great affinity, poor fold
+    b = _cand(["A2D"], score=8.0)   # worse affinity, better fold
+    fn = _refold_fn_from_map(
+        {a.sequence: 60.0, b.sequence: 85.0},
+        affinity_by_seq={a.sequence: -3.0, b.sequence: 1.0},  # lower affinity = "tighter"
+    )
+    reordered, _ = refold_validate(_WT, [a, b], {}, max_refolds=2, refold_fn=fn)
+    assert reordered[0].sequence == b.sequence          # structure ranks, not affinity
+    assert reordered[0].refold_affinity == 1.0          # affinity still recorded
+    assert reordered[1].refold_affinity == -3.0
+
+
+def test_refold_validate_failure_skipped():
+    # One candidate's re-fold raises -> skipped, stays in the un-refolded remainder, and
+    # refolds_used counts only successes.
+    a = _cand(["A1C"], score=9.0)
+    b = _cand(["A2D"], score=8.0)
+
+    def fn(sequence, context, seed):
+        if sequence == a.sequence:
+            raise RuntimeError("backend blew up")
+        return _pred(75.0)
+
+    reordered, used = refold_validate(_WT, [a, b], {}, max_refolds=2, refold_fn=fn)
+    assert used == 1
+    validated = [c for c in reordered if c.refold_score is not None]
+    assert len(validated) == 1 and validated[0].sequence == b.sequence
+    # a survived un-refolded
+    assert any(c.sequence == a.sequence and c.refold_score is None for c in reordered)
+
+
+def test_refold_validate_more_budget_than_candidates():
+    a = _cand(["A1C"], score=9.0)
+    fn = _refold_fn_from_map({a.sequence: 80.0})
+    reordered, used = refold_validate(_WT, [a], {}, max_refolds=5, refold_fn=fn)
+    assert used == 1 and len(reordered) == 1
+
+
+def test_search_and_validate_zero_budget_is_noop():
+    res = search_and_validate(_WT, _oracle, rounds=10, candidates_per_round=15, max_sites=3,
+                              seed=0, max_refolds=0)
+    assert res.refolds_used == 0
+    assert all(c.refold_score is None for c in res.candidates)
+
+
+def test_search_and_validate_end_to_end():
+    # Cheap search then funnel with a stub backend: refolds_used > 0 and the top candidate
+    # carries re-fold metrics.
+    search = adalead_search(_WT, _oracle, rounds=15, candidates_per_round=30, max_sites=3,
+                            seed=0)
+    plddt = {c.sequence: 70.0 + i for i, c in enumerate(search.candidates)}
+
+    def fn(sequence, context, seed):
+        return _pred(plddt.get(sequence, 70.0))
+
+    res = search_and_validate(_WT, _oracle, rounds=15, candidates_per_round=30, max_sites=3,
+                              seed=0, max_refolds=3, refold_fn=fn)
+    assert res.refolds_used == 3
+    assert res.candidates[0].refold_score is not None
+    assert res.oracle == "score_only"  # top-level oracle still names the SEARCH oracle
+
+
+# ---------------------------------------------------------------------------
+# CLI entrypoint (_cli) — stubbed oracle, no ProteinMPNN
+# ---------------------------------------------------------------------------
+
+def test_cli_prints_ranked_candidates(tmp_path, capsys):
+    from orchestrator import mutation_search as ms
+
+    pdb = tmp_path / "wt.pdb"
+    pdb.write_text(_MINIMAL_PDB)
+
+    # Stub the oracle so the cheap search runs in-memory (fewer mutations = higher fitness).
+    def fake_score_only(pdb_string, sequences, **kw):
+        return [-float(sum(a != b for a, b in zip(_WT, s))) for s in sequences]
+
+    argv = ["prog", "--pdb", str(pdb), "--sequence", _WT, "--proteinmpnn-dir", "/fake",
+            "--rounds", "5", "--candidates-per-round", "10", "--max-sites", "2", "--top-k", "5"]
+    with patch.object(ms, "score_only_oracle", side_effect=fake_score_only), \
+         patch("sys.argv", argv):
+        ms._cli()
+
+    out = capsys.readouterr().out
+    assert "candidates" in out and "refolds_used=0" in out
+    assert "score=" in out  # at least one ranked candidate line printed

@@ -36,11 +36,14 @@ import re
 import subprocess
 import sys
 import tempfile
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 
-from models.schemas import MutationCandidate, MutationSearchResult
+from models.schemas import MutationCandidate, MutationSearchResult, StructurePrediction
+# count_clashes lives in scoring.py, which only imports config + schemas at module level
+# (BioPython is lazy-imported inside it) — safe to import here without pulling heavy deps.
+from orchestrator.scoring import count_clashes
 
 # Reuse mutation_scan's verified alphabet and conditional-probs runner so the two modules
 # can never drift (same [L,21] ordering, same seed guard, same decoding-order averaging).
@@ -477,3 +480,194 @@ def adalead_search(
         total_evaluated=len(measured),  # distinct sequences scored, incl. seeds and WT
         refolds_used=0,
     )
+
+
+# ---------------------------------------------------------------------------
+# Tier 3 — re-fold validation funnel (connects the cheap search to the real pipeline)
+# ---------------------------------------------------------------------------
+#
+# The cheap tier-2 score_only search ranks by ProteinMPNN structural compatibility, which is
+# NOT a fold/stability/fitness guarantee. The funnel re-folds the top handful of candidates
+# through the real prediction backend (ESMFold/Boltz) and re-ranks them by a metric grounded
+# in the actual predicted structure: `mean_plddt - 5*num_clashes` — the SAME formula
+# scoring.compute_post_processing uses for accept/refine/escalate, so the funnel and the main
+# pipeline agree on what "structurally good" means.
+#
+# Affinity is deliberately NOT a ranking input. Boltz-2's affinity head may be blind to point
+# mutations (open question — research_plan/rowA-boltz-affinity-invariance.md), so ranking
+# mutants by it would be unsound today. Both affinity_score (log10 IC50 uM) and
+# affinity_probability are RECORDED on the candidate as metadata for later analysis.
+#
+# Re-folds are the only expensive step (minutes/candidate), so the count is hard-capped by
+# MUTATION_SEARCH_MAX_REFOLDS at the call site.
+
+RefoldFn = Callable[[str, Optional[Dict[str, Any]], int], StructurePrediction]
+
+
+def _default_refold_fn(
+    sequence: str, context: Optional[Dict[str, Any]], seed: int
+) -> StructurePrediction:
+    """Re-fold via the same backend choice as agent.apply_mutation: Boltz when enabled
+    (carries ligand/membrane context + affinity), else ESMFold. Backends are imported lazily
+    so this module never pulls torch/boltz at import time (optional-dep convention)."""
+    from config import BOLTZ_ENABLED
+    if BOLTZ_ENABLED:
+        from orchestrator.backends.boltz import call_boltz
+        return call_boltz(sequence, context=context, seed=seed)
+    from orchestrator.backends.esmfold import call_esmfold_api
+    return call_esmfold_api(sequence, seed=seed)
+
+
+def _refold_one(cand: MutationCandidate, pred: StructurePrediction) -> MutationCandidate:
+    """Attach re-fold metrics to a candidate. refold_score = plddt - 5*clashes (higher =
+    better), matching scoring.compute_post_processing. Affinity fields are metadata only."""
+    clashes = count_clashes(pred.structure_pdb)
+    refold_score = pred.mean_plddt - 5.0 * clashes
+    return cand.model_copy(update={
+        "refold_plddt": round(pred.mean_plddt, 2),
+        "refold_num_clashes": clashes,
+        "refold_score": round(refold_score, 2),
+        "refold_affinity": pred.affinity_score,
+        "refold_affinity_probability": pred.affinity_probability,
+    })
+
+
+def refold_validate(
+    wild_type: str,
+    candidates: List[MutationCandidate],
+    context: Optional[Dict[str, Any]],
+    max_refolds: int,
+    refold_fn: RefoldFn,
+    seed: int = 0,
+) -> Tuple[List[MutationCandidate], int]:
+    """
+    Re-fold the top `max_refolds` cheap-oracle candidates and re-rank them by predicted
+    structural quality (refold_score = plddt - 5*clashes, higher = better).
+
+    Returns `(reordered_candidates, refolds_used)`:
+      - re-folded candidates (with refold_* populated) sorted best-first, then the remaining
+        un-refolded candidates in their original cheap-oracle order;
+      - `refolds_used` = number of SUCCESSFUL re-folds (<= max_refolds).
+
+    A re-fold that raises (backend hiccup) is logged and skipped — that candidate stays in the
+    un-refolded remainder rather than crashing the funnel, mirroring apply_mutation's
+    "re-prediction failed" handling.
+    """
+    n = max(0, min(max_refolds, len(candidates)))
+    validated: List[MutationCandidate] = []
+    for cand in candidates[:n]:
+        try:
+            pred = refold_fn(cand.sequence, context, seed)
+        except Exception as e:  # noqa: BLE001 — a bad re-fold must not sink the whole funnel
+            logger.warning("re-fold failed for %s (%s) — skipping: %s",
+                           cand.mutations, cand.sequence, e)
+            continue
+        validated.append(_refold_one(cand, pred))
+
+    validated.sort(key=lambda c: c.refold_score, reverse=True)
+    refolded_seqs = {c.sequence for c in validated}
+    remainder = [c for c in candidates if c.sequence not in refolded_seqs]
+    return validated + remainder, len(validated)
+
+
+def search_and_validate(
+    wild_type: str,
+    oracle: Callable[[List[str]], List[float]],
+    *,
+    rounds: int,
+    candidates_per_round: int,
+    max_sites: int,
+    seed: int,
+    max_refolds: int = 0,
+    refold_fn: Optional[RefoldFn] = None,
+    context: Optional[Dict[str, Any]] = None,
+    oracle_name: str = "score_only",
+    **adalead_kwargs: Any,
+) -> MutationSearchResult:
+    """
+    Two-stage funnel: cheap AdaLead-lite search, then (if `max_refolds > 0`) re-fold the top
+    candidates through the real backend and re-rank by predicted structure quality.
+
+    `refold_fn` defaults to `_default_refold_fn` (Boltz/ESMFold by flag); inject a stub for
+    tests. When `max_refolds == 0` the funnel is a no-op and the cheap result is returned
+    unchanged (refolds_used stays 0).
+    """
+    result = adalead_search(
+        wild_type, oracle, rounds=rounds, candidates_per_round=candidates_per_round,
+        max_sites=max_sites, seed=seed, oracle_name=oracle_name, **adalead_kwargs,
+    )
+    if max_refolds <= 0:
+        return result
+
+    validated, refolds_used = refold_validate(
+        wild_type, result.candidates, context, max_refolds,
+        refold_fn or _default_refold_fn, seed,
+    )
+    return result.model_copy(update={"candidates": validated, "refolds_used": refolds_used})
+
+
+def _format_candidate_line(cand: MutationCandidate) -> str:
+    """One-line human summary of a ranked candidate for the CLI."""
+    muts = "+".join(cand.mutations) if cand.mutations else "(wild-type)"
+    line = f"{muts:<24} score={cand.score:+.4f}"
+    if cand.refold_score is not None:
+        line += (f"  refold_score={cand.refold_score:+.2f}"
+                 f" pLDDT={cand.refold_plddt:.2f} clashes={cand.refold_num_clashes}")
+        if cand.refold_affinity is not None:
+            line += f" affinity={cand.refold_affinity:.3f}"  # log10(IC50 uM); metadata only
+    return line
+
+
+def _cli() -> None:
+    """Offline entrypoint: python -m orchestrator.mutation_search --pdb X --sequence SEQ ...
+
+    Runs the combinatorial search over a PDB + sequence and prints ranked multi-site
+    candidates. --validate re-folds the top candidates through the real backend (needs the
+    ESMFold/Boltz deps + config), otherwise it is a pure cheap-oracle search.
+    """
+    import argparse
+
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--pdb", required=True, help="Path to the wild-type PDB")
+    ap.add_argument("--sequence", required=True, help="Wild-type sequence (matches the PDB)")
+    ap.add_argument("--proteinmpnn-dir", default=os.getenv("PROTEINMPNN_PATH", ""))
+    ap.add_argument("--model-name", default=os.getenv("PROTEINMPNN_MODEL_NAME", "v_48_020"))
+    ap.add_argument("--mpnn-seed", type=int, default=int(os.getenv("PROTEINMPNN_SEED", "37")),
+                    help="ProteinMPNN decoding seed (must be non-zero)")
+    ap.add_argument("--num-decoding-orders", type=int,
+                    default=int(os.getenv("PROTEINMPNN_NUM_DECODING_ORDERS", "8")))
+    ap.add_argument("--rounds", type=int, default=10)
+    ap.add_argument("--candidates-per-round", type=int, default=20)
+    ap.add_argument("--max-sites", type=int, default=3)
+    ap.add_argument("--top-k", type=int, default=10)
+    ap.add_argument("--seed", type=int, default=0, help="AdaLead RNG seed (search reproducibility)")
+    ap.add_argument("--validate", action="store_true",
+                    help="Re-fold top candidates and rank by structure quality")
+    ap.add_argument("--max-refolds", type=int, default=5)
+    args = ap.parse_args()
+
+    with open(args.pdb) as fh:
+        pdb_string = fh.read()
+
+    def oracle(sequences: List[str]) -> List[float]:
+        return score_only_oracle(
+            pdb_string, sequences, proteinmpnn_dir=args.proteinmpnn_dir,
+            model_name=args.model_name, seed=args.mpnn_seed,
+            num_decoding_orders=args.num_decoding_orders,
+        )
+
+    result = search_and_validate(
+        args.sequence, oracle,
+        rounds=args.rounds, candidates_per_round=args.candidates_per_round,
+        max_sites=args.max_sites, seed=args.seed, top_k=args.top_k,
+        max_refolds=(args.max_refolds if args.validate else 0),
+    )
+
+    print(f"# {len(result.candidates)} candidates | {result.total_evaluated} sequences "
+          f"evaluated | {result.rounds} rounds | refolds_used={result.refolds_used}")
+    for cand in result.candidates:
+        print(_format_candidate_line(cand))
+
+
+if __name__ == "__main__":
+    _cli()

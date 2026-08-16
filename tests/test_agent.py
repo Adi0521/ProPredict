@@ -332,3 +332,104 @@ def test_scan_mutations_scorer_failure_is_wrapped(mock_score):
         out = _scan({}, state)
 
     assert "mutation scan failed: mpnn boom" in out["error"]
+
+
+# ---------------------------------------------------------------------------
+# search_mutations tool (P2-4) — read-only combinatorial search
+# ---------------------------------------------------------------------------
+
+from models.schemas import MutationCandidate, MutationSearchResult
+
+
+def _search(tool_input, state):
+    return json.loads(_execute_agent_tool("search_mutations", tool_input, state))
+
+
+def _fake_search_result():
+    return MutationSearchResult(
+        wild_type_sequence="ACDEF",
+        candidates=[MutationCandidate(mutations=["A1V", "D3E"], sequence="VCEEF",
+                                      score=2.5, oracle="score_only")],
+        oracle="score_only", rounds=10, total_evaluated=42, refolds_used=0,
+    )
+
+
+def test_search_mutations_disabled_flag():
+    with patch("orchestrator.agent.MUTATION_SEARCH_ENABLED", False):
+        out = _search({}, _base_state("ACDEF"))
+    assert "disabled" in out["error"]
+
+
+def test_search_mutations_missing_proteinmpnn_path():
+    with patch("orchestrator.agent.MUTATION_SEARCH_ENABLED", True), \
+         patch("orchestrator.agent.PROTEINMPNN_PATH", ""):
+        out = _search({}, _base_state("ACDEF"))
+    assert "unavailable" in out["error"]
+
+
+@patch("orchestrator.agent.search_and_validate")
+def test_search_mutations_happy_path_defaults(mock_search):
+    mock_search.return_value = _fake_search_result()
+    with patch("orchestrator.agent.MUTATION_SEARCH_ENABLED", True), \
+         patch("orchestrator.agent.PROTEINMPNN_PATH", "/opt/ProteinMPNN"), \
+         patch("orchestrator.agent.MUTATION_SEARCH_ROUNDS", 10), \
+         patch("orchestrator.agent.MUTATION_SEARCH_CANDIDATES_PER_ROUND", 20), \
+         patch("orchestrator.agent.MUTATION_SEARCH_MAX_SITES", 3), \
+         patch("orchestrator.agent.MUTATION_SEARCH_MAX_REFOLDS", 5):
+        state = _base_state("ACDEF")
+        out = _search({}, state)
+
+    assert out["status"] == "completed"
+    assert out["candidates"][0]["mutations"] == ["A1V", "D3E"]
+    assert "metadata" in out["note"]
+    # Called with the wild-type sequence and config-default (no-validate => max_refolds 0).
+    args, kwargs = mock_search.call_args
+    assert args[0] == "ACDEF"
+    assert kwargs["rounds"] == 10 and kwargs["candidates_per_round"] == 20
+    assert kwargs["max_sites"] == 3 and kwargs["max_refolds"] == 0
+    assert kwargs["seed"] == 0  # AdaLead seed distinct from PROTEINMPNN_SEED
+    # Read-only: state untouched.
+    assert state["sequence"] == "ACDEF" and state["current_pdb"] == "ATOM_ORIG"
+
+
+@patch("orchestrator.agent.search_and_validate")
+def test_search_mutations_validate_passes_refold_budget(mock_search):
+    mock_search.return_value = _fake_search_result()
+    with patch("orchestrator.agent.MUTATION_SEARCH_ENABLED", True), \
+         patch("orchestrator.agent.PROTEINMPNN_PATH", "/opt/ProteinMPNN"), \
+         patch("orchestrator.agent.MUTATION_SEARCH_MAX_REFOLDS", 5):
+        out = _search({"validate": True}, _base_state("ACDEF"))
+
+    assert out["status"] == "completed"
+    kwargs = mock_search.call_args.kwargs
+    assert kwargs["max_refolds"] == 5
+    assert kwargs["context"] == {}  # state's context flows to the funnel
+
+
+@patch("orchestrator.agent.search_and_validate")
+def test_search_mutations_clamps_to_config_ceilings(mock_search):
+    mock_search.return_value = _fake_search_result()
+    with patch("orchestrator.agent.MUTATION_SEARCH_ENABLED", True), \
+         patch("orchestrator.agent.PROTEINMPNN_PATH", "/opt/ProteinMPNN"), \
+         patch("orchestrator.agent.MUTATION_SEARCH_ROUNDS", 10), \
+         patch("orchestrator.agent.MUTATION_SEARCH_CANDIDATES_PER_ROUND", 20), \
+         patch("orchestrator.agent.MUTATION_SEARCH_MAX_SITES", 3), \
+         patch("orchestrator.agent.MUTATION_SEARCH_MAX_REFOLDS", 5):
+        out = _search(
+            {"rounds": 999, "candidates_per_round": 999, "max_sites": 99,
+             "validate": True, "max_refolds": 999},
+            _base_state("ACDEF"),
+        )
+
+    assert out["status"] == "completed"
+    kwargs = mock_search.call_args.kwargs
+    assert kwargs["rounds"] == 10 and kwargs["candidates_per_round"] == 20
+    assert kwargs["max_sites"] == 3 and kwargs["max_refolds"] == 5  # all clamped down
+
+
+@patch("orchestrator.agent.search_and_validate", side_effect=RuntimeError("search boom"))
+def test_search_mutations_failure_is_wrapped(mock_search):
+    with patch("orchestrator.agent.MUTATION_SEARCH_ENABLED", True), \
+         patch("orchestrator.agent.PROTEINMPNN_PATH", "/opt/ProteinMPNN"):
+        out = _search({}, _base_state("ACDEF"))
+    assert "mutation search failed: search boom" in out["error"]

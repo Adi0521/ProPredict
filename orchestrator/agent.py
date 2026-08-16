@@ -18,6 +18,11 @@ from config import (
     PROTEINMPNN_MODEL_NAME,
     PROTEINMPNN_SEED,
     PROTEINMPNN_NUM_DECODING_ORDERS,
+    MUTATION_SEARCH_ENABLED,
+    MUTATION_SEARCH_ROUNDS,
+    MUTATION_SEARCH_CANDIDATES_PER_ROUND,
+    MUTATION_SEARCH_MAX_SITES,
+    MUTATION_SEARCH_MAX_REFOLDS,
 )
 from models.schemas import StructurePrediction, PostProcessingResult
 from orchestrator.backends.boltz import call_boltz
@@ -25,6 +30,7 @@ from orchestrator.backends.esmfold import call_esmfold_api
 from orchestrator.simulation import run_rosetta_relax, run_openmm_simulation, run_gromacs_md
 from orchestrator.scoring import count_clashes, compute_post_processing
 from orchestrator.mutation_scan import score_candidate_mutations
+from orchestrator.mutation_search import score_only_oracle, search_and_validate
 
 logger = logging.getLogger(__name__)
 
@@ -164,6 +170,71 @@ _AGENT_TOOLS = [
         },
     },
     {
+        "name": "search_mutations",
+        "description": (
+            "Search for beneficial MULTI-SITE mutation combinations on the current structure "
+            "(hand-rolled AdaLead over the ProteinMPNN score_only oracle), which scan_mutations "
+            "cannot do — scan_mutations ranks single substitutions independently and so misses "
+            "epistatic pairs whose halves are only good together. EXPENSIVE: one ProteinMPNN "
+            "subprocess per round (default from MUTATION_SEARCH_ROUNDS), and if validate=true an "
+            "additional re-fold per top candidate (minutes each) — use once, deliberately, not "
+            "as a scan. Read-only: returns a ranked shortlist of multi-site candidates to feed "
+            "into apply_mutation; it does NOT change the sequence or structure itself. Ranking "
+            "is by ProteinMPNN structural compatibility (validate=false) or, with validate=true, "
+            "by re-folded structure quality (pLDDT minus clash penalty). Affinity, when present, "
+            "is reported as METADATA only, not used to rank. Structural compatibility is NOT a "
+            "proxy for function/stability/fitness. Requires MUTATION_SEARCH_ENABLED and "
+            "PROTEINMPNN_PATH; otherwise reports it is unavailable."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "rounds": {
+                    "type": "integer",
+                    "description": (
+                        "AdaLead search rounds. Defaults to and is capped at "
+                        "MUTATION_SEARCH_ROUNDS (larger requests are clamped to the configured "
+                        "budget)."
+                    ),
+                },
+                "candidates_per_round": {
+                    "type": "integer",
+                    "description": (
+                        "Candidates proposed/evaluated per round. Defaults to and capped at "
+                        "MUTATION_SEARCH_CANDIDATES_PER_ROUND."
+                    ),
+                },
+                "max_sites": {
+                    "type": "integer",
+                    "description": (
+                        "Max simultaneous mutations per candidate. Defaults to and capped at "
+                        "MUTATION_SEARCH_MAX_SITES."
+                    ),
+                },
+                "validate": {
+                    "type": "boolean",
+                    "description": (
+                        "If true, re-fold the top candidates through the real backend and rank "
+                        "by predicted structure quality instead of the cheap oracle. Adds "
+                        "re-folds (minutes each). Default false."
+                    ),
+                },
+                "max_refolds": {
+                    "type": "integer",
+                    "description": (
+                        "Re-fold budget when validate=true. Defaults to and capped at "
+                        "MUTATION_SEARCH_MAX_REFOLDS."
+                    ),
+                },
+                "top_k": {
+                    "type": "integer",
+                    "description": "Max candidates to return, best-first (default 10).",
+                },
+            },
+            "required": [],
+        },
+    },
+    {
         "name": "accept_structure",
         "description": "Accept the current structure. Final decision — call when quality is sufficient.",
         "input_schema": {
@@ -211,18 +282,22 @@ Guidelines:
 - Membrane or ligand context present -> run simulation before accepting
 - If a required backend is disabled -> escalate and explain
 
-Two mutation tools work together:
-- scan_mutations ranks candidate substitutions by ProteinMPNN structural log-odds
-  (positive = more structurally compatible than the wild-type residue). It is a
-  read-only shortlist, NOT a proxy for function, stability, or fitness. Requires
-  PROTEINMPNN_PATH; if unavailable the tool says so — fall back to analyze_structure
-  and context.mutations.
+Three mutation tools work together (all structural-compatibility signals, NOT proxies for
+function, stability, or fitness):
+- scan_mutations ranks SINGLE substitutions by ProteinMPNN structural log-odds
+  (positive = more structurally compatible than the wild-type residue). Read-only
+  shortlist. Requires PROTEINMPNN_PATH; if unavailable the tool says so — fall back to
+  analyze_structure and context.mutations.
+- search_mutations searches for MULTI-SITE combinations (epistatic pairs that
+  scan_mutations, being single-site, cannot find). Read-only shortlist too, but EXPENSIVE
+  (a subprocess per round; more with validate=true) — use once, deliberately. Requires
+  MUTATION_SEARCH_ENABLED + PROTEINMPNN_PATH.
 - apply_mutation mutates the sequence at a position and re-predicts. Limited to
   AGENT_MAX_MUTATIONS calls per session — use them deliberately.
-Typical flow: scan_mutations to shortlist substitutions in a low-confidence region,
-then apply_mutation on the most promising candidate to confirm it improves the
-structure. Only mutate when context.mutations requests it or analysis plus a scan give
-a concrete reason — never mutate speculatively without stating why in your reasoning.
+Typical flow: scan_mutations (or search_mutations for combinations) to shortlist in a
+low-confidence region, then apply_mutation on the most promising candidate to confirm it
+improves the structure. Only mutate when context.mutations requests it or analysis plus a
+scan give a concrete reason — never mutate speculatively without stating why.
 
 Be concise. Make a terminal decision as soon as you have enough information."""
 
@@ -388,6 +463,78 @@ def _execute_agent_tool(
                 "wild-type. Not a function/stability/fitness proxy."
             ),
             "candidates": candidates,
+        })
+
+    if tool_name == "search_mutations":
+        if not MUTATION_SEARCH_ENABLED:
+            return json.dumps({
+                "error": "combinatorial mutation search disabled (MUTATION_SEARCH_ENABLED=False)"
+            })
+        if not PROTEINMPNN_PATH:
+            return json.dumps({
+                "error": "PROTEINMPNN_PATH not configured — mutation search oracle unavailable"
+            })
+
+        # Config values are CEILINGS: the agent may request less but not exceed the operator's
+        # configured budget (guards against runaway subprocesses / re-folds).
+        def _clamped(key: str, ceiling: int, minimum: int = 1) -> int:
+            try:
+                val = int(tool_input.get(key, ceiling))
+            except (TypeError, ValueError):
+                val = ceiling
+            return max(minimum, min(val, ceiling))
+
+        rounds = _clamped("rounds", MUTATION_SEARCH_ROUNDS)
+        candidates_per_round = _clamped("candidates_per_round", MUTATION_SEARCH_CANDIDATES_PER_ROUND)
+        max_sites = _clamped("max_sites", MUTATION_SEARCH_MAX_SITES)
+        try:
+            top_k = int(tool_input.get("top_k", 10))
+        except (TypeError, ValueError):
+            top_k = 10
+        top_k = max(1, top_k)
+        validate = bool(tool_input.get("validate", False))
+        max_refolds = _clamped("max_refolds", MUTATION_SEARCH_MAX_REFOLDS, minimum=0) if validate else 0
+
+        # Cheap tier-2 oracle bound to the CURRENT structure. Two distinct seeds: AdaLead's
+        # RNG seed (0, search reproducibility) is separate from PROTEINMPNN_SEED (must be
+        # non-zero — used for the oracle's decoding order inside score_only_oracle).
+        def oracle(sequences):
+            return score_only_oracle(
+                state["current_pdb"], sequences,
+                proteinmpnn_dir=PROTEINMPNN_PATH,
+                model_name=PROTEINMPNN_MODEL_NAME,
+                seed=PROTEINMPNN_SEED,
+                num_decoding_orders=PROTEINMPNN_NUM_DECODING_ORDERS,
+            )
+
+        try:
+            result = search_and_validate(
+                state["sequence"], oracle,
+                rounds=rounds, candidates_per_round=candidates_per_round,
+                max_sites=max_sites, seed=0, oracle_name="score_only", top_k=top_k,
+                max_refolds=max_refolds, context=state["context"],
+                # refold_fn defaults to _default_refold_fn (Boltz/ESMFold by flag)
+            )
+        except Exception as e:
+            return json.dumps({"error": f"mutation search failed: {e}"})
+
+        # Read-only: the search proposes a shortlist; the agent adopts a candidate via
+        # apply_mutation. State (sequence/current_pdb) is intentionally NOT modified here.
+        # FUTURE (auto-adopt): a mode that writes the best re-folded candidate straight into
+        # state when it beats the current structure's refold_score would save the double-fold
+        # (search re-folds the winner, apply_mutation re-folds it again). Deferred: it needs a
+        # fair current-vs-candidate comparison on the same metric, must count against
+        # AGENT_MAX_MUTATIONS, and should wait until the re-fold ranking is proven trustworthy
+        # (see research_plan/rowA-boltz-affinity-invariance.md).
+        return json.dumps({
+            "status": "completed",
+            "note": (
+                "multi-site combinatorial search; ranking is ProteinMPNN structural "
+                "compatibility (or re-folded structure quality when validate=true). NOT a "
+                "function/stability/fitness proxy; affinity fields are metadata, not ranked. "
+                "Read-only — feed a candidate into apply_mutation to adopt it."
+            ),
+            **result.model_dump(),
         })
 
     if tool_name == "apply_mutation":
