@@ -50,6 +50,7 @@ input.pka
 *.edr
 *.gro
 *.tpr
+*.pdb
 
 # Benchmark outputs: keep the human-readable BENCHMARKS.md and results.jsonl
 # log, but not the bulky raw dumps.
@@ -74,4 +75,3 @@ wandb/
 CLAUDE.local.md
 .claude/settings.local.json
 
-mutation-plans/
