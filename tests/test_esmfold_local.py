@@ -2,8 +2,9 @@
 Tests for local ESMFold inference (Phase 1).
 
 Fast tests mock the model/tokenizer; the integration test at the bottom
-is skipped unless torch + transformers are installed AND a GPU/MPS is
-available (too slow for CI on CPU with the full facebook/esmfold_v1 weights).
+is skipped unless transformers imports AND the facebook/esmfold_v1 weights
+(~8 GB) are already in the local Hugging Face cache — it never triggers the
+download itself. Runs on CPU (slow) or GPU/MPS.
 """
 
 import sys
@@ -147,15 +148,33 @@ def test_dispatch_routes_to_remote_when_flag_false():
 # ---------------------------------------------------------------------------
 
 
+def _esmfold_weights_cached(model_name: str) -> bool:
+    """True if the model's weight file is already in the local HF cache (no network)."""
+    from huggingface_hub import try_to_load_from_cache
+
+    return any(
+        isinstance(try_to_load_from_cache(model_name, fname), str)
+        for fname in ("model.safetensors", "pytorch_model.bin")
+    )
+
+
 def test_call_esmfold_local_integration():
     """
     End-to-end test against the real facebook/esmfold_v1 weights.
-    Skipped unless transformers imports cleanly. First run downloads ~2 GB.
+
+    Skipped unless the weights (~8 GB) are already cached, so a fresh machine or
+    container never starts a multi-GB download mid-suite. To populate the cache:
+        python -c "from transformers import EsmForProteinFolding as M; M.from_pretrained('facebook/esmfold_v1')"
     """
     try:
         from transformers import EsmForProteinFolding  # noqa: F401
     except Exception:
         pytest.skip("transformers not importable (missing or incompatible huggingface_hub)")
+
+    from config import ESMFOLD_MODEL_NAME
+
+    if not _esmfold_weights_cached(ESMFOLD_MODEL_NAME):
+        pytest.skip(f"{ESMFOLD_MODEL_NAME} weights (~8 GB) not in the local HF cache")
 
     from orchestrator.backends.esmfold import call_esmfold_local
 

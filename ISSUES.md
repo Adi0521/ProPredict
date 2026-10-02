@@ -82,6 +82,16 @@ Two documented results artifacts were overwritten by lower-effort re-runs at def
       cached for Row B — verified single chain A, 53 residues. The harness works; the comment
       is wrong. Consider pointing `DEFAULT_PDB` at an actual HIV-PR chain instead, since that
       is the affinity-invariance system.
+- [ ] **I-22 — `run_gromacs_em` fails on any net-charged protein, and is dead code.**
+      `orchestrator/simulation.py:198`. It goes pdb2gmx → editconf → solvate → grompp with no
+      `genion` step, so the system is never neutralized. On GROMACS 2023.3 (current worker image)
+      and 2025.2 (previous image), `grompp` turns the net-charge Ewald warning into a fatal "Too many warnings (1)" — verified
+      on `myprotein.pdb` (+4 charge). It has **no callers**: the only reference was an unused
+      import in `orchestrator/tasks.py`, removed in the ruff pass (`Process/pyproject.md`).
+      `run_gromacs_md` is the live path and does run `genion`. Fix: delete it, **or** add the
+      `genion` step (copy from `run_gromacs_md`, `:~655`) if a standalone EM entry point is
+      wanted. Do not paper over it with `-maxwarn` — a non-neutral Ewald system gives
+      artifactual energies.
 
 ## P1 — Doc corrections (small)
 

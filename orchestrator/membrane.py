@@ -243,7 +243,7 @@ def embed_in_membrane_openmm(
     """
     try:
         from openmm import unit
-        from openmm.app import Modeller
+        from openmm.app import Modeller  # noqa: F401 — availability probe: fail early if OpenMM is broken
     except ImportError as err:
         raise RuntimeError("OpenMM is not installed. Install: conda install -c conda-forge openmm") from err
 

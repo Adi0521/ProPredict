@@ -90,7 +90,7 @@ def run_ablation(
     rows = []
     for synergy in synergies:
         landscape = make_landscape(synergy)
-        oracle = lambda seqs: [landscape(s) for s in seqs]  # noqa: E731
+        oracle = lambda seqs, landscape=landscape: [landscape(s) for s in seqs]  # noqa: E731
         naive_fit, _ = naive_stack(landscape, max_sites)
 
         best_fits, found, beat = [], 0, 0

@@ -234,7 +234,7 @@ def dock_vina(
         raise RuntimeError("vina is not installed. Install: pip install vina") from err
     try:
         from rdkit import Chem
-        from rdkit.Chem import AllChem
+        from rdkit.Chem import AllChem  # noqa: F401 — availability probe: fail early if RDKit is broken
     except ImportError as err:
         raise RuntimeError("RDKit is required for Vina docking SDF conversion.") from err
 

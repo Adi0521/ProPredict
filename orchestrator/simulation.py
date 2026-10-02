@@ -280,13 +280,7 @@ def run_gromacs_em(pdb_string: str, pH: float = 7.4) -> Dict[str, Any]:
         _gmx("mdrun", "-v", "-deffnm", "em")
 
         logger.info("GROMACS: extracting potential energy...")
-        energy_proc = subprocess.run(
-            [gmx, "energy", "-f", "em.edr", "-o", "energy.xvg"],
-            input="Potential\n",
-            text=True,
-            capture_output=True,
-            cwd=tmpdir,
-        )
+        _gmx("energy", "-f", "em.edr", "-o", "energy.xvg", stdin_input="Potential\n")
 
         potential_energy = _parse_gromacs_energy(os.path.join(tmpdir, "energy.xvg"))
         logger.info(f"GROMACS EM complete. Potential energy: {potential_energy:.3f} kJ/mol")
@@ -679,13 +673,7 @@ def run_gromacs_md(
         _gmx("grompp", "-f", "em.mdp", "-c", "neutralized.gro", "-p", "topol.top", "-o", "em.tpr")
         _gmx("mdrun", "-v", "-deffnm", "em", "-ntmpi", "1")
 
-        subprocess.run(
-            [gmx, "energy", "-f", "em.edr", "-o", "em_energy.xvg"],
-            input="Potential\n",
-            text=True,
-            capture_output=True,
-            cwd=tmpdir,
-        )
+        _gmx("energy", "-f", "em.edr", "-o", "em_energy.xvg", stdin_input="Potential\n")
         potential_energy = _parse_gromacs_energy(os.path.join(tmpdir, "em_energy.xvg"))
         logger.info(f"GROMACS MD: EM done. PE = {potential_energy:.1f} kJ/mol")
 

@@ -1,0 +1,36 @@
+# Applies to both Dockerfile.api and Dockerfile.celery (`COPY . .`).
+# Compose bind-mounts `.:/app` at runtime, so nothing here is needed inside the image.
+
+# ---- Secrets — never bake into an image ----
+.env
+.env.*
+!.env.example
+
+# ---- VCS / local tooling ----
+.git
+.github
+.claude
+CLAUDE.local.md
+.modal/
+
+# ---- Python / test / lint caches ----
+**/__pycache__
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+build/
+dist/
+
+# ---- Large or regenerable outputs ----
+wandb/
+benchmarks/proteingym_cache/
+scripts/API-Testing/ColabFold-Testing/results/
+*.a3m
+*.m8
+out.tar.gz
+*.xvg
+*.trr
+*.edr
+*.tpr

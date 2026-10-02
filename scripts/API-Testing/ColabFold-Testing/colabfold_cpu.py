@@ -47,7 +47,7 @@ def view_structure(pdb_file: str, width: int = 600, height: int = 400):
     view.zoomTo()
 
     try:
-        from IPython.display import display
+        from IPython.display import display  # noqa: F401 — availability probe for the notebook display path
 
         return view.show()
     except ImportError:

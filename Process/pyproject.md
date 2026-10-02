@@ -161,3 +161,93 @@ exercises its own mock).
 The B904 edits were applied by an AST script. Python's `ast` `col_offset` is a **UTF-8 byte**
 offset, not a character index, so on two lines containing an em-dash in api/main.py the
 `from err` landed at the start of the following line. Caught in review and fixed by hand.
+
+---
+
+# Follow-up: manual lint fixes — group B (fix vs. suppress)
+
+**Date:** 2026-10-02
+
+Originally planned as 10 suppressions. On review, most of the flagged code had a real fix, so
+only the genuine availability probes are suppressed. Rule of thumb applied: suppress only when the
+flagged code is correct *and* the linter's alternative would be worse.
+
+## Fixed (7)
+
+- **B008 ×5 — FastAPI `Depends()` in defaults (api/main.py).** Switched to FastAPI's recommended
+  `Annotated` style via a `SessionDep = Annotated[Session, Depends(get_db)]` alias, rather than
+  whitelisting `Depends` in ruff config. Verified by introspecting `app.routes`: all 5 endpoints
+  still declare `get_db` as a dependency. (test_api.py needs Postgres, so it wasn't run.)
+  Source: https://fastapi.tiangolo.com/tutorial/dependencies/ (Annotated, supported since 0.95).
+- **E402 ×1 — benchmark_pipeline_modal.py.** The late `from benchmark_modal import ...` was
+  assumed deliberate, but import position doesn't matter: locally it's a sibling module, and
+  remotely `add_local_file` bakes it into the image at build time. `benchmark_modal` itself
+  imports `modal_app`, so the module load order is unchanged. Moved to the top; the comment
+  above `add_local_file` now says "imported above".
+- **B023 ×1 — ablation lambda.** `oracle` captured the loop variable `landscape`. It was only
+  used within the same iteration (false positive today), but binding it as a default argument
+  (`landscape=landscape`) makes it correct even if the lambda is ever stored. Smoke-ran
+  `run_ablation` to confirm.
+
+## Suppressed (3) — `# noqa: F401` with a reason
+
+- `from rdkit.Chem import AllChem` (ligands.py, Vina path) and `from openmm.app import Modeller`
+  (membrane.py): these imports are the dependency check. Ruff's suggested
+  `importlib.util.find_spec` only checks the package exists on disk and misses broken installs
+  (e.g. a conda OpenMM with a missing native lib), which is exactly what should fail early. Same
+  pattern as the existing `noqa` probes in backends/stubs.py.
+- `from IPython.display import display` (scripts/API-Testing/ColabFold-Testing/colabfold_cpu.py):
+  prototype script; deleting the import was an option, but kept and suppressed per user's call.
+
+## Verification
+
+- `ruff check .` → 3 remaining, all group C (F841 ×3, deferred).
+- test_ligands, test_membrane, test_mutation_search, test_boltz, test_orchestrator →
+  155 passed, 2 skipped.
+- **Update:** test_api.py run against Docker Postgres + Redis (`docker compose up -d postgres redis`)
+  → 5/5 passed, confirming the `SessionDep` / `Annotated` change end-to-end. Redis is required
+  too: `/predict` enqueues a Celery task (no worker needed), and without a broker it returns 500.
+
+---
+
+# Follow-up: group C1 — check `gmx energy`'s exit status
+
+**Date:** 2026-10-02
+
+## Problem
+
+Every GROMACS step in `orchestrator/simulation.py` runs through the local `_gmx()` helper
+(`check=True`) — except `gmx energy`, which called `subprocess.run` directly and ignored the
+result. Ruff flagged the one in `run_gromacs_em` (F841, `energy_proc` unused); the identical call
+in `run_gromacs_md` wasn't flagged only because it wasn't assigned. On failure the real error was
+hidden and surfaced one line later as a `FileNotFoundError` on the `.xvg`.
+
+## Risk check before changing (real binary)
+
+Switching to `check=True` would break runs that currently succeed if `gmx energy` returned
+non-zero on success. Tested against real GROMACS 2025.2 in a throwaway container from the
+`propredict-celery_worker` image (`docker run --rm`, repo mounted read-only), wrapping
+`subprocess.run` to record exit codes:
+
+| Case | `gmx energy` rc | `.xvg` written |
+|---|---|---|
+| Successful EM, `myprotein.pdb` (467 frames, PE −377,809.72 kJ/mol) | 0 | yes |
+| Missing `em.edr` | 1 | no |
+| Corrupt `em.edr` | 1 | no |
+
+Risk not real; the exit code is a reliable success signal. (GROMACS isn't installed on the host —
+`CLAUDE.local.md`'s `/opt/homebrew/bin/gmx` is stale.)
+
+## Change
+
+Both sites → `_gmx("energy", "-f", "em.edr", "-o", "<file>.xvg", stdin_input="Potential\n")`.
+Failures now raise `CalledProcessError` naming `gmx energy`, like every other step.
+Re-ran the probe on the modified code: `energy` now runs with `check=True`, rc 0, identical PE.
+Mocked suites (boltz, orchestrator, membrane, ligands): 114 passed, 2 skipped.
+
+## Found along the way → ISSUES.md I-22
+
+To reach `gmx energy`, the probe had to inject `grompp -maxwarn 1` (probe only, no repo change):
+`run_gromacs_em` never runs `genion`, so on any net-charged protein GROMACS 2025's `grompp`
+aborts on the Ewald net-charge warning. It also has no callers. Logged rather than fixed here.
+Also noted: the worker image is ~6 months old (Python 3.10 vs `Dockerfile.celery`'s 3.11).

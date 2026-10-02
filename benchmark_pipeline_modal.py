@@ -40,15 +40,6 @@ import time
 
 import numpy as np
 
-from modal_app import app, image
-
-# Modal auto-mounts the entrypoint module (this file) into the container, but NOT sibling
-# local modules. `benchmark_modal` is imported below (and again inside the GPU function via
-# `score_structures`), so it must be present at /root remotely. Extend the image *here only*
-# — rebinding the module-level `image` name leaves modal_app's own functions on the base
-# image, so their build hash and reproducibility are unaffected.
-image = image.add_local_file("benchmark_modal.py", remote_path="/root/benchmark_modal.py")
-
 # Reuse the existing harness — target fetching and scoring are identical to the
 # single-backend benchmark, so they must not be reimplemented here.
 from benchmark_modal import (
@@ -56,6 +47,15 @@ from benchmark_modal import (
     fetch_rcsb_quality_targets,
     score_structures,
 )
+from modal_app import app, image
+
+# Modal auto-mounts the entrypoint module (this file) into the container, but NOT sibling
+# local modules. `benchmark_modal` is imported above (and again inside the GPU function via
+# `score_structures`), so it must be present at /root remotely. Extend the image *here only*
+# — rebinding the module-level `image` name leaves modal_app's own functions on the base
+# image, so their build hash and reproducibility are unaffected.
+image = image.add_local_file("benchmark_modal.py", remote_path="/root/benchmark_modal.py")
+
 
 # ---------------------------------------------------------------------------
 # Sequence extraction — same 3-to-1 logic benchmark_one uses, factored out

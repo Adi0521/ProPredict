@@ -14,11 +14,19 @@ uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 # Celery worker standalone
 celery -A orchestrator.tasks worker --loglevel=info
 
+# Install (editable) — deps live in pyproject.toml; see extras for ml/modal/gpu/dev
+pip install -e ".[all]"
+
+# Lint / format (config in pyproject.toml [tool.ruff])
+ruff check .            # add --fix for safe auto-fixes
+ruff format .
+
 # Tests — unit tests are fully mocked, no services needed
 pytest tests/test_boltz.py                        # Boltz-2 (mocked, no GPU)
 pytest tests/test_boltz.py -k "not integration"  # skip GPU tests
-pytest tests/test_api.py                          # needs Postgres (init_db on import)
-pytest tests/test_esmfold_local.py                # ESMFold local tests
+docker compose up -d postgres redis              # services test_api.py needs
+pytest tests/test_api.py                          # Postgres + Redis (/predict enqueues to Celery)
+pytest tests/test_esmfold_local.py                # integration test skips unless weights cached
 
 # Modal (GPU cloud)
 modal run modal_app.py::run_prediction      # single prediction
@@ -54,20 +62,22 @@ See @ROADMAP.md for completed stages and remaining work.
 - **PDB files are strings** stored in task results and Postgres `result_json`, never on disk.
 - **pLDDT is always 0-100** — ESMFold B-factor is 0-1, multiply by 100 on parse.
 - **Boltz-2 runs via CLI subprocess** (`boltz predict` with YAML input), not Python API.
-- **ESMFold model lazy-loads** once per worker (~2GB download first run). Don't import at module level.
+- **ESMFold model lazy-loads** once per worker (~8 GB `facebook/esmfold_v1` download on first run, into the HF cache). Don't import at module level.
 - Docker images use `mambaorg/micromamba` base for ARM64 conda compat. Currently optimized for Apple M3.
+- **Dependencies are declared twice** — `pyproject.toml` and `requirements*.txt` (Docker + Modal still install from the latter). Change both together; Boltz's exact-commit pin must match in `pyproject.toml`, `requirements-gpu.txt`, and `modal_app.py`.
 
 ## Anti-Patterns (things that have caused bugs)
 
 - NEVER commit `.env` or API keys. The `.env.example` has `ANTHROPIC_API_KEY=<your-...>` as a placeholder.
+- Don't remove `.env` from `.dockerignore` — both Dockerfiles `COPY . .`, which would bake the API key into the image. Compose bind-mounts `.:/app`, so the image never needs it.
 - Don't add new config by hardcoding values — always go through `config.py` with `os.getenv()` + add to `.env.example`.
 - Don't call `import pyrosetta` / `import openmm` at module top level — they're optional deps. Guard with try/except or the feature flag.
-- `test_api.py` calls `init_db()` on import. If you add new test files that import `api.main`, they'll fail without Postgres unless you mock `init_db`.
+- `test_api.py` calls `init_db()` in a session-scoped autouse fixture and **deletes every row in `jobs`** — never point it at a database with data you care about. New test files that trigger `init_db` (the fixture, or `with TestClient(app)` lifespan) need Postgres unless you mock `models.database.init_db`.
 - The webhook SSRF validator in `schemas.py` resolves DNS — don't remove it or weaken it.
 
 ## Testing
 
-When modifying orchestrator code, always run `pytest tests/test_boltz.py` to verify nothing broke — it's the fastest feedback loop (fully mocked). For API changes, `test_api.py` needs Postgres or mocking `models.database.init_db`.
+When modifying orchestrator code, always run `pytest tests/test_boltz.py` to verify nothing broke — it's the fastest feedback loop (fully mocked). For API changes, `test_api.py` needs Postgres + Redis (`docker compose up -d postgres redis`) or mocking `models.database.init_db`. Run `ruff check .` and `ruff format --check .` before committing.
 
 ## Workflow Rules
 
