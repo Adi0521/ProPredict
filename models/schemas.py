@@ -9,18 +9,21 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 class IonContext(BaseModel):
     """Ion concentration context."""
+
     name: str
     concentration_mm: float
 
 
 class MembraneContext(BaseModel):
     """Membrane context for transmembrane proteins."""
+
     type: Optional[str] = None  # e.g., "POPC", "DMPC"
     span: Optional[List[int]] = None  # [start_residue, end_residue]
 
 
 class LigandContext(BaseModel):
     """Ligand binding context."""
+
     name: str
     smiles: Optional[str] = None
     binding_site: Optional[List[int]] = None
@@ -28,6 +31,7 @@ class LigandContext(BaseModel):
 
 class Context(BaseModel):
     """Environmental and experimental context."""
+
     pH: float = Field(default=7.4, ge=0.0, le=14.0)
     temperature_c: float = Field(default=25.0, ge=-273.15)
     ions: Optional[Dict[str, float]] = None  # e.g., {"Na+": 150, "Cl-": 150}
@@ -41,20 +45,23 @@ class Context(BaseModel):
     # IDs); the combined protein+ligand chain count is checked in the Boltz backend.
     protein_copies: int = Field(default=1, ge=1, le=26)
 
-    model_config = ConfigDict(json_schema_extra={
-        "example": {
-            "pH": 7.4,
-            "temperature_c": 25,
-            "ions": {"Na+": 150, "Cl-": 150},
-            "membrane": {"type": "POPC", "span": [20, 45]},
-            "ligands": [{"name": "ATP", "binding_site": [45, 46]}],
-            "mutations": [{"pos": 12, "from": "A", "to": "V"}]
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "pH": 7.4,
+                "temperature_c": 25,
+                "ions": {"Na+": 150, "Cl-": 150},
+                "membrane": {"type": "POPC", "span": [20, 45]},
+                "ligands": [{"name": "ATP", "binding_site": [45, 46]}],
+                "mutations": [{"pos": 12, "from": "A", "to": "V"}],
+            }
         }
-    })
+    )
 
 
 class PredictionRequest(BaseModel):
     """Request schema for protein structure prediction."""
+
     sequence: str = Field(..., min_length=1, max_length=2000)
     context: Context = Field(default_factory=Context)
     priority: str = Field(default="fast", pattern="^(fast|accurate|constraint_driven)$")
@@ -91,24 +98,23 @@ class PredictionRequest(BaseModel):
             raise ValueError("Invalid amino acid codes in sequence")
         return v.upper()
 
-    model_config = ConfigDict(json_schema_extra={
-        "example": {
-            "sequence": "MKTAYIAKQRQISFVKSHFSRQDILDLWQYVQG",
-            "context": {
-                "pH": 7.4,
-                "temperature_c": 25,
-                "ions": {"Na+": 150, "Cl-": 150}
-            },
-            "priority": "fast",
-            "job_timeout_seconds": 600,
-            "run_id": "run-123",
-            "webhook_url": "https://example.com/callback"
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "sequence": "MKTAYIAKQRQISFVKSHFSRQDILDLWQYVQG",
+                "context": {"pH": 7.4, "temperature_c": 25, "ions": {"Na+": 150, "Cl-": 150}},
+                "priority": "fast",
+                "job_timeout_seconds": 600,
+                "run_id": "run-123",
+                "webhook_url": "https://example.com/callback",
+            }
         }
-    })
+    )
 
 
 class StructurePrediction(BaseModel):
     """Structure prediction result (from ESMFold, Boltz-2, or similar)."""
+
     model_config = ConfigDict(protected_namespaces=())
 
     structure_pdb: str
@@ -134,48 +140,52 @@ class StructurePrediction(BaseModel):
 
 class PostProcessingResult(BaseModel):
     """Post-processing and scoring result."""
+
     num_clashes: int
     rosetta_energy: Optional[float] = None
     gromacs_potential_energy: Optional[float] = None
     simulation_metrics: Optional[Dict[str, Any]] = None  # RMSD, Rg, n_frames, pH, backend, etc.
-    agent_reasoning: Optional[str] = None               # Claude agent explanation (Stage D)
-    mutations_applied: Optional[List[str]] = None       # e.g. ["A12V", "G45S"] — mutations applied by the agent (Task 3)
-    validation_reason: Optional[str] = None             # why simulation validation escalated; None if it passed/didn't run
+    agent_reasoning: Optional[str] = None  # Claude agent explanation (Stage D)
+    mutations_applied: Optional[List[str]] = None  # e.g. ["A12V", "G45S"] — mutations applied by the agent (Task 3)
+    validation_reason: Optional[str] = None  # why simulation validation escalated; None if it passed/didn't run
     score: float
     decision: str  # "accept", "refine", "escalate"
 
 
 class MutationCandidate(BaseModel):
     """One multi-site mutant proposed by the combinatorial mutation search."""
-    mutations: List[str]   # e.g. ["A12V", "G45S"] — <wt><1-indexed pos><mut>, one per mutated site
-    sequence: str          # full mutant sequence
-    score: float           # cheap-oracle fitness (higher = better); preserved even after re-folding
-    oracle: str            # which oracle produced `score`: "additive" | "score_only"
+
+    mutations: List[str]  # e.g. ["A12V", "G45S"] — <wt><1-indexed pos><mut>, one per mutated site
+    sequence: str  # full mutant sequence
+    score: float  # cheap-oracle fitness (higher = better); preserved even after re-folding
+    oracle: str  # which oracle produced `score`: "additive" | "score_only"
     # Tier-3 re-fold validation metrics — None unless this candidate was re-folded through the
     # real prediction path (see orchestrator/mutation_search.refold_validate).
-    refold_plddt: Optional[float] = None          # mean pLDDT 0-100 of the re-folded mutant (higher = better)
-    refold_num_clashes: Optional[int] = None      # CA-CA steric clashes (lower = better)
-    refold_score: Optional[float] = None          # structural quality = plddt - 5*clashes; the re-fold RANKING key
+    refold_plddt: Optional[float] = None  # mean pLDDT 0-100 of the re-folded mutant (higher = better)
+    refold_num_clashes: Optional[int] = None  # CA-CA steric clashes (lower = better)
+    refold_score: Optional[float] = None  # structural quality = plddt - 5*clashes; the re-fold RANKING key
     # Boltz-2 affinity is recorded as METADATA only, NOT used to rank: whether the affinity
     # head even responds to point mutations is an open question (research_plan/
     # rowA-boltz-affinity-invariance.md). Populated only for a Boltz re-fold with a ligand.
-    refold_affinity: Optional[float] = None            # affinity_pred_value: log10(IC50 uM), lower = tighter
+    refold_affinity: Optional[float] = None  # affinity_pred_value: log10(IC50 uM), lower = tighter
     refold_affinity_probability: Optional[float] = None  # affinity_probability_binary: binder-vs-decoy prob
 
 
 class MutationSearchResult(BaseModel):
     """Ranked output of a combinatorial / multi-site mutation search (AdaLead over a
     ProteinMPNN oracle)."""
+
     wild_type_sequence: str
     candidates: List[MutationCandidate]  # ranked best-first
-    oracle: str                          # primary oracle used for the search loop
-    rounds: int                          # AdaLead rounds run
-    total_evaluated: int                 # distinct candidates scored across all rounds
-    refolds_used: int = 0                # tier-3 re-fold validations spent (0 until the re-fold funnel is wired)
+    oracle: str  # primary oracle used for the search loop
+    rounds: int  # AdaLead rounds run
+    total_evaluated: int  # distinct candidates scored across all rounds
+    refolds_used: int = 0  # tier-3 re-fold validations spent (0 until the re-fold funnel is wired)
 
 
 class PredictionResponse(BaseModel):
     """Response schema for prediction."""
+
     run_id: str
     sequence: str
     status: str  # "pending", "completed", "failed"
@@ -195,30 +205,29 @@ class PredictionResponse(BaseModel):
     refinement_iterations: Optional[int] = None
     total_seeds_tried: Optional[int] = None
 
-    model_config = ConfigDict(json_schema_extra={
-        "example": {
-            "run_id": "run-123",
-            "sequence": "MKTAYIAKQRQISFVKSHFSRQDILDLWQYVQG",
-            "status": "completed",
-            "ensemble_result": {
-                "structure_pdb": "ATOM  1  N   ALA A   1...",
-                "plddt_scores": [75.2, 76.1, 74.9],
-                "mean_plddt": 75.4,
-                "seed": 0
-            },
-            "post_processing": {
-                "num_clashes": 0,
-                "score": 85.2,
-                "decision": "accept"
-            },
-            "created_at": "2025-11-27T10:00:00Z",
-            "completed_at": "2025-11-27T10:05:00Z"
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "run_id": "run-123",
+                "sequence": "MKTAYIAKQRQISFVKSHFSRQDILDLWQYVQG",
+                "status": "completed",
+                "ensemble_result": {
+                    "structure_pdb": "ATOM  1  N   ALA A   1...",
+                    "plddt_scores": [75.2, 76.1, 74.9],
+                    "mean_plddt": 75.4,
+                    "seed": 0,
+                },
+                "post_processing": {"num_clashes": 0, "score": 85.2, "decision": "accept"},
+                "created_at": "2025-11-27T10:00:00Z",
+                "completed_at": "2025-11-27T10:05:00Z",
+            }
         }
-    })
+    )
 
 
 class JobStatus(BaseModel):
     """Job status for polling."""
+
     run_id: str
     status: str
     progress_percent: int

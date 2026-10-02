@@ -25,6 +25,7 @@ def _get_esmfold_local():
     if _esmfold_model is None:
         import torch
         from transformers import AutoTokenizer, EsmForProteinFolding  # type: ignore
+
         logger.info(f"Loading ESMFold model: {ESMFOLD_MODEL_NAME}")
         _esmfold_tokenizer = AutoTokenizer.from_pretrained(ESMFOLD_MODEL_NAME)
         _esmfold_model = EsmForProteinFolding.from_pretrained(ESMFOLD_MODEL_NAME)
@@ -95,7 +96,7 @@ def _call_esmfold_remote(sequence: str, seed: int = 0) -> StructurePrediction:
         except requests.exceptions.RequestException as e:
             logger.warning(f"ESMFold API call failed (attempt {attempt + 1}): {e}")
             if attempt < ESMFOLD_RETRIES - 1:
-                time.sleep(2 ** attempt)
+                time.sleep(2**attempt)
             else:
                 logger.error(f"ESMFold API failed after {ESMFOLD_RETRIES} attempts")
                 raise
@@ -110,6 +111,7 @@ def call_esmfold_local(sequence: str, seed: int = 0) -> StructurePrediction:
     identical structures. This is a known limitation of ESMFold, not a ProPredict bug.
     """
     import torch
+
     model, tokenizer = _get_esmfold_local()
 
     logger.info(f"ESMFold local inference on sequence of length {len(sequence)}")

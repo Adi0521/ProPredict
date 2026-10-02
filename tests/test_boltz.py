@@ -4,6 +4,7 @@ Tests for Boltz-2 integration (Phase 2).
 Unit tests mock the filesystem and subprocess; the integration test at the
 bottom requires Boltz-2 installed and a GPU (run on Modal or a local GPU machine).
 """
+
 import json
 import os
 from unittest.mock import MagicMock, patch
@@ -75,13 +76,14 @@ END
 # Unit: YAML input generation
 # ---------------------------------------------------------------------------
 
+
 # Test the REAL builder, not a copy. A previous version of this file reimplemented the
 # YAML-building logic here; that duplication is precisely how the affinity-key bug survived
 # (the test agreed with a copy, not with call_boltz). Import the actual function.
 def _build_boltz_yaml(sequence, context=None, protein_copies=1):
     from orchestrator.backends.boltz import _build_boltz_input
-    return _build_boltz_input(sequence, context=context, protein_copies=protein_copies,
-                              use_msa=False)
+
+    return _build_boltz_input(sequence, context=context, protein_copies=protein_copies, use_msa=False)
 
 
 def test_yaml_protein_only():
@@ -125,6 +127,7 @@ def test_yaml_multiple_ligands():
 # Unit: homo-oligomer (protein_copies) — the HIV-PR / homodimer fix
 # ---------------------------------------------------------------------------
 
+
 def test_yaml_homodimer_uses_id_list():
     doc, binder = _build_boltz_yaml(SAMPLE_SEQUENCE, protein_copies=2)
     assert len(doc["sequences"]) == 1
@@ -139,7 +142,7 @@ def test_yaml_homodimer_with_ligand_shifts_ligand_chain():
     ctx = {"ligands": [{"name": "inhibitor", "smiles": "CC(C)CN"}]}
     doc, binder = _build_boltz_yaml(SAMPLE_SEQUENCE, ctx, protein_copies=2)
     assert doc["sequences"][0]["protein"]["id"] == ["A", "B"]
-    assert doc["sequences"][1]["ligand"]["id"] == "C"        # NOT "B"
+    assert doc["sequences"][1]["ligand"]["id"] == "C"  # NOT "B"
     assert binder == "C"
     assert doc["properties"] == [{"affinity": {"binder": "C"}}]
 
@@ -153,13 +156,15 @@ def test_yaml_trimer_chain_ids():
 
 def test_build_boltz_input_rejects_zero_copies():
     from orchestrator.backends.boltz import _build_boltz_input
+
     with pytest.raises(ValueError, match="protein_copies must be >= 1"):
         _build_boltz_input(SAMPLE_SEQUENCE, protein_copies=0)
 
 
 def test_build_boltz_input_rejects_too_many_chains():
     from orchestrator.backends.boltz import _build_boltz_input
-    ctx = {"ligands": [{"name": "x", "smiles": "CCO"}]}   # 26 proteins + 1 ligand = 27
+
+    ctx = {"ligands": [{"name": "x", "smiles": "CCO"}]}  # 26 proteins + 1 ligand = 27
     with pytest.raises(ValueError, match="too many chains"):
         _build_boltz_input(SAMPLE_SEQUENCE, context=ctx, protein_copies=26)
 
@@ -175,14 +180,19 @@ def test_call_boltz_reads_protein_copies_from_context(tmp_path):
         # capture the YAML that was written
         yaml_path = cmd[2]
         import yaml
+
         with open(yaml_path) as fh:
             captured["doc"] = yaml.safe_load(fh)
         _make_fake_results_dir(cmd[out_idx], SAMPLE_CONFIDENCE)
         return _mock_subprocess_success()
 
-    with patch("orchestrator.backends.boltz.subprocess.run", side_effect=fake_run), \
-         patch("orchestrator.backends.boltz.get_boltz_build_info",
-               return_value={"version": "2.2.1", "commit": None, "label": "2.2.1"}):
+    with (
+        patch("orchestrator.backends.boltz.subprocess.run", side_effect=fake_run),
+        patch(
+            "orchestrator.backends.boltz.get_boltz_build_info",
+            return_value={"version": "2.2.1", "commit": None, "label": "2.2.1"},
+        ),
+    ):
         boltz_mod.call_boltz(SAMPLE_SEQUENCE, context={"protein_copies": 2}, seed=0)
 
     assert captured["doc"]["sequences"][0]["protein"]["id"] == ["A", "B"]
@@ -196,17 +206,21 @@ def test_call_boltz_kwarg_overrides_context(tmp_path):
     def fake_run(cmd, **kwargs):
         out_idx = cmd.index("--out_dir") + 1
         import yaml
+
         with open(cmd[2]) as fh:
             captured["doc"] = yaml.safe_load(fh)
         _make_fake_results_dir(cmd[out_idx], SAMPLE_CONFIDENCE)
         return _mock_subprocess_success()
 
-    with patch("orchestrator.backends.boltz.subprocess.run", side_effect=fake_run), \
-         patch("orchestrator.backends.boltz.get_boltz_build_info",
-               return_value={"version": "2.2.1", "commit": None, "label": "2.2.1"}):
+    with (
+        patch("orchestrator.backends.boltz.subprocess.run", side_effect=fake_run),
+        patch(
+            "orchestrator.backends.boltz.get_boltz_build_info",
+            return_value={"version": "2.2.1", "commit": None, "label": "2.2.1"},
+        ),
+    ):
         # context says 3, explicit kwarg says 1 -> kwarg wins -> scalar "A"
-        boltz_mod.call_boltz(SAMPLE_SEQUENCE, context={"protein_copies": 3},
-                             seed=0, protein_copies=1)
+        boltz_mod.call_boltz(SAMPLE_SEQUENCE, context={"protein_copies": 3}, seed=0, protein_copies=1)
 
     assert captured["doc"]["sequences"][0]["protein"]["id"] == "A"
 
@@ -214,6 +228,7 @@ def test_call_boltz_kwarg_overrides_context(tmp_path):
 # ---------------------------------------------------------------------------
 # Unit: SMILES validation
 # ---------------------------------------------------------------------------
+
 
 def test_call_boltz_raises_on_missing_smiles():
     from orchestrator.backends.boltz import call_boltz
@@ -235,11 +250,13 @@ def test_call_boltz_raises_on_empty_smiles():
 # Unit: _cif_to_pdb
 # ---------------------------------------------------------------------------
 
+
 def test_cif_to_pdb_produces_atom_records(tmp_path):
     cif_file = tmp_path / "test.cif"
     cif_file.write_text(SAMPLE_CIF)
 
     from orchestrator.backends.boltz import _cif_to_pdb
+
     pdb_string = _cif_to_pdb(str(cif_file))
 
     assert "ATOM" in pdb_string
@@ -248,6 +265,7 @@ def test_cif_to_pdb_produces_atom_records(tmp_path):
 # ---------------------------------------------------------------------------
 # Unit: call_boltz — mock subprocess + filesystem
 # ---------------------------------------------------------------------------
+
 
 def _make_fake_results_dir(base_dir, plddt_data, affinity_data=None):
     """Write the output files Boltz-2 would produce under base_dir."""
@@ -336,8 +354,7 @@ class TestBoltzBuildInfo:
 
         stack = ExitStack()
         if version is None:
-            stack.enter_context(patch("importlib.metadata.version",
-                                      side_effect=Exception("PackageNotFoundError")))
+            stack.enter_context(patch("importlib.metadata.version", side_effect=Exception("PackageNotFoundError")))
         else:
             stack.enter_context(patch("importlib.metadata.version", return_value=version))
         dist = MagicMock()
@@ -348,10 +365,12 @@ class TestBoltzBuildInfo:
     def test_reports_version_and_commit_from_vcs_install(self):
         from orchestrator.backends.boltz import get_boltz_build_info
 
-        direct_url = json.dumps({
-            "url": "https://github.com/jwohlwend/boltz.git",
-            "vcs_info": {"vcs": "git", "commit_id": "b1ebfc46ecf57f5414e0d1a6f9027bbb122c53bc"},
-        })
+        direct_url = json.dumps(
+            {
+                "url": "https://github.com/jwohlwend/boltz.git",
+                "vcs_info": {"vcs": "git", "commit_id": "b1ebfc46ecf57f5414e0d1a6f9027bbb122c53bc"},
+            }
+        )
         with self._patch_md("2.2.1", direct_url):
             info = get_boltz_build_info()
 
@@ -398,10 +417,13 @@ def test_call_boltz_stamps_backend_version(tmp_path):
         _make_fake_results_dir(cmd[out_idx], SAMPLE_CONFIDENCE)
         return _mock_subprocess_success()
 
-    with patch("orchestrator.backends.boltz.subprocess.run", side_effect=fake_run), \
-         patch("orchestrator.backends.boltz.get_boltz_build_info",
-               return_value={"version": "2.2.1", "commit": "b1ebfc46" * 5,
-                             "label": "2.2.1@b1ebfc46ecf5"}):
+    with (
+        patch("orchestrator.backends.boltz.subprocess.run", side_effect=fake_run),
+        patch(
+            "orchestrator.backends.boltz.get_boltz_build_info",
+            return_value={"version": "2.2.1", "commit": "b1ebfc46" * 5, "label": "2.2.1@b1ebfc46ecf5"},
+        ),
+    ):
         result = call_boltz(SAMPLE_SEQUENCE, seed=0)
 
     assert result.backend_version == "2.2.1@b1ebfc46ecf5"
@@ -456,6 +478,7 @@ def test_call_boltz_raises_on_missing_cif():
 # Unit: main task wires Boltz into predictions list
 # ---------------------------------------------------------------------------
 
+
 def test_boltz_appended_to_predictions_when_enabled():
     """Verify that a successful Boltz call adds to the predictions list."""
     from models.schemas import StructurePrediction
@@ -468,9 +491,12 @@ def test_boltz_appended_to_predictions_when_enabled():
         model_name="boltz2",
     )
 
-    with patch("orchestrator.tasks.BOLTZ_ENABLED", True), \
-         patch("orchestrator.tasks.call_boltz", return_value=fake_pred) as mock_boltz:
+    with (
+        patch("orchestrator.tasks.BOLTZ_ENABLED", True),
+        patch("orchestrator.tasks.call_boltz", return_value=fake_pred) as mock_boltz,
+    ):
         from orchestrator.tasks import call_boltz as cb
+
         result = cb("MKTAYIAK", context={}, seed=0)
 
     assert result.model_name == "boltz2"
@@ -481,6 +507,7 @@ def test_boltz_appended_to_predictions_when_enabled():
 # Integration test (requires Boltz-2 installed + GPU)
 # ---------------------------------------------------------------------------
 
+
 def test_call_boltz_integration():
     """
     End-to-end test against real Boltz-2 weights.
@@ -489,6 +516,7 @@ def test_call_boltz_integration():
     """
     try:
         import subprocess as sp
+
         sp.run(["boltz", "--help"], capture_output=True, check=True)
     except Exception:
         pytest.skip("boltz CLI not found — install with: pip install git+https://github.com/jwohlwend/boltz")
@@ -510,6 +538,7 @@ def test_call_boltz_affinity_integration():
     """
     try:
         import subprocess as sp
+
         sp.run(["boltz", "--help"], capture_output=True, check=True)
     except Exception:
         pytest.skip("boltz CLI not found")

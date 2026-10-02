@@ -48,7 +48,7 @@ PLDDT_VARIANCE_THRESHOLD = float(os.getenv("PLDDT_VARIANCE_THRESHOLD", 30.0))
 VARIANCE_REGION_PERCENT = float(os.getenv("VARIANCE_REGION_PERCENT", 10.0))
 
 # MD Simulation Validation (Stage 4.5) — escalate when a trajectory looks unphysical
-SIM_RMSD_MAX_NM = float(os.getenv("SIM_RMSD_MAX_NM", 2.0))            # CA RMSD blowup threshold (nm)
+SIM_RMSD_MAX_NM = float(os.getenv("SIM_RMSD_MAX_NM", 2.0))  # CA RMSD blowup threshold (nm)
 SIM_RG_DIVERGENCE_FACTOR = float(os.getenv("SIM_RG_DIVERGENCE_FACTOR", 3.0))  # max Rg / initial Rg before "diverged"
 
 # Job Configuration
@@ -60,27 +60,27 @@ REFINEMENT_MAX_ITERATIONS = int(os.getenv("REFINEMENT_MAX_ITERATIONS", 10))
 REFINEMENT_PLDDT_PLATEAU_DELTA = float(os.getenv("REFINEMENT_PLDDT_PLATEAU_DELTA", 0.5))
 
 # Structure result cache (Redis)
-CACHE_TTL = int(os.getenv("CACHE_TTL", 86400))           # seconds; default 24 h
+CACHE_TTL = int(os.getenv("CACHE_TTL", 86400))  # seconds; default 24 h
 REDIS_CACHE_PREFIX = os.getenv("REDIS_CACHE_PREFIX", "propredict:structure:")
 
 # Tool Feature Flags (set to True only after installing the tool)
 ROSETTA_ENABLED = os.getenv("ROSETTA_ENABLED", "False") == "True"
 GROMACS_ENABLED = os.getenv("GROMACS_ENABLED", "False") == "True"
 GROMACS_BIN = os.getenv("GROMACS_BIN", "gmx")
-OPENMM_ENABLED = os.getenv("OPENMM_ENABLED", "False") == "True"         # conda install -c conda-forge openmm
+OPENMM_ENABLED = os.getenv("OPENMM_ENABLED", "False") == "True"  # conda install -c conda-forge openmm
 ROSETTAFOLD_ENABLED = os.getenv("ROSETTAFOLD_ENABLED", "False") == "True"  # see github.com/baker-lab/RoseTTAFold2
-OPENFOLD_ENABLED = os.getenv("OPENFOLD_ENABLED", "False") == "True"        # see github.com/aqlaboratory/openfold
+OPENFOLD_ENABLED = os.getenv("OPENFOLD_ENABLED", "False") == "True"  # see github.com/aqlaboratory/openfold
 
 # Boltz-2: high-accuracy GPU backend (install from source: pip install git+https://github.com/jwohlwend/boltz)
 BOLTZ_ENABLED = os.getenv("BOLTZ_ENABLED", "False") == "True"
-BOLTZ_DIFFUSION_SAMPLES = int(os.getenv("BOLTZ_DIFFUSION_SAMPLES", 1))   # --diffusion_samples
-BOLTZ_SAMPLING_STEPS = int(os.getenv("BOLTZ_SAMPLING_STEPS", 200))       # --sampling_steps
+BOLTZ_DIFFUSION_SAMPLES = int(os.getenv("BOLTZ_DIFFUSION_SAMPLES", 1))  # --diffusion_samples
+BOLTZ_SAMPLING_STEPS = int(os.getenv("BOLTZ_SAMPLING_STEPS", 200))  # --sampling_steps
 # False = fully local (msa: empty); True = use ColabFold MSA server (better accuracy, requires network)
 BOLTZ_USE_MSA = os.getenv("BOLTZ_USE_MSA", "False") == "True"
 BOLTZ_MSA_SERVER_URL = os.getenv("BOLTZ_MSA_SERVER_URL", "https://api.colabfold.com")
 
 # MD Simulation parameters
-MD_PRODUCTION_NS = float(os.getenv("MD_PRODUCTION_NS", 0.1))   # production run length (nanoseconds)
+MD_PRODUCTION_NS = float(os.getenv("MD_PRODUCTION_NS", 0.1))  # production run length (nanoseconds)
 
 # Stage F — Membrane & Ligand environments
 # insane.py: download from http://cgmartini.nl — set path here or place on PATH
@@ -107,10 +107,14 @@ PROTEINMPNN_NUM_DECODING_ORDERS = int(os.getenv("PROTEINMPNN_NUM_DECODING_ORDERS
 # Combinatorial / multi-site mutation search (hand-rolled AdaLead over a ProteinMPNN
 # oracle). Cheap tier-2 score_only search loop, budget-capped tier-3 re-fold validation.
 MUTATION_SEARCH_ENABLED = os.getenv("MUTATION_SEARCH_ENABLED", "False") == "True"
-MUTATION_SEARCH_ROUNDS = int(os.getenv("MUTATION_SEARCH_ROUNDS", "10"))                              # AdaLead rounds
-MUTATION_SEARCH_CANDIDATES_PER_ROUND = int(os.getenv("MUTATION_SEARCH_CANDIDATES_PER_ROUND", "20"))  # AdaLead lambda: candidates proposed/evaluated per round
-MUTATION_SEARCH_MAX_SITES = int(os.getenv("MUTATION_SEARCH_MAX_SITES", "3"))                         # cap on simultaneous mutations k
-MUTATION_SEARCH_MAX_REFOLDS = int(os.getenv("MUTATION_SEARCH_MAX_REFOLDS", "5"))                     # tier-3 re-fold validation budget (the only expensive knob)
+MUTATION_SEARCH_ROUNDS = int(os.getenv("MUTATION_SEARCH_ROUNDS", "10"))  # AdaLead rounds
+MUTATION_SEARCH_CANDIDATES_PER_ROUND = int(
+    os.getenv("MUTATION_SEARCH_CANDIDATES_PER_ROUND", "20")
+)  # AdaLead lambda: candidates proposed/evaluated per round
+MUTATION_SEARCH_MAX_SITES = int(os.getenv("MUTATION_SEARCH_MAX_SITES", "3"))  # cap on simultaneous mutations k
+MUTATION_SEARCH_MAX_REFOLDS = int(
+    os.getenv("MUTATION_SEARCH_MAX_REFOLDS", "5")
+)  # tier-3 re-fold validation budget (the only expensive knob)
 
 # Agentic refinement loop (Stage D — requires ANTHROPIC_API_KEY)
 AGENT_ENABLED = os.getenv("AGENT_ENABLED", "False") == "True"
@@ -118,7 +122,9 @@ AGENT_API_KEY = os.getenv("AGENT_API_KEY", "")
 AGENT_BASE_URL = os.getenv("AGENT_BASE_URL", "")
 AGENT_MODEL = os.getenv("AGENT_MODEL", "claude-sonnet-5")
 AGENT_MAX_ITERATIONS = int(os.getenv("AGENT_MAX_ITERATIONS", 5))
-AGENT_MAX_MUTATIONS = int(os.getenv("AGENT_MAX_MUTATIONS", 3))   # apply_mutation calls per session, separate from AGENT_MAX_ITERATIONS
+AGENT_MAX_MUTATIONS = int(
+    os.getenv("AGENT_MAX_MUTATIONS", 3)
+)  # apply_mutation calls per session, separate from AGENT_MAX_ITERATIONS
 
 # Weights & Biases (optional benchmark tracking)
 WANDB_PROJECT = os.getenv("WANDB_PROJECT", "")

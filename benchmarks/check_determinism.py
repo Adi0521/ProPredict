@@ -28,6 +28,7 @@ Run (ProPredict env, PROTEINMPNN_PATH set in .env; ProteinMPNN runs fine on CPU 
 NOTE: ProteinMPNN scores a single chain. The default structure below is one chain of HIV-PR;
 point --pdb at any single-chain PDB to check determinism on your own target.
 """
+
 import argparse
 import os
 import sys
@@ -38,9 +39,7 @@ import numpy as np
 from config import PROTEINMPNN_PATH
 from orchestrator.mutation_scan import _run_proteinmpnn_conditional_probs
 
-DEFAULT_PDB = os.path.join(
-    os.path.dirname(__file__), "epistasis_structures", "4G3O.raw.pdb"
-)
+DEFAULT_PDB = os.path.join(os.path.dirname(__file__), "epistasis_structures", "4G3O.raw.pdb")
 
 
 def _logp(pdb_string: str, seed: int, n_orders: int) -> np.ndarray:
@@ -71,8 +70,9 @@ def main() -> None:
     ap.add_argument("--pdb", default=DEFAULT_PDB, help="single-chain PDB to score")
     ap.add_argument("--seed", type=int, default=37)
     ap.add_argument("--num-decoding-orders", type=int, default=8)
-    ap.add_argument("--spread-seeds", default="37,101,271",
-                    help="comma-separated seeds for the cross-seed spread report")
+    ap.add_argument(
+        "--spread-seeds", default="37,101,271", help="comma-separated seeds for the cross-seed spread report"
+    )
     args = ap.parse_args()
 
     ok_guard = _preflight_seed_zero()
@@ -89,19 +89,16 @@ def main() -> None:
     b = _logp(pdb, args.seed, args.num_decoding_orders)
     identical = a.shape == b.shape and np.array_equal(a, b)
     max_abs = float(np.max(np.abs(a - b))) if a.shape == b.shape else float("nan")
-    print(f"\n=== same-seed determinism (seed={args.seed}, "
-          f"N={args.num_decoding_orders}) ===")
+    print(f"\n=== same-seed determinism (seed={args.seed}, N={args.num_decoding_orders}) ===")
     print(f"  log_p shapes: {a.shape} vs {b.shape}   max|Δ| = {max_abs:.3e}")
-    print("  --> " + ("PASS (byte-identical)"
-                       if identical else "FAIL (non-deterministic at fixed seed)"))
+    print("  --> " + ("PASS (byte-identical)" if identical else "FAIL (non-deterministic at fixed seed)"))
 
     # Report 2 — cross-seed spread (residual decoding-order noise; not a gate).
     seeds = [int(s) for s in args.spread_seeds.split(",")]
     stack = np.stack([_logp(pdb, s, args.num_decoding_orders) for s in seeds])  # [S, L, 21]
     per_res_std = stack.std(axis=0).mean(axis=-1)  # mean over aa of cross-seed std, per residue
     print(f"\n=== cross-seed spread over seeds {seeds} ===")
-    print(f"  mean per-residue std = {per_res_std.mean():.3e}   "
-          f"max = {per_res_std.max():.3e}")
+    print(f"  mean per-residue std = {per_res_std.mean():.3e}   max = {per_res_std.max():.3e}")
     print("  (lower is better; raise --num-decoding-orders to shrink it)")
 
     sys.exit(0 if (identical and ok_guard) else 1)

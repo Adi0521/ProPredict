@@ -13,6 +13,7 @@ stacking provably cannot. Because the search is stochastic, epistasis is asserte
 FIXED set of seeds with a safe majority margin (deterministic: fixed seeds -> fixed count),
 while the k-cap, per-round budget, and reproducibility properties get hard assertions.
 """
+
 import os
 from unittest.mock import patch
 
@@ -36,6 +37,7 @@ from orchestrator.mutation_search import (
 # ---------------------------------------------------------------------------
 # Mutation representation helpers
 # ---------------------------------------------------------------------------
+
 
 def test_parse_mutation_roundtrip():
     assert parse_mutation("A12V") == ("A", 12, "V")
@@ -78,6 +80,7 @@ def test_mutations_from_sequences_length_mismatch():
 # additive_oracle — pure, against a synthetic log_p
 # ---------------------------------------------------------------------------
 
+
 def _synthetic_log_p() -> np.ndarray:
     """
     [2, 21] log-prob matrix for sequence "AC" (same construction as test_mutation_scan).
@@ -86,8 +89,8 @@ def _synthetic_log_p() -> np.ndarray:
       pos2 (wt C): G=-0.5 -> +2.5
     """
     lp = np.full((2, 21), -3.0)
-    lp[0, 2] = -1.0   # A1D -> +2.0
-    lp[1, 5] = -0.5   # C2G -> +2.5
+    lp[0, 2] = -1.0  # A1D -> +2.0
+    lp[1, 5] = -0.5  # C2G -> +2.5
     return lp
 
 
@@ -112,6 +115,7 @@ def test_additive_oracle_position_out_of_range():
 # score_only_oracle — mocked at the subprocess boundary
 # ---------------------------------------------------------------------------
 
+
 def _make_fake_srun(global_scores_by_index, decoding_orders=3):
     """
     Build a fake subprocess.run that writes ProteinMPNN score_only output: for input index i
@@ -119,6 +123,7 @@ def _make_fake_srun(global_scores_by_index, decoding_orders=3):
     global_scores_by_index[i]. The array is [decoding_orders] identical values so .mean()
     is exact.
     """
+
     def fake_srun(cmd, *args, **kwargs):
         out_folder = cmd[cmd.index("--out_folder") + 1]
         score_dir = os.path.join(out_folder, "score_only")
@@ -131,7 +136,9 @@ def _make_fake_srun(global_scores_by_index, decoding_orders=3):
             returncode = 0
             stdout = ""
             stderr = ""
+
         return _R()
+
     return fake_srun
 
 
@@ -156,13 +163,13 @@ def test_score_only_averages_over_decoding_orders(mock_srun, tmp_path):
         score_dir = os.path.join(out_folder, "score_only")
         os.makedirs(score_dir, exist_ok=True)
         # Three decoding-order samples averaging to 2.0 -> oracle returns -2.0.
-        np.savez(os.path.join(score_dir, "structure_fasta_1.npz"),
-                 global_score=np.array([1.0, 2.0, 3.0]))
+        np.savez(os.path.join(score_dir, "structure_fasta_1.npz"), global_score=np.array([1.0, 2.0, 3.0]))
 
         class _R:
             returncode = 0
             stdout = ""
             stderr = ""
+
         return _R()
 
     mock_srun.side_effect = fake_srun
@@ -174,8 +181,7 @@ def test_score_only_averages_over_decoding_orders(mock_srun, tmp_path):
 def test_score_only_passes_score_only_flags(mock_srun, tmp_path):
     (tmp_path / "protein_mpnn_run.py").write_text("# stub")
     mock_srun.side_effect = _make_fake_srun([1.0])
-    score_only_oracle("PDBSTR", ["ACDE"], proteinmpnn_dir=str(tmp_path),
-                      seed=37, num_decoding_orders=3)
+    score_only_oracle("PDBSTR", ["ACDE"], proteinmpnn_dir=str(tmp_path), seed=37, num_decoding_orders=3)
     cmd = mock_srun.call_args[0][0]
     assert "--score_only" in cmd and cmd[cmd.index("--score_only") + 1] == "1"
     assert "--path_to_fasta" in cmd
@@ -274,8 +280,9 @@ def _has_epistatic_pair(candidate) -> bool:
 def test_adalead_fuses_epistatic_pair_representative_seed():
     # Seed 0 is representative (7/8 of seeds 0..7 succeed), not lucky: it lands the global
     # optimum D3+K6+decoy and beats the naive additive stack.
-    res = adalead_search(_WT, _oracle, rounds=25, candidates_per_round=30, max_sites=3,
-                         seed=0, oracle_name="score_only")
+    res = adalead_search(
+        _WT, _oracle, rounds=25, candidates_per_round=30, max_sites=3, seed=0, oracle_name="score_only"
+    )
     top = res.candidates[0]
     assert _has_epistatic_pair(top), f"expected D3+K6 fused, got {top.mutations}"
     assert top.score > _NAIVE_STACK_FITNESS
@@ -289,8 +296,9 @@ def test_adalead_beats_naive_stacking_over_fixed_seeds():
     found = 0
     best_overall = float("-inf")
     for s in range(8):
-        res = adalead_search(_WT, _oracle, rounds=25, candidates_per_round=30, max_sites=3,
-                             seed=s, oracle_name="score_only")
+        res = adalead_search(
+            _WT, _oracle, rounds=25, candidates_per_round=30, max_sites=3, seed=s, oracle_name="score_only"
+        )
         top = res.candidates[0]
         found += _has_epistatic_pair(top)
         best_overall = max(best_overall, top.score)
@@ -300,8 +308,7 @@ def test_adalead_beats_naive_stacking_over_fixed_seeds():
 
 def test_adalead_respects_k_cap():
     # No candidate may exceed max_sites mutations, across every returned candidate.
-    res = adalead_search(_WT, _oracle, rounds=20, candidates_per_round=25, max_sites=2,
-                         seed=0, top_k=25)
+    res = adalead_search(_WT, _oracle, rounds=20, candidates_per_round=25, max_sites=2, seed=0, top_k=25)
     assert res.candidates, "expected some candidates"
     assert all(len(c.mutations) <= 2 for c in res.candidates)
 
@@ -315,10 +322,9 @@ def test_adalead_respects_per_round_budget():
         return _oracle(seqs)
 
     rounds, lam = 10, 15
-    adalead_search(_WT, counting_oracle, rounds=rounds, candidates_per_round=lam,
-                   max_sites=3, seed=0)
-    assert len(calls) == 1 + rounds            # initial seeds + one per round
-    assert calls[0] == 1                        # default initial_sequences == [wild_type]
+    adalead_search(_WT, counting_oracle, rounds=rounds, candidates_per_round=lam, max_sites=3, seed=0)
+    assert len(calls) == 1 + rounds  # initial seeds + one per round
+    assert calls[0] == 1  # default initial_sequences == [wild_type]
     assert all(n <= lam for n in calls[1:]), f"a round exceeded lambda={lam}: {calls}"
 
 
@@ -326,8 +332,7 @@ def test_adalead_is_deterministic():
     kw = dict(rounds=15, candidates_per_round=20, max_sites=3, seed=7, oracle_name="t")
     r1 = adalead_search(_WT, _oracle, **kw)
     r2 = adalead_search(_WT, _oracle, **kw)
-    assert [(c.sequence, c.score) for c in r1.candidates] == \
-           [(c.sequence, c.score) for c in r2.candidates]
+    assert [(c.sequence, c.score) for c in r1.candidates] == [(c.sequence, c.score) for c in r2.candidates]
 
 
 def test_adalead_excludes_wild_type_from_candidates():
@@ -350,8 +355,9 @@ def test_adalead_additive_landscape_stacks_to_k_cap():
             f += 1.0 if i in (0, 1, 2) else -0.5
         return f
 
-    res = adalead_search(_WT, lambda ss: [additive(s) for s in ss],
-                         rounds=15, candidates_per_round=20, max_sites=3, seed=0)
+    res = adalead_search(
+        _WT, lambda ss: [additive(s) for s in ss], rounds=15, candidates_per_round=20, max_sites=3, seed=0
+    )
     top = res.candidates[0]
     positions = {int(m[1:-1]) for m in top.mutations}
     assert len(top.mutations) == 3 and positions <= {1, 2, 3}
@@ -361,6 +367,7 @@ def test_adalead_additive_landscape_stacks_to_k_cap():
 # ---------------------------------------------------------------------------
 # refold_validate / search_and_validate — the tier-3 re-fold funnel (mocked backend)
 # ---------------------------------------------------------------------------
+
 
 def _cand(muts, score):
     """A cheap-oracle candidate (no re-fold metrics yet)."""
@@ -374,18 +381,24 @@ _MINIMAL_PDB = "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00  0.
 
 def _pred(plddt, structure_pdb=_MINIMAL_PDB, affinity=None, affinity_prob=None):
     return StructurePrediction(
-        structure_pdb=structure_pdb, plddt_scores=[plddt], mean_plddt=plddt, seed=0,
-        affinity_score=affinity, affinity_probability=affinity_prob,
+        structure_pdb=structure_pdb,
+        plddt_scores=[plddt],
+        mean_plddt=plddt,
+        seed=0,
+        affinity_score=affinity,
+        affinity_probability=affinity_prob,
     )
 
 
 def _refold_fn_from_map(plddt_by_seq, affinity_by_seq=None):
     """Build a stub refold_fn that returns a controlled pLDDT (and optional affinity) per
     sequence. structure_pdb is left empty so real count_clashes returns 0."""
+
     def fn(sequence, context, seed):
         aff = (affinity_by_seq or {}).get(sequence)
         prob = None if affinity_by_seq is None else affinity_by_seq.get(sequence)
         return _pred(plddt_by_seq[sequence], affinity=aff, affinity_prob=prob)
+
     return fn
 
 
@@ -408,16 +421,15 @@ def test_refold_validate_budget_cap():
 def test_refold_validate_reranks_by_structural_score():
     # Cheap top-1 (best score) folds poorly; a lower-ranked cheap candidate folds best and
     # must float to the front after validation.
-    a = _cand(["A1C"], score=9.0)   # cheap #1 but low pLDDT
+    a = _cand(["A1C"], score=9.0)  # cheap #1 but low pLDDT
     b = _cand(["A2D"], score=8.0)
-    c = _cand(["A3E"], score=7.0)   # cheap #3 but highest pLDDT
+    c = _cand(["A3E"], score=7.0)  # cheap #3 but highest pLDDT
     fn = _refold_fn_from_map({a.sequence: 55.0, b.sequence: 70.0, c.sequence: 90.0})
     reordered, used = refold_validate(_WT, [a, b, c], {}, max_refolds=3, refold_fn=fn)
     assert used == 3
-    assert reordered[0].sequence == c.sequence          # highest pLDDT wins
+    assert reordered[0].sequence == c.sequence  # highest pLDDT wins
     assert reordered[0].refold_plddt == 90.0
-    assert [r.refold_score for r in reordered] == sorted(
-        [r.refold_score for r in reordered], reverse=True)
+    assert [r.refold_score for r in reordered] == sorted([r.refold_score for r in reordered], reverse=True)
 
 
 def test_refold_validate_clash_penalty(monkeypatch):
@@ -432,10 +444,9 @@ def test_refold_validate_clash_penalty(monkeypatch):
         # encode clash count in the pdb string; the patched count_clashes decodes it
         return _pred(plddt[sequence], structure_pdb=sequence)
 
-    monkeypatch.setattr("orchestrator.mutation_search.count_clashes",
-                        lambda pdb: clashes[pdb])
+    monkeypatch.setattr("orchestrator.mutation_search.count_clashes", lambda pdb: clashes[pdb])
     reordered, _ = refold_validate(_WT, [a, b], {}, max_refolds=2, refold_fn=fn)
-    assert reordered[0].sequence == b.sequence          # clean structure wins
+    assert reordered[0].sequence == b.sequence  # clean structure wins
     assert reordered[0].refold_score == 80.0
     assert reordered[1].refold_score == 75.0
 
@@ -443,15 +454,15 @@ def test_refold_validate_clash_penalty(monkeypatch):
 def test_refold_validate_affinity_recorded_not_ranked():
     # The candidate with the best (lowest) affinity but a worse structure must NOT rank first;
     # affinity is recorded as metadata only.
-    a = _cand(["A1C"], score=9.0)   # great affinity, poor fold
-    b = _cand(["A2D"], score=8.0)   # worse affinity, better fold
+    a = _cand(["A1C"], score=9.0)  # great affinity, poor fold
+    b = _cand(["A2D"], score=8.0)  # worse affinity, better fold
     fn = _refold_fn_from_map(
         {a.sequence: 60.0, b.sequence: 85.0},
         affinity_by_seq={a.sequence: -3.0, b.sequence: 1.0},  # lower affinity = "tighter"
     )
     reordered, _ = refold_validate(_WT, [a, b], {}, max_refolds=2, refold_fn=fn)
-    assert reordered[0].sequence == b.sequence          # structure ranks, not affinity
-    assert reordered[0].refold_affinity == 1.0          # affinity still recorded
+    assert reordered[0].sequence == b.sequence  # structure ranks, not affinity
+    assert reordered[0].refold_affinity == 1.0  # affinity still recorded
     assert reordered[1].refold_affinity == -3.0
 
 
@@ -482,8 +493,7 @@ def test_refold_validate_more_budget_than_candidates():
 
 
 def test_search_and_validate_zero_budget_is_noop():
-    res = search_and_validate(_WT, _oracle, rounds=10, candidates_per_round=15, max_sites=3,
-                              seed=0, max_refolds=0)
+    res = search_and_validate(_WT, _oracle, rounds=10, candidates_per_round=15, max_sites=3, seed=0, max_refolds=0)
     assert res.refolds_used == 0
     assert all(c.refold_score is None for c in res.candidates)
 
@@ -491,15 +501,15 @@ def test_search_and_validate_zero_budget_is_noop():
 def test_search_and_validate_end_to_end():
     # Cheap search then funnel with a stub backend: refolds_used > 0 and the top candidate
     # carries re-fold metrics.
-    search = adalead_search(_WT, _oracle, rounds=15, candidates_per_round=30, max_sites=3,
-                            seed=0)
+    search = adalead_search(_WT, _oracle, rounds=15, candidates_per_round=30, max_sites=3, seed=0)
     plddt = {c.sequence: 70.0 + i for i, c in enumerate(search.candidates)}
 
     def fn(sequence, context, seed):
         return _pred(plddt.get(sequence, 70.0))
 
-    res = search_and_validate(_WT, _oracle, rounds=15, candidates_per_round=30, max_sites=3,
-                              seed=0, max_refolds=3, refold_fn=fn)
+    res = search_and_validate(
+        _WT, _oracle, rounds=15, candidates_per_round=30, max_sites=3, seed=0, max_refolds=3, refold_fn=fn
+    )
     assert res.refolds_used == 3
     assert res.candidates[0].refold_score is not None
     assert res.oracle == "score_only"  # top-level oracle still names the SEARCH oracle
@@ -508,6 +518,7 @@ def test_search_and_validate_end_to_end():
 # ---------------------------------------------------------------------------
 # CLI entrypoint (_cli) — stubbed oracle, no ProteinMPNN
 # ---------------------------------------------------------------------------
+
 
 def test_cli_prints_ranked_candidates(tmp_path, capsys):
     from orchestrator import mutation_search as ms
@@ -519,10 +530,24 @@ def test_cli_prints_ranked_candidates(tmp_path, capsys):
     def fake_score_only(pdb_string, sequences, **kw):
         return [-float(sum(a != b for a, b in zip(_WT, s))) for s in sequences]
 
-    argv = ["prog", "--pdb", str(pdb), "--sequence", _WT, "--proteinmpnn-dir", "/fake",
-            "--rounds", "5", "--candidates-per-round", "10", "--max-sites", "2", "--top-k", "5"]
-    with patch.object(ms, "score_only_oracle", side_effect=fake_score_only), \
-         patch("sys.argv", argv):
+    argv = [
+        "prog",
+        "--pdb",
+        str(pdb),
+        "--sequence",
+        _WT,
+        "--proteinmpnn-dir",
+        "/fake",
+        "--rounds",
+        "5",
+        "--candidates-per-round",
+        "10",
+        "--max-sites",
+        "2",
+        "--top-k",
+        "5",
+    ]
+    with patch.object(ms, "score_only_oracle", side_effect=fake_score_only), patch("sys.argv", argv):
         ms._cli()
 
     out = capsys.readouterr().out

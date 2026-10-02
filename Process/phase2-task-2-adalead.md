@@ -35,7 +35,7 @@ is essentially an **elitist GA with uniform crossover and capped random mutation
 ### (2) Range-normalized elite band — not FLEXS's multiplicative band
 Verified against FLEXS `adalead.py`:
 ```python
-top_inds = measured["true_score"] >= top_fitness * (1 - np.sign(top_fitness) * self.threshold)   # default threshold=0.05
+top_inds = measured["true_score"] >= top_fitness * (1 - np.sign(top_fitness) * self.threshold)  # default threshold=0.05
 ```
 This is **multiplicative toward max**, and it **degenerates when max fitness ≈ 0**: the band
 collapses to `[0, 0]` and excludes every below-max sequence, so an epistatic pair whose

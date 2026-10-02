@@ -9,6 +9,7 @@ Covers:
   * compute_post_processing(scoring.py)
   * _determine_protonation_states (simulation.py)
 """
+
 from unittest.mock import patch
 
 import pytest
@@ -16,6 +17,7 @@ import pytest
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
 # ---------------------------------------------------------------------------
+
 
 def _atom_line(
     serial: int,
@@ -47,26 +49,31 @@ def _atom_line(
 # 1. _parse_plddt_from_pdb
 # ---------------------------------------------------------------------------
 
+
 class TestParsePlddtFromPdb:
     def test_scales_bfactor_to_0_100(self):
         from orchestrator.backends.esmfold import _parse_plddt_from_pdb
 
-        pdb = "\n".join([
-            _atom_line(1, "CA", "MET", "A", 1, bfactor=0.50),
-            _atom_line(2, "CA", "LYS", "A", 2, bfactor=0.80),
-        ])
+        pdb = "\n".join(
+            [
+                _atom_line(1, "CA", "MET", "A", 1, bfactor=0.50),
+                _atom_line(2, "CA", "LYS", "A", 2, bfactor=0.80),
+            ]
+        )
         assert _parse_plddt_from_pdb(pdb) == pytest.approx([50.0, 80.0])
 
     def test_ignores_non_ca_and_malformed_lines(self):
         from orchestrator.backends.esmfold import _parse_plddt_from_pdb
 
-        pdb = "\n".join([
-            "HEADER    SOME PROTEIN",
-            _atom_line(1, "N", "MET", "A", 1, bfactor=0.99),   # not CA -> skipped
-            _atom_line(2, "CA", "MET", "A", 1, bfactor=0.42),  # counted
-            "ATOM  garbage line that should not crash",
-            _atom_line(3, "CB", "MET", "A", 1, bfactor=0.99),  # not CA -> skipped
-        ])
+        pdb = "\n".join(
+            [
+                "HEADER    SOME PROTEIN",
+                _atom_line(1, "N", "MET", "A", 1, bfactor=0.99),  # not CA -> skipped
+                _atom_line(2, "CA", "MET", "A", 1, bfactor=0.42),  # counted
+                "ATOM  garbage line that should not crash",
+                _atom_line(3, "CB", "MET", "A", 1, bfactor=0.99),  # not CA -> skipped
+            ]
+        )
         assert _parse_plddt_from_pdb(pdb) == pytest.approx([42.0])
 
     def test_empty_pdb_returns_empty_list(self):
@@ -79,9 +86,11 @@ class TestParsePlddtFromPdb:
 # 2. count_clashes  (requires BioPython)
 # ---------------------------------------------------------------------------
 
+
 def _has_biopython() -> bool:
     try:
         import Bio  # noqa: F401
+
         return True
     except ImportError:
         return False
@@ -94,37 +103,44 @@ class TestCountClashes:
 
         # Res 1 and res 5 are 2.5 A apart (< 3.8) and non-adjacent -> 1 clash.
         # Res 2 sits far away so it contributes nothing.
-        pdb = "\n".join([
-            _atom_line(1, "CA", "GLY", "A", 1, x=0.0, y=0.0, z=0.0),
-            _atom_line(2, "CA", "GLY", "A", 2, x=0.0, y=0.0, z=10.0),
-            _atom_line(3, "CA", "GLY", "A", 5, x=0.0, y=0.0, z=2.5),
-        ])
+        pdb = "\n".join(
+            [
+                _atom_line(1, "CA", "GLY", "A", 1, x=0.0, y=0.0, z=0.0),
+                _atom_line(2, "CA", "GLY", "A", 2, x=0.0, y=0.0, z=10.0),
+                _atom_line(3, "CA", "GLY", "A", 5, x=0.0, y=0.0, z=2.5),
+            ]
+        )
         assert count_clashes(pdb) == 1
 
     def test_excludes_adjacent_residues(self):
         from orchestrator.scoring import count_clashes
 
         # Res 1 and res 2 are only 2.0 A apart but adjacent (|i-j| <= 1) -> excluded.
-        pdb = "\n".join([
-            _atom_line(1, "CA", "GLY", "A", 1, x=0.0, y=0.0, z=0.0),
-            _atom_line(2, "CA", "GLY", "A", 2, x=0.0, y=0.0, z=2.0),
-        ])
+        pdb = "\n".join(
+            [
+                _atom_line(1, "CA", "GLY", "A", 1, x=0.0, y=0.0, z=0.0),
+                _atom_line(2, "CA", "GLY", "A", 2, x=0.0, y=0.0, z=2.0),
+            ]
+        )
         assert count_clashes(pdb) == 0
 
     def test_no_clashes_when_all_far_apart(self):
         from orchestrator.scoring import count_clashes
 
-        pdb = "\n".join([
-            _atom_line(1, "CA", "GLY", "A", 1, x=0.0, y=0.0, z=0.0),
-            _atom_line(2, "CA", "GLY", "A", 2, x=0.0, y=0.0, z=10.0),
-            _atom_line(3, "CA", "GLY", "A", 3, x=0.0, y=0.0, z=20.0),
-        ])
+        pdb = "\n".join(
+            [
+                _atom_line(1, "CA", "GLY", "A", 1, x=0.0, y=0.0, z=0.0),
+                _atom_line(2, "CA", "GLY", "A", 2, x=0.0, y=0.0, z=10.0),
+                _atom_line(3, "CA", "GLY", "A", 3, x=0.0, y=0.0, z=20.0),
+            ]
+        )
         assert count_clashes(pdb) == 0
 
 
 # ---------------------------------------------------------------------------
 # 3. generate_cache_key
 # ---------------------------------------------------------------------------
+
 
 class TestGenerateCacheKey:
     def test_deterministic_for_same_inputs(self):
@@ -160,6 +176,7 @@ class TestGenerateCacheKey:
 # 4. compute_post_processing  (threshold decision logic)
 # ---------------------------------------------------------------------------
 
+
 def _make_prediction(mean_plddt: float):
     from models.schemas import StructurePrediction
 
@@ -175,15 +192,18 @@ class TestComputePostProcessing:
     # count_clashes is patched to 0 so these tests isolate the pLDDT thresholds
     # (accept >= 75, refine >= 60, else escalate) from BioPython geometry.
 
-    @pytest.mark.parametrize("mean_plddt, expected", [
-        (90.0, "accept"),
-        (75.0, "accept"),    # boundary: >= accept threshold
-        (74.9, "refine"),
-        (65.0, "refine"),
-        (60.0, "refine"),    # boundary: >= refine threshold
-        (59.9, "escalate"),
-        (40.0, "escalate"),
-    ])
+    @pytest.mark.parametrize(
+        "mean_plddt, expected",
+        [
+            (90.0, "accept"),
+            (75.0, "accept"),  # boundary: >= accept threshold
+            (74.9, "refine"),
+            (65.0, "refine"),
+            (60.0, "refine"),  # boundary: >= refine threshold
+            (59.9, "escalate"),
+            (40.0, "escalate"),
+        ],
+    )
     def test_decision_thresholds(self, mean_plddt, expected):
         with patch("orchestrator.scoring.count_clashes", return_value=0):
             from orchestrator.scoring import compute_post_processing
@@ -205,17 +225,20 @@ class TestComputePostProcessing:
 # 5. _determine_protonation_states
 # ---------------------------------------------------------------------------
 
+
 class TestDetermineProtonationStates:
     # pdb2gmx integer encoding:
     #   HIS: 1 = HIE (neutral), 2 = HIP (charged)
     #   ASP/GLU: 0 = deprotonated (neutral), 1 = protonated (charged)
     # Default model pKa (no pka_dict): HIS 6.0, ASP 3.9, GLU 4.1.
 
-    PDB = "\n".join([
-        _atom_line(1, "CA", "HIS", "A", 1),
-        _atom_line(2, "CA", "ASP", "A", 2),
-        _atom_line(3, "CA", "GLU", "A", 3),
-    ])
+    PDB = "\n".join(
+        [
+            _atom_line(1, "CA", "HIS", "A", 1),
+            _atom_line(2, "CA", "ASP", "A", 2),
+            _atom_line(3, "CA", "GLU", "A", 3),
+        ]
+    )
 
     def test_neutral_at_physiological_ph(self):
         from orchestrator.simulation import _determine_protonation_states
@@ -236,15 +259,14 @@ class TestDetermineProtonationStates:
 
         # Force HIS pKa to 8.0 so at pH 7.4 it becomes charged (2) despite the
         # model default of 6.0 (which would give neutral 1).
-        states = _determine_protonation_states(
-            self.PDB, pH=7.4, pka_dict={(1, "A", "HIS"): 8.0}
-        )
+        states = _determine_protonation_states(self.PDB, pH=7.4, pka_dict={(1, "A", "HIS"): 8.0})
         assert states["his"] == [2]
 
 
 # ---------------------------------------------------------------------------
 # 6. validate_simulation_metrics  (Stage 4.5)
 # ---------------------------------------------------------------------------
+
 
 def _healthy_sim(**overrides):
     """A physically sane OpenMM-style trajectory result."""
@@ -324,6 +346,7 @@ class TestValidateSimulationMetrics:
 # 7. celery_state_to_status  (Stage 4.6 — status endpoint progress mapping)
 # ---------------------------------------------------------------------------
 
+
 class TestCeleryStateToStatus:
     def test_pending(self):
         from orchestrator.progress import celery_state_to_status
@@ -366,13 +389,16 @@ class TestCeleryStateToStatus:
         from orchestrator.progress import celery_state_to_status
 
         assert celery_state_to_status("progress", {"progress_percent": 90, "stage": "finalizing"}) == (
-            "started", 90, "finalizing",
+            "started",
+            90,
+            "finalizing",
         )
 
 
 # ---------------------------------------------------------------------------
 # 8. _run_prediction_core progress emission (Stage 4.6 wiring)
 # ---------------------------------------------------------------------------
+
 
 def _accept_prediction():
     from models.schemas import StructurePrediction
@@ -397,10 +423,12 @@ class TestRunPredictionCoreProgress:
         fake_redis = MagicMock()
         fake_redis.get.return_value = None  # cache miss -> full pipeline runs
 
-        with patch.object(tasks, "_get_redis", return_value=fake_redis), \
-             patch.object(tasks, "call_esmfold_api", return_value=_accept_prediction()), \
-             patch.object(tasks, "AGENT_ENABLED", False), \
-             patch("orchestrator.scoring.count_clashes", return_value=0):
+        with (
+            patch.object(tasks, "_get_redis", return_value=fake_redis),
+            patch.object(tasks, "call_esmfold_api", return_value=_accept_prediction()),
+            patch.object(tasks, "AGENT_ENABLED", False),
+            patch("orchestrator.scoring.count_clashes", return_value=0),
+        ):
             return tasks._run_prediction_core(
                 {"run_id": "test-progress", "sequence": "MKTAYIAK", "context": {}},
                 progress_cb=cb,
@@ -437,6 +465,7 @@ class TestRunPredictionCoreProgress:
 # 9. Provenance is preserved when a prediction is rebuilt mid-pipeline
 # ---------------------------------------------------------------------------
 
+
 class TestPredictionFieldPreservation:
     """
     Rosetta relax and the agent branch replace `best_prediction` mid-run. They used to
@@ -448,10 +477,11 @@ class TestPredictionFieldPreservation:
 
     def _boltz_pred(self):
         from models.schemas import StructurePrediction
+
         return StructurePrediction(
             structure_pdb="ATOM_ORIG",
             plddt_scores=[50.0],
-            mean_plddt=50.0,        # below accept -> triggers the refinement loop
+            mean_plddt=50.0,  # below accept -> triggers the refinement loop
             seed=7,
             model_name="boltz2",
             affinity_score=-1.35,
@@ -468,20 +498,20 @@ class TestPredictionFieldPreservation:
         fake_redis.get.return_value = None
 
         # Relax returns a better structure, so the rebuild branch is taken.
-        with patch.object(tasks, "_get_redis", return_value=fake_redis), \
-             patch.object(tasks, "call_esmfold_api", return_value=self._boltz_pred()), \
-             patch.object(tasks, "AGENT_ENABLED", False), \
-             patch.object(tasks, "ROSETTA_ENABLED", True), \
-             patch.object(tasks, "BOLTZ_ENABLED", False), \
-             patch.object(tasks, "run_rosetta_relax", return_value=("ATOM_RELAXED", -123.4)), \
-             patch.object(tasks, "_parse_plddt_from_pdb", return_value=[80.0]), \
-             patch("orchestrator.scoring.count_clashes", return_value=0):
-            result = tasks._run_prediction_core(
-                {"run_id": "t-relax", "sequence": "MKTAYIAK", "context": {}}
-            )
+        with (
+            patch.object(tasks, "_get_redis", return_value=fake_redis),
+            patch.object(tasks, "call_esmfold_api", return_value=self._boltz_pred()),
+            patch.object(tasks, "AGENT_ENABLED", False),
+            patch.object(tasks, "ROSETTA_ENABLED", True),
+            patch.object(tasks, "BOLTZ_ENABLED", False),
+            patch.object(tasks, "run_rosetta_relax", return_value=("ATOM_RELAXED", -123.4)),
+            patch.object(tasks, "_parse_plddt_from_pdb", return_value=[80.0]),
+            patch("orchestrator.scoring.count_clashes", return_value=0),
+        ):
+            result = tasks._run_prediction_core({"run_id": "t-relax", "sequence": "MKTAYIAK", "context": {}})
 
         ens = result["ensemble_result"]
-        assert ens["structure_pdb"] == "ATOM_RELAXED"   # the relax did happen
+        assert ens["structure_pdb"] == "ATOM_RELAXED"  # the relax did happen
         assert ens["mean_plddt"] == 80.0
         # ...and none of the provenance was lost on the way through.
         assert ens["affinity_score"] == -1.35
@@ -496,6 +526,13 @@ class TestPredictionFieldPreservation:
         updated = pred.model_copy(update={"structure_pdb": "ATOM_NEW"})
 
         assert updated.structure_pdb == "ATOM_NEW"
-        for field in ("affinity_score", "affinity_probability", "backend_version",
-                      "seed", "model_name", "plddt_scores", "mean_plddt"):
+        for field in (
+            "affinity_score",
+            "affinity_probability",
+            "backend_version",
+            "seed",
+            "model_name",
+            "plddt_scores",
+            "mean_plddt",
+        ):
             assert getattr(updated, field) == getattr(pred, field), f"{field} was dropped"

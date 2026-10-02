@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 # PyRosetta relax (optional — requires: conda install -c rosettacommons pyrosetta)
 # ---------------------------------------------------------------------------
 
+
 def run_rosetta_relax(pdb_string: str) -> Tuple[str, float]:
     """
     Run Rosetta FastRelax on a structure using PyRosetta.
@@ -30,10 +31,7 @@ def run_rosetta_relax(pdb_string: str) -> Tuple[str, float]:
     try:
         import pyrosetta  # type: ignore
     except ImportError:
-        raise RuntimeError(
-            "PyRosetta is not installed. "
-            "Install with: conda install -c rosettacommons pyrosetta"
-        )
+        raise RuntimeError("PyRosetta is not installed. Install with: conda install -c rosettacommons pyrosetta")
 
     logger.info("Initialising PyRosetta...")
     pyrosetta.init("-mute all")
@@ -70,10 +68,7 @@ def _run_propka(pdb_path: str) -> Dict[Tuple[int, str, str], float]:
     try:
         from propka.run import single as propka_single
     except ImportError:
-        logger.warning(
-            "PropKa3 not installed — protonation assignment will use model pKa values "
-            "(pip install propka)"
-        )
+        logger.warning("PropKa3 not installed — protonation assignment will use model pKa values (pip install propka)")
         return {}
 
     try:
@@ -115,9 +110,7 @@ def _run_propka(pdb_path: str) -> Dict[Tuple[int, str, str], float]:
         return {}
 
 
-def _get_titratable_residues(
-    pdb_string: str, res_names: set
-) -> List[Tuple[int, str, str]]:
+def _get_titratable_residues(pdb_string: str, res_names: set) -> List[Tuple[int, str, str]]:
     """
     Return (res_num, chain_id, res_name) tuples for matching residues in PDB
     record order — the same order pdb2gmx will ask protonation questions.
@@ -155,6 +148,7 @@ def _determine_protonation_states(
       ASP: 0 = deprotonated (standard), 1 = protonated (ASPH)
       GLU: 0 = deprotonated (standard), 1 = protonated (GLUH)
     """
+
     def _state(res_num: int, chain: str, res_name: str, charged_code: int, neutral_code: int) -> int:
         pka = pka_dict.get((res_num, chain, res_name), _MODEL_PKA[res_name])
         return charged_code if pka > pH else neutral_code
@@ -242,8 +236,18 @@ def run_gromacs_em(pdb_string: str, pH: float = 7.4) -> Dict[str, Any]:
         protonation = _determine_protonation_states(pdb_string, pH, pka_dict)
 
         pdb2gmx_args = [
-            "pdb2gmx", "-f", "input.pdb", "-o", "processed.gro",
-            "-p", "topol.top", "-ff", "amber99sb-ildn", "-water", "spc", "-ignh",
+            "pdb2gmx",
+            "-f",
+            "input.pdb",
+            "-o",
+            "processed.gro",
+            "-p",
+            "topol.top",
+            "-ff",
+            "amber99sb-ildn",
+            "-water",
+            "spc",
+            "-ignh",
         ]
         stdin_lines: List[int] = []
         if protonation["his"]:
@@ -262,16 +266,13 @@ def run_gromacs_em(pdb_string: str, pH: float = 7.4) -> Dict[str, Any]:
         _gmx(*pdb2gmx_args, stdin_input=stdin_input)
 
         logger.info("GROMACS: setting up simulation box...")
-        _gmx("editconf", "-f", "processed.gro", "-o", "box.gro",
-             "-c", "-d", "1.0", "-bt", "cubic")
+        _gmx("editconf", "-f", "processed.gro", "-o", "box.gro", "-c", "-d", "1.0", "-bt", "cubic")
 
         logger.info("GROMACS: solvating...")
-        _gmx("solvate", "-cp", "box.gro", "-cs", "spc216.gro",
-             "-o", "solvated.gro", "-p", "topol.top")
+        _gmx("solvate", "-cp", "box.gro", "-cs", "spc216.gro", "-o", "solvated.gro", "-p", "topol.top")
 
         logger.info("GROMACS: preparing energy minimisation run...")
-        _gmx("grompp", "-f", "em.mdp", "-c", "solvated.gro",
-             "-p", "topol.top", "-o", "em.tpr")
+        _gmx("grompp", "-f", "em.mdp", "-c", "solvated.gro", "-p", "topol.top", "-o", "em.tpr")
 
         logger.info("GROMACS: running energy minimisation...")
         _gmx("mdrun", "-v", "-deffnm", "em")
@@ -285,9 +286,7 @@ def run_gromacs_em(pdb_string: str, pH: float = 7.4) -> Dict[str, Any]:
             cwd=tmpdir,
         )
 
-        potential_energy = _parse_gromacs_energy(
-            os.path.join(tmpdir, "energy.xvg")
-        )
+        potential_energy = _parse_gromacs_energy(os.path.join(tmpdir, "energy.xvg"))
         logger.info(f"GROMACS EM complete. Potential energy: {potential_energy:.3f} kJ/mol")
         return {
             "potential_energy": potential_energy,
@@ -545,11 +544,11 @@ def run_gromacs_md(
             f.write(pdb_string)
 
         for name, content in [
-            ("ions.mdp",  _GROMACS_IONS_MDP),
-            ("em.mdp",    _GROMACS_EM_MDP),
-            ("nvt.mdp",   _make_nvt_mdp(temperature_k)),
-            ("npt.mdp",   _make_npt_mdp(temperature_k)),
-            ("prod.mdp",  _make_production_mdp(temperature_k, production_steps)),
+            ("ions.mdp", _GROMACS_IONS_MDP),
+            ("em.mdp", _GROMACS_EM_MDP),
+            ("nvt.mdp", _make_nvt_mdp(temperature_k)),
+            ("npt.mdp", _make_npt_mdp(temperature_k)),
+            ("prod.mdp", _make_production_mdp(temperature_k, production_steps)),
         ]:
             with open(os.path.join(tmpdir, name), "w") as f:
                 f.write(content)
@@ -558,8 +557,12 @@ def run_gromacs_md(
             cmd = [gmx] + list(args)
             logger.debug(f"Running: {' '.join(cmd)}")
             subprocess.run(
-                cmd, check=True, capture_output=True, cwd=tmpdir,
-                input=stdin_input, text=(stdin_input is not None),
+                cmd,
+                check=True,
+                capture_output=True,
+                cwd=tmpdir,
+                input=stdin_input,
+                text=(stdin_input is not None),
             )
 
         # --- Protonation ---
@@ -569,8 +572,18 @@ def run_gromacs_md(
         ff_name = MEMBRANE_FF if membrane_context else "amber99sb-ildn"
 
         pdb2gmx_args = [
-            "pdb2gmx", "-f", "input.pdb", "-o", "processed.gro",
-            "-p", "topol.top", "-ff", ff_name, "-water", "spc", "-ignh",
+            "pdb2gmx",
+            "-f",
+            "input.pdb",
+            "-o",
+            "processed.gro",
+            "-p",
+            "topol.top",
+            "-ff",
+            ff_name,
+            "-water",
+            "spc",
+            "-ignh",
         ]
         stdin_lines: List[int] = []
         if protonation["his"]:
@@ -592,9 +605,13 @@ def run_gromacs_md(
         if membrane_context:
             try:
                 from orchestrator.membrane import embed_in_membrane_gromacs
+
                 gro_mem, top_mem = embed_in_membrane_gromacs(
-                    pdb_string, membrane_context, tmpdir,
-                    insane_path=INSANE_PATH, membrane_ff=MEMBRANE_FF,
+                    pdb_string,
+                    membrane_context,
+                    tmpdir,
+                    insane_path=INSANE_PATH,
+                    membrane_ff=MEMBRANE_FF,
                 )
                 shutil.copy(gro_mem, os.path.join(tmpdir, "processed.gro"))
                 shutil.copy(top_mem, os.path.join(tmpdir, "topol.top"))
@@ -616,34 +633,44 @@ def run_gromacs_md(
         if ligand_contexts:
             try:
                 from orchestrator.ligands import prepare_ligands
-                prepared = prepare_ligands(
-                    ligand_contexts, pdb_string, tmpdir, gnina_bin=GNINA_BIN
-                )
+
+                prepared = prepare_ligands(ligand_contexts, pdb_string, tmpdir, gnina_bin=GNINA_BIN)
                 for lig in prepared:
                     itp = lig.get("itp")
                     if itp and os.path.isfile(itp):
                         with open(os.path.join(tmpdir, "topol.top"), "a") as fh:
-                            fh.write(f'\n; Ligand {lig["name"]}\n')
+                            fh.write(f"\n; Ligand {lig['name']}\n")
                             fh.write(f'#include "{itp}"\n')
-                        ligand_meta.append({
-                            "name": lig["name"],
-                            "parameterizer": lig["parameterizer"],
-                            "docked": lig["docked_sdf"] is not None,
-                        })
+                        ligand_meta.append(
+                            {
+                                "name": lig["name"],
+                                "parameterizer": lig["parameterizer"],
+                                "docked": lig["docked_sdf"] is not None,
+                            }
+                        )
                         logger.info(f"GROMACS MD: ligand '{lig['name']}' topology merged")
                     else:
-                        logger.warning(
-                            f"Ligand '{lig['name']}': no .itp produced — "
-                            "skipping topology merge"
-                        )
+                        logger.warning(f"Ligand '{lig['name']}': no .itp produced — skipping topology merge")
             except Exception as e:
                 logger.warning(f"Ligand preparation failed: {e}")
 
         logger.info("GROMACS MD: adding neutralizing ions...")
-        _gmx("grompp", "-f", "ions.mdp", "-c", "solvated.gro", "-p", "topol.top",
-             "-o", "ions.tpr", "-maxwarn", "1")
-        _gmx("genion", "-s", "ions.tpr", "-o", "neutralized.gro", "-p", "topol.top",
-             "-pname", "NA", "-nname", "CL", "-neutral", stdin_input="SOL\n")
+        _gmx("grompp", "-f", "ions.mdp", "-c", "solvated.gro", "-p", "topol.top", "-o", "ions.tpr", "-maxwarn", "1")
+        _gmx(
+            "genion",
+            "-s",
+            "ions.tpr",
+            "-o",
+            "neutralized.gro",
+            "-p",
+            "topol.top",
+            "-pname",
+            "NA",
+            "-nname",
+            "CL",
+            "-neutral",
+            stdin_input="SOL\n",
+        )
 
         # --- Energy minimization ---
         logger.info("GROMACS MD: energy minimization...")
@@ -652,27 +679,41 @@ def run_gromacs_md(
 
         subprocess.run(
             [gmx, "energy", "-f", "em.edr", "-o", "em_energy.xvg"],
-            input="Potential\n", text=True, capture_output=True, cwd=tmpdir,
+            input="Potential\n",
+            text=True,
+            capture_output=True,
+            cwd=tmpdir,
         )
         potential_energy = _parse_gromacs_energy(os.path.join(tmpdir, "em_energy.xvg"))
         logger.info(f"GROMACS MD: EM done. PE = {potential_energy:.1f} kJ/mol")
 
         # --- NVT equilibration ---
         logger.info("GROMACS MD: NVT equilibration (100 ps)...")
-        _gmx("grompp", "-f", "nvt.mdp", "-c", "em.gro", "-r", "em.gro",
-             "-p", "topol.top", "-o", "nvt.tpr")
+        _gmx("grompp", "-f", "nvt.mdp", "-c", "em.gro", "-r", "em.gro", "-p", "topol.top", "-o", "nvt.tpr")
         _gmx("mdrun", "-v", "-deffnm", "nvt", "-ntmpi", "1")
 
         # --- NPT equilibration ---
         logger.info("GROMACS MD: NPT equilibration (100 ps)...")
-        _gmx("grompp", "-f", "npt.mdp", "-c", "nvt.gro", "-r", "nvt.gro",
-             "-t", "nvt.cpt", "-p", "topol.top", "-o", "npt.tpr")
+        _gmx(
+            "grompp",
+            "-f",
+            "npt.mdp",
+            "-c",
+            "nvt.gro",
+            "-r",
+            "nvt.gro",
+            "-t",
+            "nvt.cpt",
+            "-p",
+            "topol.top",
+            "-o",
+            "npt.tpr",
+        )
         _gmx("mdrun", "-v", "-deffnm", "npt", "-ntmpi", "1")
 
         # --- Production MD ---
         logger.info(f"GROMACS MD: production ({production_ns} ns)...")
-        _gmx("grompp", "-f", "prod.mdp", "-c", "npt.gro", "-t", "npt.cpt",
-             "-p", "topol.top", "-o", "prod.tpr")
+        _gmx("grompp", "-f", "prod.mdp", "-c", "npt.gro", "-t", "npt.cpt", "-p", "topol.top", "-o", "prod.tpr")
         _gmx("mdrun", "-v", "-deffnm", "prod", "-ntmpi", "1")
 
         # --- Trajectory analysis ---
@@ -696,9 +737,8 @@ def run_gromacs_md(
 # OpenMM simulation backend (optional — conda install -c conda-forge openmm)
 # ---------------------------------------------------------------------------
 
-def _compute_openmm_trajectory_metrics(
-    frames: List[Any], ca_indices: List[int]
-) -> Tuple[List[float], List[float]]:
+
+def _compute_openmm_trajectory_metrics(frames: List[Any], ca_indices: List[int]) -> Tuple[List[float], List[float]]:
     """
     Compute per-frame CA RMSD (vs frame 0) and radius of gyration from OpenMM frames.
     Positions are expected in nanometres (OpenMM native unit).
@@ -715,7 +755,7 @@ def _compute_openmm_trajectory_metrics(
     for positions in frames:
         ca = positions[ca_indices]
         diff = ca - ref
-        rmsd_list.append(float(np.sqrt(np.mean(np.sum(diff ** 2, axis=1)))))
+        rmsd_list.append(float(np.sqrt(np.mean(np.sum(diff**2, axis=1)))))
         center = ca.mean(axis=0)
         rg_list.append(float(np.sqrt(np.mean(np.sum((ca - center) ** 2, axis=1)))))
 
@@ -754,10 +794,7 @@ def run_openmm_simulation(
         from openmm import unit
         from openmm.app import PME, ForceField, HBonds, Modeller, PDBFile, Simulation
     except ImportError:
-        raise RuntimeError(
-            "OpenMM is not installed. "
-            "Install: conda install -c conda-forge openmm"
-        )
+        raise RuntimeError("OpenMM is not installed. Install: conda install -c conda-forge openmm")
 
     import numpy as np
 
@@ -769,6 +806,7 @@ def run_openmm_simulation(
     logger.info("OpenMM: fixing PDB (missing terminals, heavy atoms)...")
     try:
         from pdbfixer import PDBFixer
+
         fixer = PDBFixer(pdbfile=io.StringIO(pdb_string))
         fixer.findMissingResidues()
         fixer.findMissingAtoms()
@@ -799,6 +837,7 @@ def run_openmm_simulation(
     if membrane_context:
         try:
             from orchestrator.membrane import embed_in_membrane_openmm
+
             modeller = embed_in_membrane_openmm(modeller, ff, membrane_context)
             membrane_meta = {
                 "membrane_type": membrane_context.get("type", "POPC"),
@@ -827,28 +866,31 @@ def run_openmm_simulation(
         with tempfile.TemporaryDirectory() as lig_tmpdir:
             try:
                 from orchestrator.ligands import prepare_ligands
+
                 prepared = prepare_ligands(
-                    ligand_contexts, pdb_string, lig_tmpdir,
-                    gnina_bin=GNINA_BIN, use_openff=True,
+                    ligand_contexts,
+                    pdb_string,
+                    lig_tmpdir,
+                    gnina_bin=GNINA_BIN,
+                    use_openff=True,
                 )
                 for lig in prepared:
                     xml_path = lig.get("xml")
                     if xml_path and os.path.isfile(xml_path):
                         try:
                             ff.loadFile(xml_path)
-                            ligand_meta.append({
-                                "name": lig["name"],
-                                "parameterizer": lig["parameterizer"],
-                                "docked": lig["docked_sdf"] is not None,
-                            })
+                            ligand_meta.append(
+                                {
+                                    "name": lig["name"],
+                                    "parameterizer": lig["parameterizer"],
+                                    "docked": lig["docked_sdf"] is not None,
+                                }
+                            )
                             logger.info(f"OpenMM: ligand '{lig['name']}' OpenFF XML loaded")
                         except Exception as e:
                             logger.warning(f"OpenMM: could not load ligand XML for '{lig['name']}': {e}")
                     else:
-                        logger.warning(
-                            f"Ligand '{lig['name']}': no OpenFF XML produced — "
-                            "skipping force-field merge"
-                        )
+                        logger.warning(f"Ligand '{lig['name']}': no OpenFF XML produced — skipping force-field merge")
             except Exception as e:
                 logger.warning(f"Ligand preparation (OpenFF) failed: {e}")
 
@@ -883,9 +925,7 @@ def run_openmm_simulation(
     logger.info("OpenMM: energy minimization...")
     simulation.minimizeEnergy()
     state = simulation.context.getState(getEnergy=True)
-    potential_energy_kj = state.getPotentialEnergy().value_in_unit(
-        unit.kilojoules_per_mole
-    )
+    potential_energy_kj = state.getPotentialEnergy().value_in_unit(unit.kilojoules_per_mole)
     logger.info(f"OpenMM: EM done. PE = {potential_energy_kj:.1f} kJ/mol")
 
     logger.info("OpenMM: NVT equilibration (50 ps)...")
@@ -903,13 +943,9 @@ def run_openmm_simulation(
     for _ in range(n_chunks):
         simulation.step(report_interval)
         state = simulation.context.getState(getPositions=True)
-        frames.append(
-            np.array(state.getPositions(asNumpy=True).value_in_unit(unit.nanometers))
-        )
+        frames.append(np.array(state.getPositions(asNumpy=True).value_in_unit(unit.nanometers)))
 
-    ca_indices = [
-        i for i, atom in enumerate(modeller.topology.atoms()) if atom.name == "CA"
-    ]
+    ca_indices = [i for i, atom in enumerate(modeller.topology.atoms()) if atom.name == "CA"]
     rmsd_nm, rg_nm = _compute_openmm_trajectory_metrics(frames, ca_indices)
 
     logger.info(f"OpenMM: complete. {len(frames)} frames, {len(ca_indices)} CA atoms.")

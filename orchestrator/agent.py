@@ -207,8 +207,7 @@ _AGENT_TOOLS = [
                 "max_sites": {
                     "type": "integer",
                     "description": (
-                        "Max simultaneous mutations per candidate. Defaults to and capped at "
-                        "MUTATION_SEARCH_MAX_SITES."
+                        "Max simultaneous mutations per candidate. Defaults to and capped at MUTATION_SEARCH_MAX_SITES."
                     ),
                 },
                 "validate": {
@@ -222,8 +221,7 @@ _AGENT_TOOLS = [
                 "max_refolds": {
                     "type": "integer",
                     "description": (
-                        "Re-fold budget when validate=true. Defaults to and capped at "
-                        "MUTATION_SEARCH_MAX_REFOLDS."
+                        "Re-fold budget when validate=true. Defaults to and capped at MUTATION_SEARCH_MAX_REFOLDS."
                     ),
                 },
                 "top_k": {
@@ -239,9 +237,7 @@ _AGENT_TOOLS = [
         "description": "Accept the current structure. Final decision — call when quality is sufficient.",
         "input_schema": {
             "type": "object",
-            "properties": {
-                "reasoning": {"type": "string", "description": "Why this structure is accepted"}
-            },
+            "properties": {"reasoning": {"type": "string", "description": "Why this structure is accepted"}},
             "required": ["reasoning"],
         },
     },
@@ -253,9 +249,7 @@ _AGENT_TOOLS = [
         ),
         "input_schema": {
             "type": "object",
-            "properties": {
-                "reasoning": {"type": "string", "description": "Why human review is needed"}
-            },
+            "properties": {"reasoning": {"type": "string", "description": "Why human review is needed"}},
             "required": ["reasoning"],
         },
     },
@@ -324,14 +318,16 @@ def _execute_agent_tool(
                 prev = res_num
             regions.append({"start": start, "end": prev})
 
-        return json.dumps({
-            "total_residues": len(plddt),
-            "low_confidence_count": len(low),
-            "low_confidence_fraction": round(len(low) / len(plddt), 3) if plddt else 0,
-            "regions_below_threshold": regions,
-            "worst_residue": int(plddt.index(min(plddt))) + 1 if plddt else None,
-            "worst_score": round(min(plddt), 1) if plddt else None,
-        })
+        return json.dumps(
+            {
+                "total_residues": len(plddt),
+                "low_confidence_count": len(low),
+                "low_confidence_fraction": round(len(low) / len(plddt), 3) if plddt else 0,
+                "regions_below_threshold": regions,
+                "worst_residue": int(plddt.index(min(plddt))) + 1 if plddt else None,
+                "worst_score": round(min(plddt), 1) if plddt else None,
+            }
+        )
 
     if tool_name == "run_rosetta_relax":
         if not ROSETTA_ENABLED:
@@ -341,11 +337,13 @@ def _execute_agent_tool(
             state["current_pdb"] = relaxed_pdb
             state["rosetta_energy"] = score
             state["num_clashes"] = count_clashes(state["current_pdb"])
-            return json.dumps({
-                "status": "completed",
-                "rosetta_energy": round(score, 3),
-                "num_clashes": state["num_clashes"],
-            })
+            return json.dumps(
+                {
+                    "status": "completed",
+                    "rosetta_energy": round(score, 3),
+                    "num_clashes": state["num_clashes"],
+                }
+            )
         except Exception as e:
             return json.dumps({"error": str(e)})
 
@@ -360,23 +358,24 @@ def _execute_agent_tool(
         try:
             if OPENMM_ENABLED:
                 sim = run_openmm_simulation(
-                    state["current_pdb"], pH=pH,
-                    temperature_c=temperature_c, production_ns=production_ns,
+                    state["current_pdb"],
+                    pH=pH,
+                    temperature_c=temperature_c,
+                    production_ns=production_ns,
                     membrane_context=membrane_ctx,
                     ligand_contexts=ligand_ctx if ligand_ctx else None,
                 )
             else:
                 sim = run_gromacs_md(
-                    state["current_pdb"], pH=pH,
-                    temperature_c=temperature_c, production_ns=production_ns,
+                    state["current_pdb"],
+                    pH=pH,
+                    temperature_c=temperature_c,
+                    production_ns=production_ns,
                     membrane_context=membrane_ctx,
                     ligand_contexts=ligand_ctx if ligand_ctx else None,
                 )
             state["sim_result"] = sim
-            summary: Dict[str, Any] = {
-                k: v for k, v in sim.items()
-                if k not in ("rmsd_nm", "rg_nm", "protonation")
-            }
+            summary: Dict[str, Any] = {k: v for k, v in sim.items() if k not in ("rmsd_nm", "rg_nm", "protonation")}
             if sim.get("rmsd_nm"):
                 summary["rmsd_final_nm"] = round(sim["rmsd_nm"][-1], 4)
                 summary["rmsd_mean_nm"] = round(sum(sim["rmsd_nm"]) / len(sim["rmsd_nm"]), 4)
@@ -430,9 +429,7 @@ def _execute_agent_tool(
 
     if tool_name == "scan_mutations":
         if not PROTEINMPNN_PATH:
-            return json.dumps({
-                "error": "PROTEINMPNN_PATH not configured — structural mutation scorer unavailable"
-            })
+            return json.dumps({"error": "PROTEINMPNN_PATH not configured — structural mutation scorer unavailable"})
         positions = tool_input.get("positions")
         if positions is not None:
             try:
@@ -456,24 +453,22 @@ def _execute_agent_tool(
             )
         except Exception as e:
             return json.dumps({"error": f"mutation scan failed: {e}"})
-        return json.dumps({
-            "status": "completed",
-            "note": (
-                "structural-compatibility log-odds; positive = more compatible than "
-                "wild-type. Not a function/stability/fitness proxy."
-            ),
-            "candidates": candidates,
-        })
+        return json.dumps(
+            {
+                "status": "completed",
+                "note": (
+                    "structural-compatibility log-odds; positive = more compatible than "
+                    "wild-type. Not a function/stability/fitness proxy."
+                ),
+                "candidates": candidates,
+            }
+        )
 
     if tool_name == "search_mutations":
         if not MUTATION_SEARCH_ENABLED:
-            return json.dumps({
-                "error": "combinatorial mutation search disabled (MUTATION_SEARCH_ENABLED=False)"
-            })
+            return json.dumps({"error": "combinatorial mutation search disabled (MUTATION_SEARCH_ENABLED=False)"})
         if not PROTEINMPNN_PATH:
-            return json.dumps({
-                "error": "PROTEINMPNN_PATH not configured — mutation search oracle unavailable"
-            })
+            return json.dumps({"error": "PROTEINMPNN_PATH not configured — mutation search oracle unavailable"})
 
         # Config values are CEILINGS: the agent may request less but not exceed the operator's
         # configured budget (guards against runaway subprocesses / re-folds).
@@ -500,7 +495,8 @@ def _execute_agent_tool(
         # non-zero — used for the oracle's decoding order inside score_only_oracle).
         def oracle(sequences):
             return score_only_oracle(
-                state["current_pdb"], sequences,
+                state["current_pdb"],
+                sequences,
                 proteinmpnn_dir=PROTEINMPNN_PATH,
                 model_name=PROTEINMPNN_MODEL_NAME,
                 seed=PROTEINMPNN_SEED,
@@ -509,10 +505,16 @@ def _execute_agent_tool(
 
         try:
             result = search_and_validate(
-                state["sequence"], oracle,
-                rounds=rounds, candidates_per_round=candidates_per_round,
-                max_sites=max_sites, seed=0, oracle_name="score_only", top_k=top_k,
-                max_refolds=max_refolds, context=state["context"],
+                state["sequence"],
+                oracle,
+                rounds=rounds,
+                candidates_per_round=candidates_per_round,
+                max_sites=max_sites,
+                seed=0,
+                oracle_name="score_only",
+                top_k=top_k,
+                max_refolds=max_refolds,
+                context=state["context"],
                 # refold_fn defaults to _default_refold_fn (Boltz/ESMFold by flag)
             )
         except Exception as e:
@@ -526,26 +528,30 @@ def _execute_agent_tool(
         # fair current-vs-candidate comparison on the same metric, must count against
         # AGENT_MAX_MUTATIONS, and should wait until the re-fold ranking is proven trustworthy
         # (see research_plan/rowA-boltz-affinity-invariance.md).
-        return json.dumps({
-            "status": "completed",
-            "note": (
-                "multi-site combinatorial search; ranking is ProteinMPNN structural "
-                "compatibility (or re-folded structure quality when validate=true). NOT a "
-                "function/stability/fitness proxy; affinity fields are metadata, not ranked. "
-                "Read-only — feed a candidate into apply_mutation to adopt it."
-            ),
-            **result.model_dump(),
-        })
+        return json.dumps(
+            {
+                "status": "completed",
+                "note": (
+                    "multi-site combinatorial search; ranking is ProteinMPNN structural "
+                    "compatibility (or re-folded structure quality when validate=true). NOT a "
+                    "function/stability/fitness proxy; affinity fields are metadata, not ranked. "
+                    "Read-only — feed a candidate into apply_mutation to adopt it."
+                ),
+                **result.model_dump(),
+            }
+        )
 
     if tool_name == "apply_mutation":
         applied_so_far = len(state.get("mutations_applied", []))
         if applied_so_far >= AGENT_MAX_MUTATIONS:
-            return json.dumps({
-                "error": (
-                    f"mutation limit reached ({applied_so_far}/{AGENT_MAX_MUTATIONS} "
-                    "AGENT_MAX_MUTATIONS) — no further mutations this session"
-                )
-            })
+            return json.dumps(
+                {
+                    "error": (
+                        f"mutation limit reached ({applied_so_far}/{AGENT_MAX_MUTATIONS} "
+                        "AGENT_MAX_MUTATIONS) — no further mutations this session"
+                    )
+                }
+            )
 
         try:
             position = int(tool_input["position"])
@@ -557,23 +563,18 @@ def _execute_agent_tool(
         seq = state["sequence"]
 
         if position < 1 or position > len(seq):
-            return json.dumps({
-                "error": f"position {position} out of range (sequence length {len(seq)})"
-            })
+            return json.dumps({"error": f"position {position} out of range (sequence length {len(seq)})"})
         if to_aa not in _VALID_AA:
             return json.dumps({"error": f"'{to_aa}' is not a standard amino acid code"})
 
         idx = position - 1
         actual_from = seq[idx]
         if from_aa and str(from_aa).upper() != actual_from:
-            return json.dumps({
-                "error": (
-                    f"from_aa mismatch: sequence has '{actual_from}' at position "
-                    f"{position}, not '{from_aa}'"
-                )
-            })
+            return json.dumps(
+                {"error": (f"from_aa mismatch: sequence has '{actual_from}' at position {position}, not '{from_aa}'")}
+            )
 
-        mutated_seq = seq[:idx] + to_aa + seq[idx + 1:]
+        mutated_seq = seq[:idx] + to_aa + seq[idx + 1 :]
 
         try:
             if BOLTZ_ENABLED:
@@ -644,15 +645,15 @@ def run_agent_refinement(
     num_clashes = count_clashes(prediction.structure_pdb)
 
     state: Dict[str, Any] = {
-        "current_pdb":    prediction.structure_pdb,
-        "plddt_scores":   prediction.plddt_scores,
-        "mean_plddt":     prediction.mean_plddt,
-        "num_clashes":    num_clashes,
-        "context":        context,
-        "sequence":       sequence,
+        "current_pdb": prediction.structure_pdb,
+        "plddt_scores": prediction.plddt_scores,
+        "mean_plddt": prediction.mean_plddt,
+        "num_clashes": num_clashes,
+        "context": context,
+        "sequence": sequence,
         "rosetta_energy": None,
-        "sim_result":     None,
-        "terminal_tool":  None,
+        "sim_result": None,
+        "terminal_tool": None,
         "agent_reasoning": "",
         "mutations_applied": [],
     }
@@ -733,11 +734,13 @@ def run_agent_refinement(
                     continue
                 result_str = _execute_agent_tool(block.name, block.input, state)
                 logger.info(f"Tool '{block.name}' -> {result_str[:120]}...")
-                tool_results.append({
-                    "type": "tool_result",
-                    "tool_use_id": block.id,
-                    "content": result_str,
-                })
+                tool_results.append(
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": block.id,
+                        "content": result_str,
+                    }
+                )
             messages.append({"role": "user", "content": tool_results})
 
             if state["terminal_tool"] is not None:

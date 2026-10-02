@@ -63,9 +63,7 @@ def align_and_compare_structures(pdb_strings: List[str]) -> Dict[str, Any]:
             dist_nm = (ref_a.get_vector() - mob_a.get_vector()).norm() / 10.0
             per_pair_dists[j].append(dist_nm)
 
-    mean_per_residue = [
-        sum(ds) / len(ds) if ds else 0.0 for ds in per_pair_dists
-    ]
+    mean_per_residue = [sum(ds) / len(ds) if ds else 0.0 for ds in per_pair_dists]
 
     regions: List[Dict[str, Any]] = []
     in_region = False
@@ -78,18 +76,22 @@ def align_and_compare_structures(pdb_strings: List[str]) -> Dict[str, Any]:
                 in_region, r_start, r_vals = True, res_num, []
             r_vals.append(dist)
         elif in_region:
-            regions.append({
-                "start": r_start,
-                "end": common[idx - 1],
-                "mean_disagreement_nm": round(sum(r_vals) / len(r_vals), 4),
-            })
+            regions.append(
+                {
+                    "start": r_start,
+                    "end": common[idx - 1],
+                    "mean_disagreement_nm": round(sum(r_vals) / len(r_vals), 4),
+                }
+            )
             in_region = False
     if in_region:
-        regions.append({
-            "start": r_start,
-            "end": common[-1],
-            "mean_disagreement_nm": round(sum(r_vals) / len(r_vals), 4),
-        })
+        regions.append(
+            {
+                "start": r_start,
+                "end": common[-1],
+                "mean_disagreement_nm": round(sum(r_vals) / len(r_vals), 4),
+            }
+        )
 
     mean_overall = sum(mean_per_residue) / len(mean_per_residue)
     logger.info(

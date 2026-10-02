@@ -11,7 +11,7 @@ Bug re-verified against the live tree before implementing.
 ProteinMPNN. ProteinMPNN's `protein_mpnn_run.py:24` does:
 
 ```python
-if args.seed:                       # 0 is falsy!
+if args.seed:  # 0 is falsy!
     seed = args.seed
 else:
     seed = int(np.random.randint(0, high=999, size=1)[0])

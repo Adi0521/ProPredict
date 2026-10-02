@@ -5,6 +5,7 @@ Fast tests mock the model/tokenizer; the integration test at the bottom
 is skipped unless torch + transformers are installed AND a GPU/MPS is
 available (too slow for CI on CPU with the full facebook/esmfold_v1 weights).
 """
+
 import sys
 from unittest.mock import MagicMock, patch
 
@@ -31,6 +32,7 @@ EXPECTED_PLDDT = [85.0, 72.0]
 # Unit: _parse_plddt_from_pdb
 # ---------------------------------------------------------------------------
 
+
 def test_parse_plddt_from_pdb():
     from orchestrator.backends.esmfold import _parse_plddt_from_pdb
 
@@ -48,6 +50,7 @@ def test_parse_plddt_empty_pdb():
 # ---------------------------------------------------------------------------
 # Unit: call_esmfold_local — mock model/tokenizer
 # ---------------------------------------------------------------------------
+
 
 def _make_mock_model(pdb_output: str):
     """Return a mock EsmForProteinFolding-like object."""
@@ -73,9 +76,11 @@ def test_call_esmfold_local_returns_structure_prediction():
     mock_model = _make_mock_model(SAMPLE_PDB)
     mock_tokenizer = MagicMock(return_value={"input_ids": MagicMock(to=lambda d: MagicMock())})
 
-    with patch.dict(sys.modules, {"torch": _mock_torch()}), \
-         patch("orchestrator.backends.esmfold._esmfold_model", mock_model), \
-         patch("orchestrator.backends.esmfold._esmfold_tokenizer", mock_tokenizer):
+    with (
+        patch.dict(sys.modules, {"torch": _mock_torch()}),
+        patch("orchestrator.backends.esmfold._esmfold_model", mock_model),
+        patch("orchestrator.backends.esmfold._esmfold_tokenizer", mock_tokenizer),
+    ):
         result = call_esmfold_local("MKTAYIAK", seed=0)
 
     assert result.model_name == "esmfold_local"
@@ -87,6 +92,7 @@ def test_call_esmfold_local_returns_structure_prediction():
     # is the version recorded. Read from config rather than hardcoded so overriding
     # ESMFOLD_MODEL_NAME cannot silently mis-stamp results.
     from config import ESMFOLD_MODEL_NAME
+
     assert result.backend_version == ESMFOLD_MODEL_NAME
 
 
@@ -96,9 +102,11 @@ def test_call_esmfold_local_raises_on_empty_pdb():
     mock_model = _make_mock_model("REMARK no atoms\n")
     mock_tokenizer = MagicMock(return_value={"input_ids": MagicMock(to=lambda d: MagicMock())})
 
-    with patch.dict(sys.modules, {"torch": _mock_torch()}), \
-         patch("orchestrator.backends.esmfold._esmfold_model", mock_model), \
-         patch("orchestrator.backends.esmfold._esmfold_tokenizer", mock_tokenizer):
+    with (
+        patch.dict(sys.modules, {"torch": _mock_torch()}),
+        patch("orchestrator.backends.esmfold._esmfold_model", mock_model),
+        patch("orchestrator.backends.esmfold._esmfold_tokenizer", mock_tokenizer),
+    ):
         with pytest.raises(ValueError, match="No CA atoms"):
             call_esmfold_local("MKTAYIAK")
 
@@ -107,21 +115,28 @@ def test_call_esmfold_local_raises_on_empty_pdb():
 # Unit: call_esmfold_api — dispatch routing
 # ---------------------------------------------------------------------------
 
+
 def test_dispatch_routes_to_local_when_flag_true():
-    with patch("orchestrator.backends.esmfold.ESMFOLD_LOCAL", True), \
-         patch("orchestrator.backends.esmfold.call_esmfold_local") as mock_local, \
-         patch("orchestrator.backends.esmfold._call_esmfold_remote") as mock_remote:
+    with (
+        patch("orchestrator.backends.esmfold.ESMFOLD_LOCAL", True),
+        patch("orchestrator.backends.esmfold.call_esmfold_local") as mock_local,
+        patch("orchestrator.backends.esmfold._call_esmfold_remote") as mock_remote,
+    ):
         from orchestrator.backends.esmfold import call_esmfold_api
+
         call_esmfold_api("MKTAYIAK", seed=1)
         mock_local.assert_called_once_with("MKTAYIAK", 1)
         mock_remote.assert_not_called()
 
 
 def test_dispatch_routes_to_remote_when_flag_false():
-    with patch("orchestrator.backends.esmfold.ESMFOLD_LOCAL", False), \
-         patch("orchestrator.backends.esmfold.call_esmfold_local") as mock_local, \
-         patch("orchestrator.backends.esmfold._call_esmfold_remote") as mock_remote:
+    with (
+        patch("orchestrator.backends.esmfold.ESMFOLD_LOCAL", False),
+        patch("orchestrator.backends.esmfold.call_esmfold_local") as mock_local,
+        patch("orchestrator.backends.esmfold._call_esmfold_remote") as mock_remote,
+    ):
         from orchestrator.backends.esmfold import call_esmfold_api
+
         call_esmfold_api("MKTAYIAK", seed=0)
         mock_remote.assert_called_once_with("MKTAYIAK", 0)
         mock_local.assert_not_called()
@@ -130,6 +145,7 @@ def test_dispatch_routes_to_remote_when_flag_false():
 # ---------------------------------------------------------------------------
 # Integration test (skipped unless model weights are available)
 # ---------------------------------------------------------------------------
+
 
 def test_call_esmfold_local_integration():
     """

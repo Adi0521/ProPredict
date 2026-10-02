@@ -47,11 +47,13 @@ Each phase is self-contained. Complete Phase 1 before starting Phase 2, etc.
   _esmfold_model = None
   _esmfold_tokenizer = None
 
+
   def _get_esmfold_local():
       global _esmfold_model, _esmfold_tokenizer
       if _esmfold_model is None:
           from transformers import EsmForProteinFolding, AutoTokenizer
           import torch
+
           _esmfold_tokenizer = AutoTokenizer.from_pretrained(ESMFOLD_MODEL_NAME)
           _esmfold_model = EsmForProteinFolding.from_pretrained(ESMFOLD_MODEL_NAME)
           _esmfold_model.eval()
@@ -352,13 +354,13 @@ Each phase is self-contained. Complete Phase 1 before starting Phase 2, etc.
 
 - [ ] In `predict_protein_structure()`, add progress updates at each stage:
   ```python
-  self.update_state(state='PROGRESS', meta={'progress_percent': 10, 'stage': 'folding'})
+  self.update_state(state="PROGRESS", meta={"progress_percent": 10, "stage": "folding"})
   # ... after ESMFold
-  self.update_state(state='PROGRESS', meta={'progress_percent': 40, 'stage': 'post_processing'})
+  self.update_state(state="PROGRESS", meta={"progress_percent": 40, "stage": "post_processing"})
   # ... after Rosetta
-  self.update_state(state='PROGRESS', meta={'progress_percent': 60, 'stage': 'simulation'})
+  self.update_state(state="PROGRESS", meta={"progress_percent": 60, "stage": "simulation"})
   # ... after MD
-  self.update_state(state='PROGRESS', meta={'progress_percent': 90, 'stage': 'finalizing'})
+  self.update_state(state="PROGRESS", meta={"progress_percent": 90, "stage": "finalizing"})
   ```
 - [ ] Update `get_job_status()` in `api/main.py` to read progress from `task.info` instead of hardcoding 0/50/100.
 

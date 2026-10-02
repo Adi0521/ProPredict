@@ -32,6 +32,7 @@ Run (ProPredict conda env; needs PROTEINMPNN_PATH + ESMFOLD_LOCAL=True in .env):
     python -m benchmarks.benchmark_proteinmpnn_checkpoints --checkpoints v_48_020,v_48_030
     python -m benchmarks.benchmark_proteinmpnn_checkpoints --assays CCDB_ECOLI_Adkar_2012
 """
+
 import argparse
 import json
 import os
@@ -58,9 +59,9 @@ PARQUET_S3 = "s3://proteingym/DMS_substitutions.parquet"
 # Same three assays as the Task-2 validation gate: two Stability (best case for a
 # structural scorer) + one Activity (contrast category — tests generalization).
 DEFAULT_ASSAYS = [
-    "TCRG1_MOUSE_Tsuboyama_2023_1E0L",   # Stability, 37 aa
-    "ESTA_BACSU_Nutschel_2020",          # Stability, 212 aa
-    "CCDB_ECOLI_Adkar_2012",             # Activity, 101 aa
+    "TCRG1_MOUSE_Tsuboyama_2023_1E0L",  # Stability, 37 aa
+    "ESTA_BACSU_Nutschel_2020",  # Stability, 212 aa
+    "CCDB_ECOLI_Adkar_2012",  # Activity, 101 aa
 ]
 # ProteinMPNN vanilla checkpoints, in ascending training-noise order.
 DEFAULT_CHECKPOINTS = ["v_48_002", "v_48_010", "v_48_020", "v_48_030"]
@@ -116,9 +117,7 @@ def benchmark_assay(
     seeds: List[int],
     num_decoding_orders: int,
 ) -> Optional[Dict]:
-    df = pd.read_parquet(
-        parquet_path, columns=["DMS_id", "mutant", "DMS_score", "target_seq"]
-    )
+    df = pd.read_parquet(parquet_path, columns=["DMS_id", "mutant", "DMS_score", "target_seq"])
     df = df[df["DMS_id"] == dms_id]
     if df.empty:
         print(f"[warn] no rows for {dms_id} — skipping")
@@ -144,8 +143,12 @@ def benchmark_assay(
         for seed in seeds:
             with tempfile.TemporaryDirectory() as td:
                 log_p = _run_proteinmpnn_conditional_probs(
-                    pred.structure_pdb, td, PROTEINMPNN_PATH, model_name=ckpt,
-                    seed=seed, num_decoding_orders=num_decoding_orders,
+                    pred.structure_pdb,
+                    td,
+                    PROTEINMPNN_PATH,
+                    model_name=ckpt,
+                    seed=seed,
+                    num_decoding_orders=num_decoding_orders,
                 )
             scores, truths, skipped = [], [], 0
             for mutant, dms in zip(mutants, dms_scores):
@@ -170,8 +173,7 @@ def benchmark_assay(
             "n_skipped": n_skipped,
         }
         spread = f" ±{rho_std:.4f}" if len(seeds) > 1 else ""
-        print(f"  {ckpt}: rho={rho_mean:+.4f}{spread}  "
-              f"(n={n_scored}, skipped={n_skipped}, seeds={len(seeds)})")
+        print(f"  {ckpt}: rho={rho_mean:+.4f}{spread}  (n={n_scored}, skipped={n_skipped}, seeds={len(seeds)})")
 
     return {
         "dms_id": dms_id,
@@ -183,21 +185,28 @@ def benchmark_assay(
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--checkpoints", default=",".join(DEFAULT_CHECKPOINTS),
-                    help="comma-separated ProteinMPNN checkpoints (default: all four)")
-    ap.add_argument("--assays", default=",".join(DEFAULT_ASSAYS),
-                    help="comma-separated ProteinGym DMS_ids")
-    ap.add_argument("--seeds", default=str(PROTEINMPNN_SEED),
-                    help="comma-separated non-zero ProteinMPNN seeds; each checkpoint is "
-                         "scored once per seed and reported as mean±std (default: config "
-                         f"PROTEINMPNN_SEED={PROTEINMPNN_SEED}). Use e.g. 37,38,39 for a "
-                         "seed-noise band.")
-    ap.add_argument("--num-decoding-orders", type=int, default=PROTEINMPNN_NUM_DECODING_ORDERS,
-                    help=f"decoding orders averaged per score (default: config "
-                         f"PROTEINMPNN_NUM_DECODING_ORDERS={PROTEINMPNN_NUM_DECODING_ORDERS})")
-    ap.add_argument("--out",
-                    default=os.path.join(os.path.dirname(__file__),
-                                         "proteinmpnn_checkpoint_results.json"))
+    ap.add_argument(
+        "--checkpoints",
+        default=",".join(DEFAULT_CHECKPOINTS),
+        help="comma-separated ProteinMPNN checkpoints (default: all four)",
+    )
+    ap.add_argument("--assays", default=",".join(DEFAULT_ASSAYS), help="comma-separated ProteinGym DMS_ids")
+    ap.add_argument(
+        "--seeds",
+        default=str(PROTEINMPNN_SEED),
+        help="comma-separated non-zero ProteinMPNN seeds; each checkpoint is "
+        "scored once per seed and reported as mean±std (default: config "
+        f"PROTEINMPNN_SEED={PROTEINMPNN_SEED}). Use e.g. 37,38,39 for a "
+        "seed-noise band.",
+    )
+    ap.add_argument(
+        "--num-decoding-orders",
+        type=int,
+        default=PROTEINMPNN_NUM_DECODING_ORDERS,
+        help=f"decoding orders averaged per score (default: config "
+        f"PROTEINMPNN_NUM_DECODING_ORDERS={PROTEINMPNN_NUM_DECODING_ORDERS})",
+    )
+    ap.add_argument("--out", default=os.path.join(os.path.dirname(__file__), "proteinmpnn_checkpoint_results.json"))
     args = ap.parse_args()
 
     if not PROTEINMPNN_PATH:
@@ -207,8 +216,7 @@ def main() -> None:
     assays = [a.strip() for a in args.assays.split(",") if a.strip()]
     seeds = [int(s.strip()) for s in args.seeds.split(",") if s.strip()]
     if any(s == 0 for s in seeds):
-        sys.exit("ERROR: seed 0 is invalid — ProteinMPNN treats it as unset and randomizes. "
-                 "Use non-zero seeds.")
+        sys.exit("ERROR: seed 0 is invalid — ProteinMPNN treats it as unset and randomizes. Use non-zero seeds.")
 
     parquet_path = _ensure_parquet()
 
@@ -231,28 +239,35 @@ def main() -> None:
         cells = []
         for c in checkpoints:
             ck = r["checkpoints"][c]
-            cell = (f"{ck['spearman_mean']:+.3f}±{ck['spearman_std']:.3f}"
-                    if len(seeds) > 1 else f"{ck['spearman_mean']:+.4f}")
+            cell = (
+                f"{ck['spearman_mean']:+.3f}±{ck['spearman_std']:.3f}"
+                if len(seeds) > 1
+                else f"{ck['spearman_mean']:+.4f}"
+            )
             cells.append(f"{cell:>16}")
         print(f"{r['dms_id']:<34}" + "".join(cells))
     if results:
         print("-" * len(header))
-        means = [
-            sum(r["checkpoints"][c]["spearman_mean"] for r in results) / len(results)
-            for c in checkpoints
-        ]
+        means = [sum(r["checkpoints"][c]["spearman_mean"] for r in results) / len(results) for c in checkpoints]
         print(f"{'MEAN':<34}" + "".join(f"{m:>+16.4f}" for m in means))
         best_idx = int(np.argmax(means))
         print(f"\nBest mean checkpoint: {checkpoints[best_idx]} (mean rho {means[best_idx]:+.4f})")
         if len(seeds) == 1:
-            print("NOTE: single seed — this run cannot separate checkpoint effect from "
-                  "decoding-order noise. Re-run with --seeds 37,38,39 for a proper band.")
+            print(
+                "NOTE: single seed — this run cannot separate checkpoint effect from "
+                "decoding-order noise. Re-run with --seeds 37,38,39 for a proper band."
+            )
 
     with open(args.out, "w") as f:
         json.dump(
-            {"checkpoints": checkpoints, "seeds": seeds,
-             "num_decoding_orders": args.num_decoding_orders, "assays": results},
-            f, indent=2,
+            {
+                "checkpoints": checkpoints,
+                "seeds": seeds,
+                "num_decoding_orders": args.num_decoding_orders,
+                "assays": results,
+            },
+            f,
+            indent=2,
         )
     print(f"Saved -> {args.out}")
 

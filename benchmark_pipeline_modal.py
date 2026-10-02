@@ -61,6 +61,7 @@ from benchmark_modal import (
 # Sequence extraction — same 3-to-1 logic benchmark_one uses, factored out
 # ---------------------------------------------------------------------------
 
+
 def _extract_sequence(true_pdb: str, chain: str):
     """Return (sequence, resolved_chain_id) from an experimental PDB string.
 
@@ -84,17 +85,14 @@ def _extract_sequence(true_pdb: str, chain: str):
         chain_obj = chains[0]
         chain = chain_obj.id
 
-    seq = "".join(
-        protein_letters_3to1.get(res.get_resname(), "X")
-        for res in chain_obj
-        if is_aa(res, standard=True)
-    )
+    seq = "".join(protein_letters_3to1.get(res.get_resname(), "X") for res in chain_obj if is_aa(res, standard=True))
     return seq, chain
 
 
 # ---------------------------------------------------------------------------
 # Per-target Modal function — runs all three arms
 # ---------------------------------------------------------------------------
+
 
 # A100-40GB, not A10G: arm C holds the ESMFold-local model resident in GPU memory
 # (a lazy singleton) while Boltz's subprocess also needs the GPU. On a 24 GB A10G that
@@ -114,20 +112,22 @@ def benchmark_pipeline_one(target: dict) -> dict:
     import requests
 
     cfg = target.get("_cfg", {})
-    os.environ.update({
-        "BOLTZ_ENABLED": "True",
-        "MODAL_ENABLED": "True",
-        # Reduce CUDA fragmentation OOMs when ESMFold + Boltz share the GPU.
-        "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True",
-        # Agent OFF: deterministic threshold refinement loop, reproducible, no API calls.
-        "AGENT_ENABLED": "False",
-        # How many Boltz seeds arm C's initial ensemble draws (refinement may add more).
-        "ENSEMBLE_NUM_SEEDS": str(cfg.get("ENSEMBLE_NUM_SEEDS", 3)),
-        "BOLTZ_DIFFUSION_SAMPLES": str(cfg.get("BOLTZ_DIFFUSION_SAMPLES", 1)),
-        "BOLTZ_SAMPLING_STEPS": str(cfg.get("BOLTZ_SAMPLING_STEPS", 200)),
-        "BOLTZ_USE_MSA": str(cfg.get("BOLTZ_USE_MSA", "False")),
-        "BOLTZ_MSA_SERVER_URL": str(cfg.get("BOLTZ_MSA_SERVER_URL", "https://api.colabfold.com")),
-    })
+    os.environ.update(
+        {
+            "BOLTZ_ENABLED": "True",
+            "MODAL_ENABLED": "True",
+            # Reduce CUDA fragmentation OOMs when ESMFold + Boltz share the GPU.
+            "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True",
+            # Agent OFF: deterministic threshold refinement loop, reproducible, no API calls.
+            "AGENT_ENABLED": "False",
+            # How many Boltz seeds arm C's initial ensemble draws (refinement may add more).
+            "ENSEMBLE_NUM_SEEDS": str(cfg.get("ENSEMBLE_NUM_SEEDS", 3)),
+            "BOLTZ_DIFFUSION_SAMPLES": str(cfg.get("BOLTZ_DIFFUSION_SAMPLES", 1)),
+            "BOLTZ_SAMPLING_STEPS": str(cfg.get("BOLTZ_SAMPLING_STEPS", 200)),
+            "BOLTZ_USE_MSA": str(cfg.get("BOLTZ_USE_MSA", "False")),
+            "BOLTZ_MSA_SERVER_URL": str(cfg.get("BOLTZ_MSA_SERVER_URL", "https://api.colabfold.com")),
+        }
+    )
 
     from orchestrator import tasks as _tasks
     from orchestrator.backends.boltz import call_boltz
@@ -138,8 +138,10 @@ def benchmark_pipeline_one(target: dict) -> dict:
     class _NoRedis:
         def get(self, *a, **k):
             return None
+
         def setex(self, *a, **k):
             return None
+
     _tasks._redis_client = _NoRedis()
 
     pdb_id, chain = target["pdb_id"], target["chain"]
@@ -176,9 +178,7 @@ def benchmark_pipeline_one(target: dict) -> dict:
     # --- Arm C: full pipeline (agent off) ---
     c_boltz_calls = 0
     try:
-        res = _tasks._run_prediction_core(
-            {"sequence": seq, "context": {}, "priority": "accurate"}
-        )
+        res = _tasks._run_prediction_core({"sequence": seq, "context": {}, "priority": "accurate"})
         if res.get("status") != "completed":
             out["C"] = {"error": res.get("error_message", "pipeline did not complete")}
         else:
@@ -243,6 +243,7 @@ def benchmark_pipeline_one(target: dict) -> dict:
 # Paired statistics — no scipy dependency required
 # ---------------------------------------------------------------------------
 
+
 def _sign_test_p(deltas):
     """Two-sided exact binomial sign test on paired deltas (zeros dropped).
 
@@ -256,7 +257,7 @@ def _sign_test_p(deltas):
         return 1.0, pos, neg
     k = min(pos, neg)
     # Two-sided: P(X <= k) + P(X >= n-k) under Binomial(n, 0.5)
-    tail = sum(math.comb(n, i) for i in range(0, k + 1)) / (2 ** n)
+    tail = sum(math.comb(n, i) for i in range(0, k + 1)) / (2**n)
     p = min(1.0, 2 * tail)
     return p, pos, neg
 
@@ -281,12 +282,15 @@ def _paired_summary(good, arm_x, arm_y, metric, higher_is_better):
         "n_paired": len(deltas),
         "mean_delta": round(float(arr.mean()), 4),
         "median_delta": round(float(np.median(arr)), 4),
-        "wins": wins, "losses": losses, "ties": ties,
+        "wins": wins,
+        "losses": losses,
+        "ties": ties,
     }
 
     # Prefer Wilcoxon signed-rank; fall back to the exact sign test if scipy is absent.
     try:
         from scipy.stats import wilcoxon
+
         nonzero = arr[arr != 0]
         if len(nonzero) > 0:
             _, p = wilcoxon(nonzero)
@@ -302,6 +306,7 @@ def _paired_summary(good, arm_x, arm_y, metric, higher_is_better):
 # ---------------------------------------------------------------------------
 # Local entrypoint
 # ---------------------------------------------------------------------------
+
 
 @app.local_entrypoint()
 def run_pipeline_benchmark(
@@ -327,10 +332,7 @@ def run_pipeline_benchmark(
         modal run benchmark_pipeline_modal.py --pdb-ids 1UBQ,1VII,1GB1
     """
     if pdb_ids:
-        targets = [
-            {"pdb_id": p.strip().upper(), "chain": "A", "name": p.strip().upper()}
-            for p in pdb_ids.split(",")
-        ]
+        targets = [{"pdb_id": p.strip().upper(), "chain": "A", "name": p.strip().upper()} for p in pdb_ids.split(",")]
         source = "custom"
     elif source == "rcsb":
         print("Querying RCSB for high-quality single-chain proteins deposited ≥ 2023...")
@@ -374,22 +376,22 @@ def run_pipeline_benchmark(
         # A target is usable for paired stats only if every arm scored (E included — it is
         # derived from arm C's own ESMFold run, so it is present whenever C completed).
         arms_ok = all(
-            k in r and "error" not in r.get(k, {}) and "tm_score" in r.get(k, {})
-            for k in ("A", "B", "C", "E")
+            k in r and "error" not in r.get(k, {}) and "tm_score" in r.get(k, {}) for k in ("A", "B", "C", "E")
         )
         if not arms_ok:
-            errs = {k: r[k].get("error") for k in ("A", "B", "C", "E")
-                    if isinstance(r.get(k), dict) and "error" in r[k]}
+            errs = {
+                k: r[k].get("error") for k in ("A", "B", "C", "E") if isinstance(r.get(k), dict) and "error" in r[k]
+            }
             errors.append({"pdb_id": r.get("pdb_id"), "arm_errors": errs})
-            print(f"{r.get('pdb_id',''):>6}  incomplete: {errs}")
+            print(f"{r.get('pdb_id', ''):>6}  incomplete: {errs}")
             continue
 
         good.append(r)
         d_cb = r["C"]["tm_score"] - r["B"]["tm_score"]
         print(
-            f"{r['pdb_id']:>6}  {r['length']:>4}  {r['C'].get('boltz_calls','?'):>6}  "
+            f"{r['pdb_id']:>6}  {r['length']:>4}  {r['C'].get('boltz_calls', '?'):>6}  "
             f"{r['A']['tm_score']:>7.4f}  {r['B']['tm_score']:>7.4f}  {r['C']['tm_score']:>7.4f}  "
-            f"{r['E']['tm_score']:>7.4f}  {d_cb:>+9.4f}  {str(r['C'].get('winner_model','')):>13}"
+            f"{r['E']['tm_score']:>7.4f}  {d_cb:>+9.4f}  {str(r['C'].get('winner_model', '')):>13}"
         )
 
     # --- Paired analysis ---
@@ -432,7 +434,7 @@ def run_pipeline_benchmark(
             return (
                 f"  {label}: mean Δ={s['mean_delta']:+.4f}  median Δ={s['median_delta']:+.4f}  "
                 f"W/L/T={s['wins']}/{s['losses']}/{s['ties']}  "
-                f"p={s.get('p_value','?')} ({s.get('test','')})"
+                f"p={s.get('p_value', '?')} ({s.get('test', '')})"
             )
 
         print(
@@ -455,15 +457,14 @@ def run_pipeline_benchmark(
     with open(out, "w") as f:
         json.dump(
             {"targets": results, "errors": errors, "analysis": analysis},
-            f, indent=2, default=str,
+            f,
+            indent=2,
+            default=str,
         )
     print(f"  Per-target results saved to {out}")
 
     # Backend build reported from inside the workers (see benchmark_modal for rationale).
-    reported = {
-        r.get("_backend_version") for r in results
-        if isinstance(r, dict) and r.get("_backend_version")
-    }
+    reported = {r.get("_backend_version") for r in results if isinstance(r, dict) and r.get("_backend_version")}
     if len(reported) > 1:
         backend_build = "MIXED:" + ",".join(sorted(reported))
         print(f"  WARNING: targets ran on differing backend builds: {sorted(reported)}")
@@ -487,6 +488,7 @@ def run_pipeline_benchmark(
         "analysis": analysis,
     }
     import datetime as _dt
+
     summary_row["timestamp"] = _dt.datetime.now(_dt.timezone.utc).isoformat()
     with open("benchmarks/pipeline_vs_boltz.jsonl", "a") as f:
         f.write(json.dumps(summary_row, default=str) + "\n")

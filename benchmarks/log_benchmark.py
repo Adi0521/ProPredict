@@ -34,9 +34,7 @@ RESULTS_FILE = Path(__file__).parent / "results.jsonl"
 def _git_info() -> dict:
     def _run(cmd: list[str]) -> str:
         try:
-            return subprocess.check_output(
-                cmd, stderr=subprocess.DEVNULL
-            ).decode().strip()
+            return subprocess.check_output(cmd, stderr=subprocess.DEVNULL).decode().strip()
         except Exception:
             return ""
 
@@ -63,6 +61,7 @@ def _environment_info() -> dict:
     }
     try:
         import torch
+
         env["torch_version"] = torch.__version__
         env["cuda_available"] = torch.cuda.is_available()
         if torch.cuda.is_available():
@@ -121,8 +120,15 @@ def _ci95(values: list[float]) -> float:
     se = statistics.stdev(values) / math.sqrt(n)
     # t critical value approximation for 95% CI
     t_crit = {
-        2: 12.706, 3: 4.303, 4: 3.182, 5: 2.776, 6: 2.571,
-        7: 2.447, 8: 2.365, 9: 2.306, 10: 2.262,
+        2: 12.706,
+        3: 4.303,
+        4: 3.182,
+        5: 2.776,
+        6: 2.571,
+        7: 2.447,
+        8: 2.365,
+        9: 2.306,
+        10: 2.262,
     }.get(n, 1.96)
     return round(se * t_crit, 4)
 
@@ -183,22 +189,26 @@ def _build_per_target_table(results: list[dict]) -> list[dict]:
         if not isinstance(r, dict):
             continue
         if "error" in r:
-            table.append({
-                "pdb_id": r.get("pdb_id", "?"),
-                "status": "failed",
-                "error": r["error"],
-            })
+            table.append(
+                {
+                    "pdb_id": r.get("pdb_id", "?"),
+                    "status": "failed",
+                    "error": r["error"],
+                }
+            )
         else:
-            table.append({
-                "pdb_id": r["pdb_id"],
-                "name": r.get("name", r["pdb_id"]),
-                "length": r["length"],
-                "mean_plddt": r["mean_plddt"],
-                "tm_score": r["tm_score"],
-                "rmsd": r["rmsd"],
-                "n_aligned": r.get("n_aligned"),
-                "status": "ok",
-            })
+            table.append(
+                {
+                    "pdb_id": r["pdb_id"],
+                    "name": r.get("name", r["pdb_id"]),
+                    "length": r["length"],
+                    "mean_plddt": r["mean_plddt"],
+                    "tm_score": r["tm_score"],
+                    "rmsd": r["rmsd"],
+                    "n_aligned": r.get("n_aligned"),
+                    "status": "ok",
+                }
+            )
     return table
 
 
@@ -251,7 +261,7 @@ def log_run(
 
     print(f"\n  Logged {run_id} to {RESULTS_FILE}")
     if duration_seconds:
-        print(f"  Run duration: {duration_seconds:.0f}s ({duration_seconds/60:.1f}m)")
+        print(f"  Run duration: {duration_seconds:.0f}s ({duration_seconds / 60:.1f}m)")
 
     wb_project = wandb_project or os.getenv("WANDB_PROJECT")
     if wb_project:
@@ -280,18 +290,21 @@ def _log_wandb(entry: dict, project: str, entity: str | None = None):
     # `AttributeError: module 'wandb' has no attribute 'init'` — after the GPU work is done.
     if not hasattr(wandb, "init"):
         where = getattr(wandb, "__path__", None) or getattr(wandb, "__file__", "?")
-        print(f"  [warn] 'wandb' resolved to {where}, which is the local run-artifact "
-              "directory rather than the installed package — skipping W&B logging.")
-        print("         Activate the env that has wandb installed (the ProPredict env), "
-              "or run from outside the repo root.")
+        print(
+            f"  [warn] 'wandb' resolved to {where}, which is the local run-artifact "
+            "directory rather than the installed package — skipping W&B logging."
+        )
+        print(
+            "         Activate the env that has wandb installed (the ProPredict env), "
+            "or run from outside the repo root."
+        )
         return
 
     try:
         _log_wandb_inner(entry, wandb, project, entity)
     except Exception as e:  # noqa: BLE001 — telemetry must never fail the run
         print(f"  [warn] W&B logging failed: {type(e).__name__}: {e}")
-        print(f"         The results.jsonl entry ({entry['run_id']}) was already written "
-              "and is unaffected.")
+        print(f"         The results.jsonl entry ({entry['run_id']}) was already written and is unaffected.")
 
 
 def _log_wandb_inner(entry: dict, wandb, project: str, entity: str | None = None):
@@ -318,24 +331,29 @@ def _log_wandb_inner(entry: dict, wandb, project: str, entity: str | None = None
         run.summary["duration_seconds"] = entry["duration_seconds"]
 
     if good:
-        table = wandb.Table(
-            columns=["pdb_id", "name", "length", "mean_plddt", "tm_score", "rmsd", "n_aligned"]
-        )
+        table = wandb.Table(columns=["pdb_id", "name", "length", "mean_plddt", "tm_score", "rmsd", "n_aligned"])
         for r in good:
             table.add_data(
-                r["pdb_id"], r.get("name", ""), r["length"],
-                r["mean_plddt"], r["tm_score"], r["rmsd"], r.get("n_aligned"),
+                r["pdb_id"],
+                r.get("name", ""),
+                r["length"],
+                r["mean_plddt"],
+                r["tm_score"],
+                r["rmsd"],
+                r.get("n_aligned"),
             )
         run.log({"per_target": table})
 
         tms = [r["tm_score"] for r in good]
         rmsds = [r["rmsd"] for r in good]
         plddts = [r["mean_plddt"] for r in good]
-        run.log({
-            "tm_score_hist": wandb.Histogram(tms),
-            "rmsd_hist": wandb.Histogram(rmsds),
-            "plddt_hist": wandb.Histogram(plddts),
-        })
+        run.log(
+            {
+                "tm_score_hist": wandb.Histogram(tms),
+                "rmsd_hist": wandb.Histogram(rmsds),
+                "plddt_hist": wandb.Histogram(plddts),
+            }
+        )
 
     run.finish()
     print(f"  Logged to W&B project '{project}': {run.url}")
@@ -364,8 +382,10 @@ if __name__ == "__main__":
     }
 
     log_run(
-        targets, config_snapshot,
-        source=args.source, backend=args.backend,
+        targets,
+        config_snapshot,
+        source=args.source,
+        backend=args.backend,
         notes=args.notes,
         wandb_project=args.wandb_project,
         wandb_entity=args.wandb_entity,

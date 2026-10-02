@@ -6,6 +6,7 @@ count_clashes, and the BOLTZ_ENABLED / AGENT_MAX_MUTATIONS config values in the
 orchestrator.agent namespace, then calls _execute_agent_tool() directly. No real
 ESMFold/Boltz/BioPython needed. Mirrors tests/test_boltz.py style.
 """
+
 import json
 from unittest.mock import MagicMock, patch
 
@@ -47,11 +48,11 @@ def _apply(tool_input, state):
 # Happy path
 # ---------------------------------------------------------------------------
 
+
 @patch("orchestrator.agent.count_clashes", return_value=1)
 @patch("orchestrator.agent.call_esmfold_api")
 def test_valid_mutation_updates_state(mock_esm, mock_clash):
-    with patch("orchestrator.agent.BOLTZ_ENABLED", False), \
-         patch("orchestrator.agent.AGENT_MAX_MUTATIONS", 3):
+    with patch("orchestrator.agent.BOLTZ_ENABLED", False), patch("orchestrator.agent.AGENT_MAX_MUTATIONS", 3):
         mock_esm.return_value = _fake_pred(pdb="ATOM_MUT", mean=88.0)
         state = _base_state("ACDEF")
         out = _apply({"position": 2, "from_aa": "C", "to_aa": "W"}, state)
@@ -72,8 +73,7 @@ def test_valid_mutation_updates_state(mock_esm, mock_clash):
 @patch("orchestrator.agent.count_clashes", return_value=0)
 @patch("orchestrator.agent.call_esmfold_api")
 def test_lowercase_to_aa_is_normalized(mock_esm, mock_clash):
-    with patch("orchestrator.agent.BOLTZ_ENABLED", False), \
-         patch("orchestrator.agent.AGENT_MAX_MUTATIONS", 3):
+    with patch("orchestrator.agent.BOLTZ_ENABLED", False), patch("orchestrator.agent.AGENT_MAX_MUTATIONS", 3):
         mock_esm.return_value = _fake_pred()
         state = _base_state("ACDEF")
         out = _apply({"position": 1, "to_aa": "g"}, state)
@@ -86,10 +86,10 @@ def test_lowercase_to_aa_is_normalized(mock_esm, mock_clash):
 # Validation errors — state must stay unchanged, backend must not be called
 # ---------------------------------------------------------------------------
 
+
 @patch("orchestrator.agent.call_esmfold_api")
 def test_from_aa_mismatch_errors_without_prediction(mock_esm):
-    with patch("orchestrator.agent.BOLTZ_ENABLED", False), \
-         patch("orchestrator.agent.AGENT_MAX_MUTATIONS", 3):
+    with patch("orchestrator.agent.BOLTZ_ENABLED", False), patch("orchestrator.agent.AGENT_MAX_MUTATIONS", 3):
         state = _base_state("ACDEF")
         out = _apply({"position": 2, "from_aa": "G", "to_aa": "W"}, state)
 
@@ -136,16 +136,16 @@ def test_missing_position_errors(mock_esm):
 # Rollback on backend failure
 # ---------------------------------------------------------------------------
 
+
 @patch("orchestrator.agent.call_esmfold_api", side_effect=RuntimeError("boom"))
 def test_backend_failure_rolls_back(mock_esm):
-    with patch("orchestrator.agent.BOLTZ_ENABLED", False), \
-         patch("orchestrator.agent.AGENT_MAX_MUTATIONS", 3):
+    with patch("orchestrator.agent.BOLTZ_ENABLED", False), patch("orchestrator.agent.AGENT_MAX_MUTATIONS", 3):
         state = _base_state("ACDEF")
         out = _apply({"position": 2, "to_aa": "W"}, state)
 
     assert "re-prediction failed" in out["error"]
-    assert state["sequence"] == "ACDEF"          # unchanged
-    assert state["current_pdb"] == "ATOM_ORIG"   # unchanged
+    assert state["sequence"] == "ACDEF"  # unchanged
+    assert state["current_pdb"] == "ATOM_ORIG"  # unchanged
     assert state["mutations_applied"] == []
 
 
@@ -153,12 +153,12 @@ def test_backend_failure_rolls_back(mock_esm):
 # Backend routing
 # ---------------------------------------------------------------------------
 
+
 @patch("orchestrator.agent.count_clashes", return_value=0)
 @patch("orchestrator.agent.call_boltz")
 @patch("orchestrator.agent.call_esmfold_api")
 def test_boltz_enabled_routes_to_boltz(mock_esm, mock_boltz, mock_clash):
-    with patch("orchestrator.agent.BOLTZ_ENABLED", True), \
-         patch("orchestrator.agent.AGENT_MAX_MUTATIONS", 3):
+    with patch("orchestrator.agent.BOLTZ_ENABLED", True), patch("orchestrator.agent.AGENT_MAX_MUTATIONS", 3):
         mock_boltz.return_value = _fake_pred(mean=90.0, affinity=-1.35, affinity_prob=0.91)
         state = _base_state("ACDEF")
         out = _apply({"position": 1, "to_aa": "G"}, state)
@@ -177,11 +177,11 @@ def test_boltz_enabled_routes_to_boltz(mock_esm, mock_boltz, mock_clash):
 # Cap enforcement
 # ---------------------------------------------------------------------------
 
+
 @patch("orchestrator.agent.call_boltz")
 @patch("orchestrator.agent.call_esmfold_api")
 def test_mutation_cap_enforced(mock_esm, mock_boltz):
-    with patch("orchestrator.agent.BOLTZ_ENABLED", False), \
-         patch("orchestrator.agent.AGENT_MAX_MUTATIONS", 2):
+    with patch("orchestrator.agent.BOLTZ_ENABLED", False), patch("orchestrator.agent.AGENT_MAX_MUTATIONS", 2):
         state = _base_state("ACDEF")
         state["mutations_applied"] = ["A1V", "C2D"]  # already at the limit
         out = _apply({"position": 3, "to_aa": "W"}, state)
@@ -196,6 +196,7 @@ def test_mutation_cap_enforced(mock_esm, mock_boltz):
 # Task 4 — num_clashes recomputed after refinement branches that reassign the PDB
 # ---------------------------------------------------------------------------
 
+
 @patch("orchestrator.agent.count_clashes", return_value=7)
 @patch("orchestrator.agent.run_rosetta_relax", return_value=("RELAXED_PDB", -123.4))
 def test_rosetta_relax_recomputes_clashes(mock_relax, mock_clash):
@@ -205,8 +206,8 @@ def test_rosetta_relax_recomputes_clashes(mock_relax, mock_clash):
         out = json.loads(_execute_agent_tool("run_rosetta_relax", {}, state))
 
     assert state["current_pdb"] == "RELAXED_PDB"
-    assert state["num_clashes"] == 7          # recomputed on the relaxed structure
-    assert out["num_clashes"] == 7            # and surfaced in the tool result
+    assert state["num_clashes"] == 7  # recomputed on the relaxed structure
+    assert out["num_clashes"] == 7  # and surfaced in the tool result
     mock_clash.assert_called_once_with("RELAXED_PDB")
 
 
@@ -232,6 +233,7 @@ def test_run_agent_refinement_reports_updated_clashes():
     run_agent_refinement does `import anthropic` internally; we inject a fake module
     into sys.modules so the test runs without the real SDK installed (the client is
     fully mocked anyway — no real anthropic types are exercised)."""
+
     def _tool_use(name, inp):
         blk = MagicMock()
         blk.type = "tool_use"
@@ -253,16 +255,18 @@ def test_run_agent_refinement_reports_updated_clashes():
 
     pred = _fake_pred(pdb="ORIG", plddt=[80.0, 80.0, 80.0], mean=80.0)
 
-    with patch.dict("sys.modules", {"anthropic": fake_anthropic}), \
-         patch("orchestrator.agent.ROSETTA_ENABLED", True), \
-         patch("orchestrator.agent.AGENT_API_KEY", "sk-test"), \
-         patch("orchestrator.agent.AGENT_BASE_URL", ""), \
-         patch("orchestrator.agent.run_rosetta_relax", return_value=("RELAXED", -50.0)), \
-         patch("orchestrator.agent.count_clashes", side_effect=[2, 9]):
+    with (
+        patch.dict("sys.modules", {"anthropic": fake_anthropic}),
+        patch("orchestrator.agent.ROSETTA_ENABLED", True),
+        patch("orchestrator.agent.AGENT_API_KEY", "sk-test"),
+        patch("orchestrator.agent.AGENT_BASE_URL", ""),
+        patch("orchestrator.agent.run_rosetta_relax", return_value=("RELAXED", -50.0)),
+        patch("orchestrator.agent.count_clashes", side_effect=[2, 9]),
+    ):
         post_proc, updated_pdb = run_agent_refinement(pred, {}, "ACDEF")
 
     assert post_proc.decision == "accept"
-    assert post_proc.num_clashes == 9        # post-relax count, not the pre-loop 2
+    assert post_proc.num_clashes == 9  # post-relax count, not the pre-loop 2
     assert post_proc.score == 80.0 - 9 * 5.0
     assert updated_pdb == "RELAXED"
 
@@ -270,6 +274,7 @@ def test_run_agent_refinement_reports_updated_clashes():
 # ---------------------------------------------------------------------------
 # scan_mutations — ProteinMPNN structural-log-odds tool (read-only)
 # ---------------------------------------------------------------------------
+
 
 def _scan(tool_input, state):
     return json.loads(_execute_agent_tool("scan_mutations", tool_input, state))
@@ -295,10 +300,12 @@ def test_scan_mutations_happy_path(mock_score):
         {"position": 1, "from_aa": "A", "to_aa": "V", "score": 0.4},
     ]
     mock_score.return_value = candidates
-    with patch("orchestrator.agent.PROTEINMPNN_PATH", "/opt/ProteinMPNN"), \
-         patch("orchestrator.agent.PROTEINMPNN_MODEL_NAME", "v_48_020"), \
-         patch("orchestrator.agent.PROTEINMPNN_SEED", 37), \
-         patch("orchestrator.agent.PROTEINMPNN_NUM_DECODING_ORDERS", 8):
+    with (
+        patch("orchestrator.agent.PROTEINMPNN_PATH", "/opt/ProteinMPNN"),
+        patch("orchestrator.agent.PROTEINMPNN_MODEL_NAME", "v_48_020"),
+        patch("orchestrator.agent.PROTEINMPNN_SEED", 37),
+        patch("orchestrator.agent.PROTEINMPNN_NUM_DECODING_ORDERS", 8),
+    ):
         state = _base_state("ACDEF")
         out = _scan({"positions": [1, 3], "top_k": 2}, state)
 
@@ -306,10 +313,14 @@ def test_scan_mutations_happy_path(mock_score):
     assert out["candidates"] == candidates
     assert "compatibility" in out["note"]
     mock_score.assert_called_once_with(
-        "ATOM_ORIG", "ACDEF",
-        positions=[1, 3], top_k=2,
-        proteinmpnn_dir="/opt/ProteinMPNN", model_name="v_48_020",
-        seed=37, num_decoding_orders=8,
+        "ATOM_ORIG",
+        "ACDEF",
+        positions=[1, 3],
+        top_k=2,
+        proteinmpnn_dir="/opt/ProteinMPNN",
+        model_name="v_48_020",
+        seed=37,
+        num_decoding_orders=8,
     )
 
 
@@ -348,9 +359,11 @@ def _search(tool_input, state):
 def _fake_search_result():
     return MutationSearchResult(
         wild_type_sequence="ACDEF",
-        candidates=[MutationCandidate(mutations=["A1V", "D3E"], sequence="VCEEF",
-                                      score=2.5, oracle="score_only")],
-        oracle="score_only", rounds=10, total_evaluated=42, refolds_used=0,
+        candidates=[MutationCandidate(mutations=["A1V", "D3E"], sequence="VCEEF", score=2.5, oracle="score_only")],
+        oracle="score_only",
+        rounds=10,
+        total_evaluated=42,
+        refolds_used=0,
     )
 
 
@@ -361,8 +374,7 @@ def test_search_mutations_disabled_flag():
 
 
 def test_search_mutations_missing_proteinmpnn_path():
-    with patch("orchestrator.agent.MUTATION_SEARCH_ENABLED", True), \
-         patch("orchestrator.agent.PROTEINMPNN_PATH", ""):
+    with patch("orchestrator.agent.MUTATION_SEARCH_ENABLED", True), patch("orchestrator.agent.PROTEINMPNN_PATH", ""):
         out = _search({}, _base_state("ACDEF"))
     assert "unavailable" in out["error"]
 
@@ -370,12 +382,14 @@ def test_search_mutations_missing_proteinmpnn_path():
 @patch("orchestrator.agent.search_and_validate")
 def test_search_mutations_happy_path_defaults(mock_search):
     mock_search.return_value = _fake_search_result()
-    with patch("orchestrator.agent.MUTATION_SEARCH_ENABLED", True), \
-         patch("orchestrator.agent.PROTEINMPNN_PATH", "/opt/ProteinMPNN"), \
-         patch("orchestrator.agent.MUTATION_SEARCH_ROUNDS", 10), \
-         patch("orchestrator.agent.MUTATION_SEARCH_CANDIDATES_PER_ROUND", 20), \
-         patch("orchestrator.agent.MUTATION_SEARCH_MAX_SITES", 3), \
-         patch("orchestrator.agent.MUTATION_SEARCH_MAX_REFOLDS", 5):
+    with (
+        patch("orchestrator.agent.MUTATION_SEARCH_ENABLED", True),
+        patch("orchestrator.agent.PROTEINMPNN_PATH", "/opt/ProteinMPNN"),
+        patch("orchestrator.agent.MUTATION_SEARCH_ROUNDS", 10),
+        patch("orchestrator.agent.MUTATION_SEARCH_CANDIDATES_PER_ROUND", 20),
+        patch("orchestrator.agent.MUTATION_SEARCH_MAX_SITES", 3),
+        patch("orchestrator.agent.MUTATION_SEARCH_MAX_REFOLDS", 5),
+    ):
         state = _base_state("ACDEF")
         out = _search({}, state)
 
@@ -395,9 +409,11 @@ def test_search_mutations_happy_path_defaults(mock_search):
 @patch("orchestrator.agent.search_and_validate")
 def test_search_mutations_validate_passes_refold_budget(mock_search):
     mock_search.return_value = _fake_search_result()
-    with patch("orchestrator.agent.MUTATION_SEARCH_ENABLED", True), \
-         patch("orchestrator.agent.PROTEINMPNN_PATH", "/opt/ProteinMPNN"), \
-         patch("orchestrator.agent.MUTATION_SEARCH_MAX_REFOLDS", 5):
+    with (
+        patch("orchestrator.agent.MUTATION_SEARCH_ENABLED", True),
+        patch("orchestrator.agent.PROTEINMPNN_PATH", "/opt/ProteinMPNN"),
+        patch("orchestrator.agent.MUTATION_SEARCH_MAX_REFOLDS", 5),
+    ):
         out = _search({"validate": True}, _base_state("ACDEF"))
 
     assert out["status"] == "completed"
@@ -409,15 +425,16 @@ def test_search_mutations_validate_passes_refold_budget(mock_search):
 @patch("orchestrator.agent.search_and_validate")
 def test_search_mutations_clamps_to_config_ceilings(mock_search):
     mock_search.return_value = _fake_search_result()
-    with patch("orchestrator.agent.MUTATION_SEARCH_ENABLED", True), \
-         patch("orchestrator.agent.PROTEINMPNN_PATH", "/opt/ProteinMPNN"), \
-         patch("orchestrator.agent.MUTATION_SEARCH_ROUNDS", 10), \
-         patch("orchestrator.agent.MUTATION_SEARCH_CANDIDATES_PER_ROUND", 20), \
-         patch("orchestrator.agent.MUTATION_SEARCH_MAX_SITES", 3), \
-         patch("orchestrator.agent.MUTATION_SEARCH_MAX_REFOLDS", 5):
+    with (
+        patch("orchestrator.agent.MUTATION_SEARCH_ENABLED", True),
+        patch("orchestrator.agent.PROTEINMPNN_PATH", "/opt/ProteinMPNN"),
+        patch("orchestrator.agent.MUTATION_SEARCH_ROUNDS", 10),
+        patch("orchestrator.agent.MUTATION_SEARCH_CANDIDATES_PER_ROUND", 20),
+        patch("orchestrator.agent.MUTATION_SEARCH_MAX_SITES", 3),
+        patch("orchestrator.agent.MUTATION_SEARCH_MAX_REFOLDS", 5),
+    ):
         out = _search(
-            {"rounds": 999, "candidates_per_round": 999, "max_sites": 99,
-             "validate": True, "max_refolds": 999},
+            {"rounds": 999, "candidates_per_round": 999, "max_sites": 99, "validate": True, "max_refolds": 999},
             _base_state("ACDEF"),
         )
 
@@ -429,7 +446,9 @@ def test_search_mutations_clamps_to_config_ceilings(mock_search):
 
 @patch("orchestrator.agent.search_and_validate", side_effect=RuntimeError("search boom"))
 def test_search_mutations_failure_is_wrapped(mock_search):
-    with patch("orchestrator.agent.MUTATION_SEARCH_ENABLED", True), \
-         patch("orchestrator.agent.PROTEINMPNN_PATH", "/opt/ProteinMPNN"):
+    with (
+        patch("orchestrator.agent.MUTATION_SEARCH_ENABLED", True),
+        patch("orchestrator.agent.PROTEINMPNN_PATH", "/opt/ProteinMPNN"),
+    ):
         out = _search({}, _base_state("ACDEF"))
     assert "mutation search failed: search boom" in out["error"]

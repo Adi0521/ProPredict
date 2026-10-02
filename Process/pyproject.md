@@ -106,3 +106,18 @@ Cleaning these up is a separate step.
 B904 raise-without-from (21), B905 zip-without-strict (14), E741 ambiguous names (6),
 F841 unused variables (6), B008 call-in-default-arg (5, mostly FastAPI `Depends()` — idiomatic,
 likely to be ignored per-file), E402 (4), F401 availability probes (3), B023 (1).
+
+---
+
+# Follow-up: `ruff format`
+
+**Date:** 2026-10-02
+
+- Ran `ruff format .` (config from `[tool.ruff]`: line-length 120, py310). All 94 linted files now
+  pass `ruff format --check`.
+- Ruff's formatter verifies the AST is unchanged after formatting, so this is layout-only.
+  Spot-checked anyway: module import smoke test OK, `tests/test_boltz.py` + `tests/test_orchestrator.py`
+  → 67 passed, 2 skipped.
+- Lint findings unchanged at 60 (formatting doesn't affect them).
+- Once committed, add the formatting commit hash to `.git-blame-ignore-revs` so `git blame`
+  skips it (`git config blame.ignoreRevsFile .git-blame-ignore-revs`).

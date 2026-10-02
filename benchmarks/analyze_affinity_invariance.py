@@ -20,6 +20,7 @@ Reporting rules baked in:
     significant correlation with slope ~0.02 is still practical blindness, and
     that distinction is the whole point -- don't let a p-value decide it.
 """
+
 import argparse
 import json
 import math
@@ -40,6 +41,7 @@ def spearman(x, y):
                 r[order[k]] = avg
             i = j + 1
         return r
+
     rx, ry = rank(x), rank(y)
     n = len(x)
     mx, my = sum(rx) / n, sum(ry) / n
@@ -74,8 +76,7 @@ def main():
     rows = [r for r in rows if r.get("ok")]
 
     # WT baseline per (drug, msa arm)
-    wt = {(r["drug"], r["msa"]): r["affinity_pred_value"]
-          for r in rows if r["seq_id"] == "WT_CONSENSUS_B"}
+    wt = {(r["drug"], r["msa"]): r["affinity_pred_value"] for r in rows if r["seq_id"] == "WT_CONSENSUS_B"}
     if not wt:
         raise SystemExit("no WT reference rows found -- cannot compute Delta")
 
@@ -90,9 +91,8 @@ def main():
         by_arm[r["msa"]].append(r)
 
     for msa_arm, rs in sorted(by_arm.items()):
-        print(f"\n{'='*72}\nMSA={'on' if msa_arm else 'off'}   n={len(rs)}\n{'='*72}")
-        print(f"{'drug':>5} {'n':>4} {'spearman':>9} {'slope':>8} "
-              f"{'sd(pred)':>9} {'sd(exp)':>8} {'ratio':>6}")
+        print(f"\n{'=' * 72}\nMSA={'on' if msa_arm else 'off'}   n={len(rs)}\n{'=' * 72}")
+        print(f"{'drug':>5} {'n':>4} {'spearman':>9} {'slope':>8} {'sd(pred)':>9} {'sd(exp)':>8} {'ratio':>6}")
         allp, alle = [], []
         for drug in sorted({r["drug"] for r in rs}):
             sub = [r for r in rs if r["drug"] == drug]
@@ -104,8 +104,10 @@ def main():
             rho = spearman(p, e)
             slope, _ = linfit(e, p)
             sp, se = stdev(p), stdev(e)
-            print(f"{drug:>5} {len(p):>4} {rho:>+9.3f} {slope:>+8.3f} "
-                  f"{sp:>9.3f} {se:>8.3f} {sp/se if se else float('nan'):>6.2f}")
+            print(
+                f"{drug:>5} {len(p):>4} {rho:>+9.3f} {slope:>+8.3f} "
+                f"{sp:>9.3f} {se:>8.3f} {sp / se if se else float('nan'):>6.2f}"
+            )
             allp += p
             alle += e
 
@@ -113,12 +115,16 @@ def main():
             rho = spearman(allp, alle)
             slope, _ = linfit(alle, allp)
             sp, se = stdev(allp), stdev(alle)
-            print(f"{'ALL':>5} {len(allp):>4} {rho:>+9.3f} {slope:>+8.3f} "
-                  f"{sp:>9.3f} {se:>8.3f} {sp/se if se else float('nan'):>6.2f}")
+            print(
+                f"{'ALL':>5} {len(allp):>4} {rho:>+9.3f} {slope:>+8.3f} "
+                f"{sp:>9.3f} {se:>8.3f} {sp / se if se else float('nan'):>6.2f}"
+            )
             print()
-            print(f"  Experimental spread spans {se:.2f} log10 units (~{10**(2*se):.0f}x).")
-            print(f"  Predicted spread is {sp:.3f} log10 units "
-                  f"({sp/se*100 if se else float('nan'):.0f}% of experimental).")
+            print(f"  Experimental spread spans {se:.2f} log10 units (~{10 ** (2 * se):.0f}x).")
+            print(
+                f"  Predicted spread is {sp:.3f} log10 units "
+                f"({sp / se * 100 if se else float('nan'):.0f}% of experimental)."
+            )
             if abs(slope) < 0.1 and abs(rho) < 0.2:
                 print("  => H_invariant: affinity head is effectively mutation-blind.")
             elif rho > 0.3:

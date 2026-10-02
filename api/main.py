@@ -18,6 +18,7 @@ MODAL_ENABLED = os.getenv("MODAL_ENABLED", "False") == "True"
 
 if MODAL_ENABLED:
     import modal
+
     _modal_predict = modal.Function.from_name("propredict", "run_prediction")
 else:
     from orchestrator.tasks import predict_protein_structure
@@ -32,6 +33,7 @@ def _read_modal_progress(run_id: str) -> Optional[dict]:
         return d.get(run_id)
     except Exception:
         return None
+
 
 # Configure logging
 logging.basicConfig(level=LOG_LEVEL)
@@ -330,4 +332,5 @@ async def http_exception_handler(request, exc):
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000, debug=API_DEBUG)

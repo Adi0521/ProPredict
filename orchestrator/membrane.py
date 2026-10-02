@@ -29,13 +29,13 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 _INSANE_LIPID_MAP: Dict[str, str] = {
-    "POPC":  "POPC",
-    "POPE":  "POPE",
-    "DPPC":  "DPPC",
-    "DMPC":  "DMPC",
-    "POPG":  "POPG",
-    "POPS":  "POPS",
-    "CHOL":  "CHOL",
+    "POPC": "POPC",
+    "POPE": "POPE",
+    "DPPC": "DPPC",
+    "DMPC": "DMPC",
+    "POPG": "POPG",
+    "POPS": "POPS",
+    "CHOL": "CHOL",
 }
 
 _DEFAULT_LIPID = "POPC"
@@ -143,14 +143,22 @@ def embed_in_membrane_gromacs(
     # -d  slab distance (bilayer) = 0 means auto
     # -z  box z-dimension (nm); set large enough
     insane_cmd = [
-        "python", script,
-        "-f", pdb_path,
-        "-o", gro_out,
-        "-p", top_out,
-        "-pbc", "square",
-        "-l", f"{lipid}:1",
-        "-d", "0",
-        "-z", "10",
+        "python",
+        script,
+        "-f",
+        pdb_path,
+        "-o",
+        gro_out,
+        "-p",
+        top_out,
+        "-pbc",
+        "square",
+        "-l",
+        f"{lipid}:1",
+        "-d",
+        "0",
+        "-z",
+        "10",
     ]
 
     # TM protein positioning: centre the protein at z=0 (membrane midplane)
@@ -176,10 +184,7 @@ def embed_in_membrane_gromacs(
         )
 
     if not os.path.isfile(gro_out) or not os.path.isfile(top_out):
-        raise RuntimeError(
-            "insane.py completed but output files are missing. "
-            f"Expected: {gro_out}, {top_out}"
-        )
+        raise RuntimeError(f"insane.py completed but output files are missing. Expected: {gro_out}, {top_out}")
 
     logger.info(f"insane.py: membrane system written to {gro_out}")
     return gro_out, top_out
@@ -240,10 +245,7 @@ def embed_in_membrane_openmm(
         from openmm import unit
         from openmm.app import Modeller
     except ImportError:
-        raise RuntimeError(
-            "OpenMM is not installed. "
-            "Install: conda install -c conda-forge openmm"
-        )
+        raise RuntimeError("OpenMM is not installed. Install: conda install -c conda-forge openmm")
 
     try:
         # openmmforcefields provides CHARMM36m lipids

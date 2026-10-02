@@ -24,18 +24,13 @@ def call_rosettafold2(sequence: str, seed: int = 0) -> StructurePrediction:
     try:
         import rf2aa  # type: ignore  # noqa: F401
     except ImportError:
-        raise RuntimeError(
-            "RoseTTAFold2 (rf2aa) is not installed. "
-            "See: https://github.com/baker-lab/RoseTTAFold2"
-        )
+        raise RuntimeError("RoseTTAFold2 (rf2aa) is not installed. See: https://github.com/baker-lab/RoseTTAFold2")
 
     # TODO: implement using the RF2AA runner once the conda env is active.
     # Example sketch (API may differ by version):
     #   from rf2aa.run_inference import run_inference
     #   pdb_string, plddt = run_inference(sequence)
-    raise NotImplementedError(
-        "RoseTTAFold2 stub — fill in using the rf2aa.run_inference API."
-    )
+    raise NotImplementedError("RoseTTAFold2 stub — fill in using the rf2aa.run_inference API.")
 
 
 def call_openfold(sequence: str, seed: int = 0) -> StructurePrediction:
@@ -56,16 +51,11 @@ def call_openfold(sequence: str, seed: int = 0) -> StructurePrediction:
     try:
         import openfold  # type: ignore  # noqa: F401
     except ImportError:
-        raise RuntimeError(
-            "OpenFold is not installed. "
-            "See: https://github.com/aqlaboratory/openfold"
-        )
+        raise RuntimeError("OpenFold is not installed. See: https://github.com/aqlaboratory/openfold")
 
     # TODO: implement using the OpenFold data pipeline + model runner.
     # Example sketch:
     #   from openfold.data import data_pipeline, feature_pipeline
     #   from openfold.model import model as of_model
     #   ...
-    raise NotImplementedError(
-        "OpenFold stub — fill in using the openfold.data and openfold.model APIs."
-    )
+    raise NotImplementedError("OpenFold stub — fill in using the openfold.data and openfold.model APIs.")

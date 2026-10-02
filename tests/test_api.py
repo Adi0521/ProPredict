@@ -29,11 +29,13 @@ def initialize_database():
     finally:
         db.close()
 
+
 def test_health_check():
     """Test health endpoint."""
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json()["status"] == "healthy"
+
 
 def test_predict_valid_sequence():
     """Test prediction endpoint with valid sequence."""
@@ -52,6 +54,7 @@ def test_predict_valid_sequence():
     assert "run_id" in data
     assert data["progress_percent"] == 0
 
+
 def test_predict_invalid_sequence():
     """Test prediction with invalid amino acid codes."""
     payload = {
@@ -60,6 +63,7 @@ def test_predict_invalid_sequence():
     }
     response = client.post("/predict", json=payload)
     assert response.status_code == 422  # Validation error
+
 
 def test_predict_sequence_too_long():
     """Test prediction with sequence exceeding max length."""
@@ -70,6 +74,7 @@ def test_predict_sequence_too_long():
     response = client.post("/predict", json=payload)
     assert response.status_code == 422  # Pydantic max_length validation
 
+
 def test_get_job_status():
     """Test retrieving job status."""
     # Submit a job
@@ -79,7 +84,7 @@ def test_get_job_status():
     }
     response = client.post("/predict", json=payload)
     run_id = response.json()["run_id"]
-    
+
     # Get status
     status_response = client.get(f"/predict/{run_id}/status")
     assert status_response.status_code == 200

@@ -57,10 +57,7 @@ def smiles_to_3d(smiles: str, ligand_name: str, out_dir: str) -> str:
         from rdkit import Chem
         from rdkit.Chem import AllChem
     except ImportError:
-        raise RuntimeError(
-            "RDKit is not installed. "
-            "Install: conda install -c conda-forge rdkit"
-        )
+        raise RuntimeError("RDKit is not installed. Install: conda install -c conda-forge rdkit")
 
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
@@ -156,17 +153,28 @@ def dock_gnina(
         )
         cmd = [
             gnina,
-            "-r", protein_pdb,
-            "-l", ligand_sdf,
-            "-o", docked_sdf,
-            "--center_x", str(center_x),
-            "--center_y", str(center_y),
-            "--center_z", str(center_z),
-            "--size_x", str(box_size),
-            "--size_y", str(box_size),
-            "--size_z", str(box_size),
-            "--exhaustiveness", str(exhaustiveness),
-            "--num_modes", "1",
+            "-r",
+            protein_pdb,
+            "-l",
+            ligand_sdf,
+            "-o",
+            docked_sdf,
+            "--center_x",
+            str(center_x),
+            "--center_y",
+            str(center_y),
+            "--center_z",
+            str(center_z),
+            "--size_x",
+            str(box_size),
+            "--size_y",
+            str(box_size),
+            "--size_z",
+            str(box_size),
+            "--exhaustiveness",
+            str(exhaustiveness),
+            "--num_modes",
+            "1",
             "--quiet",
         ]
     else:
@@ -174,12 +182,18 @@ def dock_gnina(
         logger.info("GNINA: blind docking (no binding site specified)")
         cmd = [
             gnina,
-            "-r", protein_pdb,
-            "-l", ligand_sdf,
-            "-o", docked_sdf,
-            "--autobox_ligand", protein_pdb,
-            "--exhaustiveness", str(exhaustiveness),
-            "--num_modes", "1",
+            "-r",
+            protein_pdb,
+            "-l",
+            ligand_sdf,
+            "-o",
+            docked_sdf,
+            "--autobox_ligand",
+            protein_pdb,
+            "--exhaustiveness",
+            str(exhaustiveness),
+            "--num_modes",
+            "1",
             "--quiet",
         ]
 
@@ -217,9 +231,7 @@ def dock_vina(
     try:
         from vina import Vina
     except ImportError:
-        raise RuntimeError(
-            "vina is not installed. Install: pip install vina"
-        )
+        raise RuntimeError("vina is not installed. Install: pip install vina")
     try:
         from rdkit import Chem
         from rdkit.Chem import AllChem
@@ -230,27 +242,31 @@ def dock_vina(
     # otherwise use a simple charge-stripping conversion.
     try:
         import meeko
+
         _meeko_available = True
     except ImportError:
         _meeko_available = False
 
     receptor_pdbqt = os.path.join(out_dir, "receptor.pdbqt")
-    ligand_pdbqt   = os.path.join(out_dir, "ligand.pdbqt")
-    docked_pdbqt   = os.path.join(out_dir, "docked_vina.pdbqt")
-    docked_sdf     = os.path.join(out_dir, "docked_vina.sdf")
+    ligand_pdbqt = os.path.join(out_dir, "ligand.pdbqt")
+    docked_pdbqt = os.path.join(out_dir, "docked_vina.pdbqt")
+    docked_sdf = os.path.join(out_dir, "docked_vina.sdf")
 
     # --- Convert receptor PDB → PDBQT (strip H, add charges with mk_prepare_receptor or fallback) ---
     if _meeko_available:
         import meeko
+
         mk = meeko.MoleculePreparation()
         # meeko receptor preparation
         subprocess.run(
             ["mk_prepare_receptor.py", "-i", protein_pdb, "-o", receptor_pdbqt],
-            capture_output=True, check=False,
+            capture_output=True,
+            check=False,
         )
     if not os.path.isfile(receptor_pdbqt):
         # Minimal fallback: rename PDB to PDBQT (Vina tolerates plain PDB as receptor)
         import shutil as _shutil
+
         _shutil.copy(protein_pdb, receptor_pdbqt)
 
     # --- Convert ligand SDF → PDBQT ---
@@ -307,6 +323,7 @@ def dock_vina(
     if not os.path.isfile(docked_sdf):
         # Last resort: copy pdbqt as sdf (OpenFF can sometimes parse it)
         import shutil as _shutil
+
         _shutil.copy(docked_pdbqt, docked_sdf)
 
     logger.info(f"Vina: best pose written to {docked_sdf}")
@@ -497,18 +514,12 @@ def parameterize_ligand_openff(
         from openff.toolkit import Molecule
         from openff.toolkit.utils.exceptions import RadicalsNotSupportedError
     except ImportError:
-        raise RuntimeError(
-            "openff-toolkit is not installed. "
-            "Install: pip install openff-toolkit openff-forcefields"
-        )
+        raise RuntimeError("openff-toolkit is not installed. Install: pip install openff-toolkit openff-forcefields")
 
     try:
         from openff.interchange import Interchange
     except ImportError:
-        raise RuntimeError(
-            "openff-interchange is not installed. "
-            "Install: pip install openff-interchange"
-        )
+        raise RuntimeError("openff-interchange is not installed. Install: pip install openff-interchange")
 
     logger.info(f"OpenFF: parameterizing {ligand_name} with SMIRNOFF sage-2.1.0...")
 
@@ -522,8 +533,7 @@ def parameterize_ligand_openff(
         interchange = Interchange.from_smirnoff(force_field=ff, topology=mol.to_topology())
     except RadicalsNotSupportedError:
         raise RuntimeError(
-            f"OpenFF does not support radicals in {ligand_name}. "
-            "Use ACPYPE (GAFF2) for this ligand instead."
+            f"OpenFF does not support radicals in {ligand_name}. Use ACPYPE (GAFF2) for this ligand instead."
         )
     except Exception as e:
         raise RuntimeError(f"OpenFF parameterization failed for {ligand_name}: {e}")
@@ -532,6 +542,7 @@ def parameterize_ligand_openff(
     interchange.to_openmm_system()  # validates the system
     with open(xml_path, "w") as fh:
         import openmm
+
         fh.write(openmm.XmlSerializer.serialize(interchange.to_openmm_system()))
 
     logger.info(f"OpenFF: XML system written to {xml_path}")
@@ -624,23 +635,16 @@ def prepare_ligands(
 
         # Step 2: Dock — try GNINA first, fall back to Vina, then undocked conformer
         try:
-            docked_sdf = dock_gnina(
-                sdf_path, protein_pdb_path, binding_site, lig_dir, gnina_bin=gnina_bin
-            )
+            docked_sdf = dock_gnina(sdf_path, protein_pdb_path, binding_site, lig_dir, gnina_bin=gnina_bin)
             entry["docked_sdf"] = docked_sdf
         except RuntimeError as gnina_err:
             logger.warning(f"Ligand '{name}': GNINA unavailable ({gnina_err}). Trying Vina fallback...")
             try:
-                docked_sdf = dock_vina(
-                    sdf_path, protein_pdb_path, binding_site, lig_dir
-                )
+                docked_sdf = dock_vina(sdf_path, protein_pdb_path, binding_site, lig_dir)
                 entry["docked_sdf"] = docked_sdf
                 logger.info(f"Ligand '{name}': Vina docking succeeded.")
             except RuntimeError as vina_err:
-                logger.warning(
-                    f"Ligand '{name}': Vina docking also failed ({vina_err}). "
-                    "Using undocked conformer."
-                )
+                logger.warning(f"Ligand '{name}': Vina docking also failed ({vina_err}). Using undocked conformer.")
                 entry["docked_sdf"] = sdf_path  # fall back to undocked pose
 
         # Step 3: Parameterize
@@ -652,8 +656,8 @@ def prepare_ligands(
                 entry["parameterizer"] = "openff"
             else:
                 params = parameterize_ligand_acpype(source_sdf, name, lig_dir)
-                entry["itp"]  = params.get("itp")
-                entry["gro"]  = params.get("gro")
+                entry["itp"] = params.get("itp")
+                entry["gro"] = params.get("gro")
                 entry["mol2"] = params.get("mol2")
                 entry["parameterizer"] = "acpype"
         except RuntimeError as e:
@@ -662,8 +666,7 @@ def prepare_ligands(
 
         results.append(entry)
         logger.info(
-            f"Ligand '{name}' prepared: parameterizer={entry['parameterizer']}, "
-            f"docked_sdf={entry['docked_sdf']}"
+            f"Ligand '{name}' prepared: parameterizer={entry['parameterizer']}, docked_sdf={entry['docked_sdf']}"
         )
 
     return results

@@ -23,6 +23,7 @@ Exit codes:
     1  behind upstream — updates available
     2  could not determine (network failure, rate limit, or the two pins disagree)
 """
+
 import argparse
 import json
 import os
@@ -49,15 +50,30 @@ _SHA_RE = re.compile(r"jwohlwend/boltz(?:\.git)?@([0-9a-f]{40})\b")
 
 # Commit subjects worth surfacing loudly — these are the ones that can move numbers, and so
 # the ones that make a bump worth a benchmark re-run rather than a quiet upgrade.
-_NUMERICS_HINTS = ("precision", "float32", "float16", "autocast", "nan", "inf",
-                   "dtype", "device", "seed", "determin", "scale", "sampling")
+_NUMERICS_HINTS = (
+    "precision",
+    "float32",
+    "float16",
+    "autocast",
+    "nan",
+    "inf",
+    "dtype",
+    "device",
+    "seed",
+    "determin",
+    "scale",
+    "sampling",
+)
 
 
 def _get(url: str):
-    req = urllib.request.Request(url, headers={
-        "Accept": "application/vnd.github+json",
-        "User-Agent": "propredict-boltz-version-check",
-    })
+    req = urllib.request.Request(
+        url,
+        headers={
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "propredict-boltz-version-check",
+        },
+    )
     with urllib.request.urlopen(req, timeout=30) as resp:
         return json.load(resp)
 
@@ -80,8 +96,7 @@ def read_pins() -> dict:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--json", action="store_true", help="machine-readable output")
     args = ap.parse_args()
 
@@ -117,25 +132,29 @@ def main() -> int:
         print("(unauthenticated requests are rate-limited to 60/hour)", file=sys.stderr)
         return 2
 
-    behind = cmp_data.get("ahead_by", 0)   # pinned...latest: "ahead" = commits we lack
+    behind = cmp_data.get("ahead_by", 0)  # pinned...latest: "ahead" = commits we lack
     commits = cmp_data.get("commits", [])
 
     def _subject(c):
         return c["commit"]["message"].splitlines()[0]
 
-    notable = [c for c in commits
-               if any(h in _subject(c).lower() for h in _NUMERICS_HINTS)]
+    notable = [c for c in commits if any(h in _subject(c).lower() for h in _NUMERICS_HINTS)]
 
     if args.json:
-        print(json.dumps({
-            "pinned": pinned,
-            "latest_main": latest_sha,
-            "latest_release": latest_release,
-            "behind_by": behind,
-            "up_to_date": behind == 0,
-            "commits": [{"sha": c["sha"][:8], "subject": _subject(c)} for c in commits],
-            "notable_numerics_commits": [c["sha"][:8] for c in notable],
-        }, indent=2))
+        print(
+            json.dumps(
+                {
+                    "pinned": pinned,
+                    "latest_main": latest_sha,
+                    "latest_release": latest_release,
+                    "behind_by": behind,
+                    "up_to_date": behind == 0,
+                    "commits": [{"sha": c["sha"][:8], "subject": _subject(c)} for c in commits],
+                    "notable_numerics_commits": [c["sha"][:8] for c in notable],
+                },
+                indent=2,
+            )
+        )
         return 0 if behind == 0 else 1
 
     pinned_date = ""
@@ -147,8 +166,7 @@ def main() -> int:
     print(f"pinned:  {pinned[:8]}" + (f" ({pinned_date})" if pinned_date else ""))
     print(f"latest:  {latest_sha[:8]} ({head['commit']['committer']['date'][:10]}) on main")
     if latest_release:
-        print(f"release: {latest_release}   "
-              "(NOTE: the version string can lag main — see Process/boltz-version-pin.md)")
+        print(f"release: {latest_release}   (NOTE: the version string can lag main — see Process/boltz-version-pin.md)")
 
     if behind == 0:
         print("\nUp to date — pin matches upstream main.")

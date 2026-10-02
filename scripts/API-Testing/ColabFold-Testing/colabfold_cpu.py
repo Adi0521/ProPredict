@@ -29,14 +29,12 @@ def ensure_weights():
         try:
             from colabfold.download import download_alphafold_params
         except Exception as e:
-            raise RuntimeError(
-                "ColabFold not installed or CLI not found. Tried: "
-                + ", ".join(tried)
-            ) from e
+            raise RuntimeError("ColabFold not installed or CLI not found. Tried: " + ", ".join(tried)) from e
 
         download_alphafold_params("alphafold2_ptm", cache_dir.parent)
     else:
         print("Model weights already present.")
+
 
 def view_structure(pdb_file: str, width: int = 600, height: int = 400):
     """Render structure in browser or Jupyter."""
@@ -50,6 +48,7 @@ def view_structure(pdb_file: str, width: int = 600, height: int = 400):
 
     try:
         from IPython.display import display
+
         return view.show()
     except ImportError:
         # Write HTML for standalone viewing
@@ -58,6 +57,7 @@ def view_structure(pdb_file: str, width: int = 600, height: int = 400):
         with open(out_file, "w") as f:
             f.write(html_str)
         print(f"Structure view written to {out_file}. Open it in your browser.")
+
 
 def main():
     if len(sys.argv) < 2:
@@ -77,14 +77,7 @@ def main():
     queries, is_complex = get_queries(fasta_file)
 
     print(f"Running ColabFold on CPU for {fasta_file}...")
-    run(
-        queries,
-        output_dir,
-        model_type="alphafold2_ptm",
-        use_gpu=False,
-        num_models=1,
-        is_complex=is_complex
-    )
+    run(queries, output_dir, model_type="alphafold2_ptm", use_gpu=False, num_models=1, is_complex=is_complex)
 
     print(f"\n Prediction complete! Check the '{output_dir}' folder for results.")
 
@@ -95,6 +88,7 @@ def main():
         view_structure(ranked_pdb)
     else:
         print(" No ranked_0.pdb file found to visualize.")
+
 
 if __name__ == "__main__":
     main()

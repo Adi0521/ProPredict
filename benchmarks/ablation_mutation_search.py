@@ -20,6 +20,7 @@ combination. It ranks the two decoys first and never fuses D3+K6.
 
 Run: python -m benchmarks.ablation_mutation_search
 """
+
 from typing import Callable, Dict, List, Tuple
 
 from orchestrator.mutation_search import adalead_search
@@ -47,6 +48,7 @@ def make_landscape(synergy: float) -> Callable[[str], float]:
         if seq[2] == "D" and seq[5] == "K":
             f += synergy
         return f
+
     return landscape
 
 
@@ -93,40 +95,51 @@ def run_ablation(
 
         best_fits, found, beat = [], 0, 0
         for seed in range(n_seeds):
-            res = adalead_search(_WT, oracle, rounds=rounds,
-                                 candidates_per_round=candidates_per_round,
-                                 max_sites=max_sites, seed=seed, oracle_name="ablation")
+            res = adalead_search(
+                _WT,
+                oracle,
+                rounds=rounds,
+                candidates_per_round=candidates_per_round,
+                max_sites=max_sites,
+                seed=seed,
+                oracle_name="ablation",
+            )
             top = res.candidates[0]
             best_fits.append(top.score)
             found += _has_pair(top.sequence)
             beat += top.score > naive_fit + 1e-9
-        rows.append({
-            "synergy": synergy,
-            "naive_fit": naive_fit,
-            "adalead_mean": sum(best_fits) / len(best_fits),
-            "adalead_max": max(best_fits),
-            "found_pair_frac": found / n_seeds,
-            "beat_naive_frac": beat / n_seeds,
-            "n_seeds": n_seeds,
-        })
+        rows.append(
+            {
+                "synergy": synergy,
+                "naive_fit": naive_fit,
+                "adalead_mean": sum(best_fits) / len(best_fits),
+                "adalead_max": max(best_fits),
+                "found_pair_frac": found / n_seeds,
+                "beat_naive_frac": beat / n_seeds,
+                "n_seeds": n_seeds,
+            }
+        )
     return rows
 
 
 def main() -> None:
     synergies = [0.0, 0.5, 1.0, 2.0, 3.0, 5.0]
     rows = run_ablation(synergies)
-    hdr = (f"{'synergy':>7} | {'naive':>6} | {'ada_mean':>8} | {'ada_max':>7} | "
-           f"{'found_pair':>10} | {'beat_naive':>10}")
+    hdr = f"{'synergy':>7} | {'naive':>6} | {'ada_mean':>8} | {'ada_max':>7} | {'found_pair':>10} | {'beat_naive':>10}"
     print(hdr)
     print("-" * len(hdr))
     for r in rows:
-        print(f"{r['synergy']:>7.1f} | {r['naive_fit']:>6.2f} | {r['adalead_mean']:>8.2f} | "
-              f"{r['adalead_max']:>7.2f} | {r['found_pair_frac']:>9.0%} | "
-              f"{r['beat_naive_frac']:>9.0%}")
-    print(f"\n(n_seeds={rows[0]['n_seeds']}, rounds=25, lambda=30, k=3. Naive baseline is "
-          "deterministic.\nAdaLead oracle calls = 1+rounds = 26 vs naive = 1 single-site "
-          "pass — the search\ncosts ~26x more oracle calls to find combos the single pass "
-          "cannot represent.)")
+        print(
+            f"{r['synergy']:>7.1f} | {r['naive_fit']:>6.2f} | {r['adalead_mean']:>8.2f} | "
+            f"{r['adalead_max']:>7.2f} | {r['found_pair_frac']:>9.0%} | "
+            f"{r['beat_naive_frac']:>9.0%}"
+        )
+    print(
+        f"\n(n_seeds={rows[0]['n_seeds']}, rounds=25, lambda=30, k=3. Naive baseline is "
+        "deterministic.\nAdaLead oracle calls = 1+rounds = 26 vs naive = 1 single-site "
+        "pass — the search\ncosts ~26x more oracle calls to find combos the single pass "
+        "cannot represent.)"
+    )
 
 
 if __name__ == "__main__":

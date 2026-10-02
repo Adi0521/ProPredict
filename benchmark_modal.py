@@ -24,6 +24,7 @@ from modal_app import app, image
 # Target fetching
 # ---------------------------------------------------------------------------
 
+
 def fetch_casp15_targets() -> list[dict]:
     """
     Fetch CASP15 single-chain targets from RCSB by searching for entries
@@ -57,7 +58,7 @@ def fetch_casp15_targets() -> list[dict]:
         hits = resp.json().get("result_set", [])
         targets = []
         for hit in hits:
-            eid = hit["identifier"]          # e.g. "7TY4_1"
+            eid = hit["identifier"]  # e.g. "7TY4_1"
             pdb_id, entity_num = eid.split("_")
             targets.append({"pdb_id": pdb_id, "chain": "A", "name": f"CASP15/{pdb_id}"})
         if targets:
@@ -69,17 +70,94 @@ def fetch_casp15_targets() -> list[dict]:
     return [
         {"pdb_id": p, "chain": "A", "name": f"CASP15/{p}"}
         for p in [
-            "7TY4","7TY5","7UL4","7UL5","7UXB","7UXC","7V3E","7V3F",
-            "7VDL","7VDM","7VQ6","7VQ7","7WGP","7WGQ","7WV6","7WV7",
-            "7X26","7X27","7XPT","7XPU","7YEK","7YEL","7YG3","7Z6M",
-            "7Z6N","7ZPD","7ZPE","8A0N","8A0O","8A2O","8A2P","8ACS",
-            "8APC","8APD","8APE","8APG","8APH","8B1J","8B8T","8BCY",
-            "8BCZ","8BD0","8BDE","8BDF","8BDG","8BEP","8BG1","8BOZ",
-            "8BP0","8BPP","8BPQ","8C7B","8C7C","8CBN","8CBO","8CGU",
-            "8CGV","8CIQ","8CIR","8CMJ","8CMK","8D40","8D41","8D8C",
-            "8D8D","8DGS","8DGT","8DPN","8DPO","8DPP","8DPQ","8DPR",
-            "8DPS","8DPT","8DPU","8FLY","8FLZ","8FM0","8FM1","8GEO",
-            "8GEP","8GEQ","8H8J","8H8K","8HAK","8HAL","8HAM","8HAN",
+            "7TY4",
+            "7TY5",
+            "7UL4",
+            "7UL5",
+            "7UXB",
+            "7UXC",
+            "7V3E",
+            "7V3F",
+            "7VDL",
+            "7VDM",
+            "7VQ6",
+            "7VQ7",
+            "7WGP",
+            "7WGQ",
+            "7WV6",
+            "7WV7",
+            "7X26",
+            "7X27",
+            "7XPT",
+            "7XPU",
+            "7YEK",
+            "7YEL",
+            "7YG3",
+            "7Z6M",
+            "7Z6N",
+            "7ZPD",
+            "7ZPE",
+            "8A0N",
+            "8A0O",
+            "8A2O",
+            "8A2P",
+            "8ACS",
+            "8APC",
+            "8APD",
+            "8APE",
+            "8APG",
+            "8APH",
+            "8B1J",
+            "8B8T",
+            "8BCY",
+            "8BCZ",
+            "8BD0",
+            "8BDE",
+            "8BDF",
+            "8BDG",
+            "8BEP",
+            "8BG1",
+            "8BOZ",
+            "8BP0",
+            "8BPP",
+            "8BPQ",
+            "8C7B",
+            "8C7C",
+            "8CBN",
+            "8CBO",
+            "8CGU",
+            "8CGV",
+            "8CIQ",
+            "8CIR",
+            "8CMJ",
+            "8CMK",
+            "8D40",
+            "8D41",
+            "8D8C",
+            "8D8D",
+            "8DGS",
+            "8DGT",
+            "8DPN",
+            "8DPO",
+            "8DPP",
+            "8DPQ",
+            "8DPR",
+            "8DPS",
+            "8DPT",
+            "8DPU",
+            "8FLY",
+            "8FLZ",
+            "8FM0",
+            "8FM1",
+            "8GEO",
+            "8GEP",
+            "8GEQ",
+            "8H8J",
+            "8H8K",
+            "8HAK",
+            "8HAL",
+            "8HAM",
+            "8HAN",
         ]
     ]
 
@@ -170,15 +248,13 @@ def fetch_rcsb_quality_targets(
     )
     resp.raise_for_status()
     hits = resp.json().get("result_set", [])
-    return [
-        {"pdb_id": h["identifier"], "chain": "A", "name": h["identifier"]}
-        for h in hits
-    ]
+    return [{"pdb_id": h["identifier"], "chain": "A", "name": h["identifier"]} for h in hits]
 
 
 # ---------------------------------------------------------------------------
 # Structural scoring — pure numpy, no extra deps needed in the container
 # ---------------------------------------------------------------------------
+
 
 def _parse_ca_coords(pdb_str: str, chain_id: Optional[str] = None) -> np.ndarray:
     coords = []
@@ -196,7 +272,7 @@ def _kabsch_rmsd(P: np.ndarray, Q: np.ndarray):
     U, _, Vt = np.linalg.svd(Pc.T @ Qc)
     R = Vt.T @ np.diag([1, 1, np.linalg.det(Vt.T @ U.T)]) @ U.T
     diff = Pc @ R.T - Qc
-    return float(np.sqrt((diff ** 2).sum(1).mean())), diff
+    return float(np.sqrt((diff**2).sum(1).mean())), diff
 
 
 def score_structures(pred_pdb: str, true_pdb: str, chain_id: str = "A") -> dict:
@@ -217,7 +293,7 @@ def score_structures(pred_pdb: str, true_pdb: str, chain_id: str = "A") -> dict:
 
     L = len(true_ca)
     d0 = max(1.24 * (L - 15) ** (1 / 3) - 1.8, 0.5)
-    tm = float((1.0 / L) * (1.0 / (1.0 + (diff ** 2).sum(1) / d0 ** 2)).sum())
+    tm = float((1.0 / L) * (1.0 / (1.0 + (diff**2).sum(1) / d0**2)).sum())
 
     return {"tm_score": round(tm, 4), "rmsd": round(rmsd, 3), "n_aligned": n}
 
@@ -225,6 +301,7 @@ def score_structures(pred_pdb: str, true_pdb: str, chain_id: str = "A") -> dict:
 # ---------------------------------------------------------------------------
 # Per-target Modal function
 # ---------------------------------------------------------------------------
+
 
 @app.function(timeout=600, gpu="A10G", image=image)
 def benchmark_one(target: dict) -> dict:
@@ -236,22 +313,22 @@ def benchmark_one(target: dict) -> dict:
     from Bio.PDB.Polypeptide import is_aa, protein_letters_3to1
 
     boltz_cfg = target.get("_boltz_config", {})
-    os.environ.update({
-        "BOLTZ_ENABLED": "True",
-        "BOLTZ_DIFFUSION_SAMPLES": str(boltz_cfg.get("BOLTZ_DIFFUSION_SAMPLES", "1")),
-        "BOLTZ_SAMPLING_STEPS": str(boltz_cfg.get("BOLTZ_SAMPLING_STEPS", "200")),
-        "BOLTZ_USE_MSA": str(boltz_cfg.get("BOLTZ_USE_MSA", "False")),
-        "BOLTZ_MSA_SERVER_URL": str(boltz_cfg.get("BOLTZ_MSA_SERVER_URL", "https://api.colabfold.com")),
-    })
+    os.environ.update(
+        {
+            "BOLTZ_ENABLED": "True",
+            "BOLTZ_DIFFUSION_SAMPLES": str(boltz_cfg.get("BOLTZ_DIFFUSION_SAMPLES", "1")),
+            "BOLTZ_SAMPLING_STEPS": str(boltz_cfg.get("BOLTZ_SAMPLING_STEPS", "200")),
+            "BOLTZ_USE_MSA": str(boltz_cfg.get("BOLTZ_USE_MSA", "False")),
+            "BOLTZ_MSA_SERVER_URL": str(boltz_cfg.get("BOLTZ_MSA_SERVER_URL", "https://api.colabfold.com")),
+        }
+    )
     from orchestrator.backends.boltz import call_boltz
 
     pdb_id, chain = target["pdb_id"], target["chain"]
 
     # Fetch experimental structure
     try:
-        resp = requests.get(
-            f"https://files.rcsb.org/download/{pdb_id}.pdb", timeout=30
-        )
+        resp = requests.get(f"https://files.rcsb.org/download/{pdb_id}.pdb", timeout=30)
         resp.raise_for_status()
     except Exception as e:
         return {"pdb_id": pdb_id, "error": f"PDB fetch failed: {e}"}
@@ -271,11 +348,7 @@ def benchmark_one(target: dict) -> dict:
         chain_obj = chains[0]
         chain = chain_obj.id
 
-    seq = "".join(
-        protein_letters_3to1.get(res.get_resname(), "X")
-        for res in chain_obj
-        if is_aa(res, standard=True)
-    )
+    seq = "".join(protein_letters_3to1.get(res.get_resname(), "X") for res in chain_obj if is_aa(res, standard=True))
 
     if len(seq) < 10:
         return {"pdb_id": pdb_id, "error": f"Sequence too short ({len(seq)} aa)"}
@@ -306,6 +379,7 @@ def benchmark_one(target: dict) -> dict:
 # ---------------------------------------------------------------------------
 # Local entrypoint
 # ---------------------------------------------------------------------------
+
 
 @app.local_entrypoint()
 def run_benchmark(
@@ -342,10 +416,7 @@ def run_benchmark(
     )
 
     if pdb_ids:
-        targets = [
-            {"pdb_id": p.strip().upper(), "chain": "A", "name": p.strip().upper()}
-            for p in pdb_ids.split(",")
-        ]
+        targets = [{"pdb_id": p.strip().upper(), "chain": "A", "name": p.strip().upper()} for p in pdb_ids.split(",")]
     elif source == "rcsb":
         print("Querying RCSB for high-quality single-chain proteins deposited ≥ 2023...")
         targets = fetch_rcsb_quality_targets()
@@ -373,10 +444,7 @@ def run_benchmark(
     duration_seconds = time.time() - t0
 
     # Print table
-    header = (
-        f"{'PDB':>6}  {'Name':<24}  {'Len':>4}  "
-        f"{'pLDDT':>6}  {'TM-score':>8}  {'RMSD (Å)':>9}"
-    )
+    header = f"{'PDB':>6}  {'Name':<24}  {'Len':>4}  {'pLDDT':>6}  {'TM-score':>8}  {'RMSD (Å)':>9}"
     print(header)
     print("-" * len(header))
 
@@ -436,7 +504,8 @@ def run_benchmark(
         backend_build = next(iter(reported), None)
 
     log_run(
-        results, config_snapshot,
+        results,
+        config_snapshot,
         source=effective_source,
         notes=notes,
         duration_seconds=duration_seconds,

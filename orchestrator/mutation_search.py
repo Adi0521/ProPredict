@@ -29,6 +29,7 @@ does `if args.seed:` and treats 0 as unset, randomizing the seed.
 Standalone module (params, not config.py wiring). The AdaLead search that consumes these
 oracles is built on top in a later task.
 """
+
 import glob
 import logging
 import os
@@ -63,19 +64,15 @@ _MUTATION_RE = re.compile(r"^([A-Z])(\d+)([A-Z])$")
 # Mutation representation helpers (shared by both oracles and, later, AdaLead)
 # ---------------------------------------------------------------------------
 
+
 def parse_mutation(mutation: str) -> Tuple[str, int, str]:
     """'A12V' -> ('A', 12, 'V'). Position is 1-indexed. Raises ValueError on bad format."""
     m = _MUTATION_RE.match(mutation)
     if not m:
-        raise ValueError(
-            f"malformed mutation {mutation!r}: expected <wt-aa><1-indexed-pos><mut-aa>, "
-            "e.g. 'A12V'."
-        )
+        raise ValueError(f"malformed mutation {mutation!r}: expected <wt-aa><1-indexed-pos><mut-aa>, e.g. 'A12V'.")
     wt, pos, mut = m.group(1), int(m.group(2)), m.group(3)
     if wt not in _STANDARD_AA or mut not in _STANDARD_AA:
-        raise ValueError(
-            f"mutation {mutation!r} uses a non-standard amino acid (allowed: {_STANDARD_AA})."
-        )
+        raise ValueError(f"mutation {mutation!r} uses a non-standard amino acid (allowed: {_STANDARD_AA}).")
     if pos < 1:
         raise ValueError(f"mutation {mutation!r} has non-positive position {pos}.")
     return wt, pos, mut
@@ -100,8 +97,7 @@ def apply_mutations(sequence: str, mutations: List[str]) -> str:
         idx = pos - 1
         if idx >= len(chars):
             raise ValueError(
-                f"mutation {mutation!r} position {pos} is past the end of a "
-                f"{len(chars)}-residue sequence."
+                f"mutation {mutation!r} position {pos} is past the end of a {len(chars)}-residue sequence."
             )
         if chars[idx] != wt:
             raise ValueError(
@@ -122,16 +118,13 @@ def mutations_from_sequences(wild_type: str, mutant: str) -> List[str]:
             f"length mismatch: wild_type is {len(wild_type)}, mutant is {len(mutant)}. "
             "Mutation search only produces substitutions (equal length)."
         )
-    return [
-        format_mutation(wt, i + 1, mt)
-        for i, (wt, mt) in enumerate(zip(wild_type, mutant))
-        if wt != mt
-    ]
+    return [format_mutation(wt, i + 1, mt) for i, (wt, mt) in enumerate(zip(wild_type, mutant)) if wt != mt]
 
 
 # ---------------------------------------------------------------------------
 # Tier 1 — additive oracle (pure; seeding / pre-filter only)
 # ---------------------------------------------------------------------------
+
 
 def additive_oracle(log_p: np.ndarray, mutations: List[str]) -> float:
     """
@@ -149,8 +142,7 @@ def additive_oracle(log_p: np.ndarray, mutations: List[str]) -> float:
         idx = pos - 1
         if idx < 0 or idx >= log_p.shape[0]:
             raise ValueError(
-                f"mutation {mutation!r} position {pos} is out of range for a "
-                f"{log_p.shape[0]}-residue log_p."
+                f"mutation {mutation!r} position {pos} is out of range for a {log_p.shape[0]}-residue log_p."
             )
         total += float(log_p[idx, _ALPHABET.index(mut)] - log_p[idx, _ALPHABET.index(wt)])
     return total
@@ -159,6 +151,7 @@ def additive_oracle(log_p: np.ndarray, mutations: List[str]) -> float:
 # ---------------------------------------------------------------------------
 # Tier 2 — score_only oracle (epistasis-aware; batched; the search-loop oracle)
 # ---------------------------------------------------------------------------
+
 
 def _run_proteinmpnn_score_only(
     pdb_string: str,
@@ -208,16 +201,26 @@ def _run_proteinmpnn_score_only(
         )
 
     cmd = [
-        sys.executable, run_script,
-        "--pdb_path", pdb_path,
-        "--out_folder", out_dir,
-        "--path_to_model_weights", weights_dir,
-        "--model_name", model_name,
-        "--score_only", "1",
-        "--path_to_fasta", fasta_path,
-        "--num_seq_per_target", str(num_decoding_orders),
-        "--seed", str(seed),
-        "--batch_size", "1",
+        sys.executable,
+        run_script,
+        "--pdb_path",
+        pdb_path,
+        "--out_folder",
+        out_dir,
+        "--path_to_model_weights",
+        weights_dir,
+        "--model_name",
+        model_name,
+        "--score_only",
+        "1",
+        "--path_to_fasta",
+        fasta_path,
+        "--num_seq_per_target",
+        str(num_decoding_orders),
+        "--seed",
+        str(seed),
+        "--batch_size",
+        "1",
     ]
     result = subprocess.run(cmd, capture_output=True, text=True, cwd=proteinmpnn_dir)
     if result.returncode != 0:
@@ -284,8 +287,13 @@ def score_only_oracle(
 
     with tempfile.TemporaryDirectory() as tmpdir:
         global_scores = _run_proteinmpnn_score_only(
-            pdb_string, sequences, tmpdir, proteinmpnn_dir, model_name,
-            seed=seed, num_decoding_orders=num_decoding_orders,
+            pdb_string,
+            sequences,
+            tmpdir,
+            proteinmpnn_dir,
+            model_name,
+            seed=seed,
+            num_decoding_orders=num_decoding_orders,
         )
     # global_score is a mean NLL (lower = better fit); negate so higher = better everywhere.
     return [-g for g in global_scores]
@@ -337,17 +345,14 @@ def _elite_parents(measured: Dict[str, float], kappa: float) -> List[str]:
     """
     fits = list(measured.values())
     hi, lo = max(fits), min(fits)
-    cutoff = hi - kappa * (hi - lo)   # hi==lo -> cutoff==hi -> every seq qualifies
+    cutoff = hi - kappa * (hi - lo)  # hi==lo -> cutoff==hi -> every seq qualifies
     return [seq for seq, fit in measured.items() if fit >= cutoff]
 
 
 def _recombine(parent_a: str, parent_b: str, rng: np.random.Generator) -> str:
     """Uniform crossover: each position independently taken from one parent (0.5 each).
     recombine(WT, WT) == WT, so a singleton round-1 pool is safe."""
-    return "".join(
-        parent_a[i] if rng.random() < 0.5 else parent_b[i]
-        for i in range(len(parent_a))
-    )
+    return "".join(parent_a[i] if rng.random() < 0.5 else parent_b[i] for i in range(len(parent_a)))
 
 
 def _mutate(sequence: str, n_mutations: int, rng: np.random.Generator) -> str:
@@ -363,9 +368,7 @@ def _mutate(sequence: str, n_mutations: int, rng: np.random.Generator) -> str:
     return "".join(chars)
 
 
-def _enforce_k_cap(
-    sequence: str, wild_type: str, max_sites: int, rng: np.random.Generator
-) -> str:
+def _enforce_k_cap(sequence: str, wild_type: str, max_sites: int, rng: np.random.Generator) -> str:
     """Revert random excess mutations back to WT so at most `max_sites` positions differ.
     Reverting to WT (not to a parent) keeps the operation self-contained and unbiased."""
     diff = [i for i in range(len(sequence)) if sequence[i] != wild_type[i]]
@@ -504,17 +507,18 @@ def adalead_search(
 RefoldFn = Callable[[str, Optional[Dict[str, Any]], int], StructurePrediction]
 
 
-def _default_refold_fn(
-    sequence: str, context: Optional[Dict[str, Any]], seed: int
-) -> StructurePrediction:
+def _default_refold_fn(sequence: str, context: Optional[Dict[str, Any]], seed: int) -> StructurePrediction:
     """Re-fold via the same backend choice as agent.apply_mutation: Boltz when enabled
     (carries ligand/membrane context + affinity), else ESMFold. Backends are imported lazily
     so this module never pulls torch/boltz at import time (optional-dep convention)."""
     from config import BOLTZ_ENABLED
+
     if BOLTZ_ENABLED:
         from orchestrator.backends.boltz import call_boltz
+
         return call_boltz(sequence, context=context, seed=seed)
     from orchestrator.backends.esmfold import call_esmfold_api
+
     return call_esmfold_api(sequence, seed=seed)
 
 
@@ -523,13 +527,15 @@ def _refold_one(cand: MutationCandidate, pred: StructurePrediction) -> MutationC
     better), matching scoring.compute_post_processing. Affinity fields are metadata only."""
     clashes = count_clashes(pred.structure_pdb)
     refold_score = pred.mean_plddt - 5.0 * clashes
-    return cand.model_copy(update={
-        "refold_plddt": round(pred.mean_plddt, 2),
-        "refold_num_clashes": clashes,
-        "refold_score": round(refold_score, 2),
-        "refold_affinity": pred.affinity_score,
-        "refold_affinity_probability": pred.affinity_probability,
-    })
+    return cand.model_copy(
+        update={
+            "refold_plddt": round(pred.mean_plddt, 2),
+            "refold_num_clashes": clashes,
+            "refold_score": round(refold_score, 2),
+            "refold_affinity": pred.affinity_score,
+            "refold_affinity_probability": pred.affinity_probability,
+        }
+    )
 
 
 def refold_validate(
@@ -559,8 +565,7 @@ def refold_validate(
         try:
             pred = refold_fn(cand.sequence, context, seed)
         except Exception as e:  # noqa: BLE001 — a bad re-fold must not sink the whole funnel
-            logger.warning("re-fold failed for %s (%s) — skipping: %s",
-                           cand.mutations, cand.sequence, e)
+            logger.warning("re-fold failed for %s (%s) — skipping: %s", cand.mutations, cand.sequence, e)
             continue
         validated.append(_refold_one(cand, pred))
 
@@ -593,15 +598,25 @@ def search_and_validate(
     unchanged (refolds_used stays 0).
     """
     result = adalead_search(
-        wild_type, oracle, rounds=rounds, candidates_per_round=candidates_per_round,
-        max_sites=max_sites, seed=seed, oracle_name=oracle_name, **adalead_kwargs,
+        wild_type,
+        oracle,
+        rounds=rounds,
+        candidates_per_round=candidates_per_round,
+        max_sites=max_sites,
+        seed=seed,
+        oracle_name=oracle_name,
+        **adalead_kwargs,
     )
     if max_refolds <= 0:
         return result
 
     validated, refolds_used = refold_validate(
-        wild_type, result.candidates, context, max_refolds,
-        refold_fn or _default_refold_fn, seed,
+        wild_type,
+        result.candidates,
+        context,
+        max_refolds,
+        refold_fn or _default_refold_fn,
+        seed,
     )
     return result.model_copy(update={"candidates": validated, "refolds_used": refolds_used})
 
@@ -611,8 +626,9 @@ def _format_candidate_line(cand: MutationCandidate) -> str:
     muts = "+".join(cand.mutations) if cand.mutations else "(wild-type)"
     line = f"{muts:<24} score={cand.score:+.4f}"
     if cand.refold_score is not None:
-        line += (f"  refold_score={cand.refold_score:+.2f}"
-                 f" pLDDT={cand.refold_plddt:.2f} clashes={cand.refold_num_clashes}")
+        line += (
+            f"  refold_score={cand.refold_score:+.2f} pLDDT={cand.refold_plddt:.2f} clashes={cand.refold_num_clashes}"
+        )
         if cand.refold_affinity is not None:
             line += f" affinity={cand.refold_affinity:.3f}"  # log10(IC50 uM); metadata only
     return line
@@ -632,17 +648,19 @@ def _cli() -> None:
     ap.add_argument("--sequence", required=True, help="Wild-type sequence (matches the PDB)")
     ap.add_argument("--proteinmpnn-dir", default=os.getenv("PROTEINMPNN_PATH", ""))
     ap.add_argument("--model-name", default=os.getenv("PROTEINMPNN_MODEL_NAME", "v_48_020"))
-    ap.add_argument("--mpnn-seed", type=int, default=int(os.getenv("PROTEINMPNN_SEED", "37")),
-                    help="ProteinMPNN decoding seed (must be non-zero)")
-    ap.add_argument("--num-decoding-orders", type=int,
-                    default=int(os.getenv("PROTEINMPNN_NUM_DECODING_ORDERS", "8")))
+    ap.add_argument(
+        "--mpnn-seed",
+        type=int,
+        default=int(os.getenv("PROTEINMPNN_SEED", "37")),
+        help="ProteinMPNN decoding seed (must be non-zero)",
+    )
+    ap.add_argument("--num-decoding-orders", type=int, default=int(os.getenv("PROTEINMPNN_NUM_DECODING_ORDERS", "8")))
     ap.add_argument("--rounds", type=int, default=10)
     ap.add_argument("--candidates-per-round", type=int, default=20)
     ap.add_argument("--max-sites", type=int, default=3)
     ap.add_argument("--top-k", type=int, default=10)
     ap.add_argument("--seed", type=int, default=0, help="AdaLead RNG seed (search reproducibility)")
-    ap.add_argument("--validate", action="store_true",
-                    help="Re-fold top candidates and rank by structure quality")
+    ap.add_argument("--validate", action="store_true", help="Re-fold top candidates and rank by structure quality")
     ap.add_argument("--max-refolds", type=int, default=5)
     args = ap.parse_args()
 
@@ -651,20 +669,29 @@ def _cli() -> None:
 
     def oracle(sequences: List[str]) -> List[float]:
         return score_only_oracle(
-            pdb_string, sequences, proteinmpnn_dir=args.proteinmpnn_dir,
-            model_name=args.model_name, seed=args.mpnn_seed,
+            pdb_string,
+            sequences,
+            proteinmpnn_dir=args.proteinmpnn_dir,
+            model_name=args.model_name,
+            seed=args.mpnn_seed,
             num_decoding_orders=args.num_decoding_orders,
         )
 
     result = search_and_validate(
-        args.sequence, oracle,
-        rounds=args.rounds, candidates_per_round=args.candidates_per_round,
-        max_sites=args.max_sites, seed=args.seed, top_k=args.top_k,
+        args.sequence,
+        oracle,
+        rounds=args.rounds,
+        candidates_per_round=args.candidates_per_round,
+        max_sites=args.max_sites,
+        seed=args.seed,
+        top_k=args.top_k,
         max_refolds=(args.max_refolds if args.validate else 0),
     )
 
-    print(f"# {len(result.candidates)} candidates | {result.total_evaluated} sequences "
-          f"evaluated | {result.rounds} rounds | refolds_used={result.refolds_used}")
+    print(
+        f"# {len(result.candidates)} candidates | {result.total_evaluated} sequences "
+        f"evaluated | {result.rounds} rounds | refolds_used={result.refolds_used}"
+    )
     for cand in result.candidates:
         print(_format_candidate_line(cand))
 
