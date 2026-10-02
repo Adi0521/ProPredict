@@ -81,7 +81,7 @@ def _extract_sequence(true_pdb: str, chain: str):
     except KeyError:
         chains = list(struct[0].get_chains())
         if not chains:
-            raise ValueError("No chains found in PDB")
+            raise ValueError("No chains found in PDB") from None
         chain_obj = chains[0]
         chain = chain_obj.id
 

@@ -151,7 +151,7 @@ def benchmark_assay(
                     num_decoding_orders=num_decoding_orders,
                 )
             scores, truths, skipped = [], [], 0
-            for mutant, dms in zip(mutants, dms_scores):
+            for mutant, dms in zip(mutants, dms_scores, strict=True):
                 s = _score_mutant(mutant, log_p, target_seq)
                 if s is None or dms is None or (isinstance(dms, float) and np.isnan(dms)):
                     skipped += 1

@@ -121,3 +121,43 @@ likely to be ignored per-file), E402 (4), F401 availability probes (3), B023 (1)
 - Lint findings unchanged at 60 (formatting doesn't affect them).
 - Once committed, add the formatting commit hash to `.git-blame-ignore-revs` so `git blame`
   skips it (`git config blame.ignoreRevsFile .git-blame-ignore-revs`).
+
+---
+
+# Follow-up: manual lint fixes — group A (mechanical)
+
+**Date:** 2026-10-02
+
+Fixed 47 of the 60 remaining findings. The other 13 are deferred: 10 suppressions (group B:
+B008 FastAPI `Depends`, F401 availability probes, deliberate E402 in benchmark_pipeline_modal.py,
+B023 in the ablation lambda) and 3 real issues (group C: unchecked `gmx energy` result in
+simulation.py, dead `rng`/`seed` in build_hiv_pr_dataset.py, a test in test_boltz.py that only
+exercises its own mock).
+
+## What changed
+
+- **B904 ×21 — exception chaining.** `raise X` inside `except` → `raise X from err`, naming the
+  handler (`except ImportError as err:`) where it was anonymous. For the optional-dependency
+  guards this means the underlying ImportError (e.g. a broken native lib vs. not installed) now
+  shows in the traceback instead of being hidden behind "X is not installed". One exception:
+  `benchmark_pipeline_modal.py` raises "No chains found" from a `KeyError` fallback path where
+  the KeyError is expected, not the cause — that one is `from None`.
+- **B905 ×14 — `zip(..., strict=True)`.** Every site pairs sequences that must be equal length
+  (oracle scores ↔ sequences, aligned CA atom lists, x/y for correlation, WT ↔ mutant residues,
+  DMS dataframe columns). A length mismatch now raises `ValueError` instead of silently
+  truncating — a mismatch at any of these sites would be a bug. Ruff's own fix inserts
+  `strict=False` (behaviour-preserving); we deliberately chose `strict=True`. Requires Python
+  ≥3.10, matching `requires-python`.
+- **E741 ×6** — `l` renamed to `line` / `pkg` / `lig`.
+- **E402 ×3** — `import redis` moved to the top of orchestrator/tasks.py; the
+  `orchestrator.progress` import in api/main.py moved above the `if MODAL_ENABLED` block (it
+  doesn't depend on the branch); a mid-file schema import in tests/test_agent.py merged into the
+  top import.
+- **F841 ×3** — removed dead `results_dir` (backends/boltz.py), `length` (mutation_search.py),
+  `out` (tests/test_ligands.py).
+
+## Gotcha (for anyone scripting similar fixes)
+
+The B904 edits were applied by an AST script. Python's `ast` `col_offset` is a **UTF-8 byte**
+offset, not a character index, so on two lines containing an em-dash in api/main.py the
+`from err` landed at the start of the following line. Caught in review and fixed by hand.

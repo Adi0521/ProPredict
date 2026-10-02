@@ -23,8 +23,10 @@ def call_rosettafold2(sequence: str, seed: int = 0) -> StructurePrediction:
     """
     try:
         import rf2aa  # type: ignore  # noqa: F401
-    except ImportError:
-        raise RuntimeError("RoseTTAFold2 (rf2aa) is not installed. See: https://github.com/baker-lab/RoseTTAFold2")
+    except ImportError as err:
+        raise RuntimeError(
+            "RoseTTAFold2 (rf2aa) is not installed. See: https://github.com/baker-lab/RoseTTAFold2"
+        ) from err
 
     # TODO: implement using the RF2AA runner once the conda env is active.
     # Example sketch (API may differ by version):
@@ -50,8 +52,8 @@ def call_openfold(sequence: str, seed: int = 0) -> StructurePrediction:
     """
     try:
         import openfold  # type: ignore  # noqa: F401
-    except ImportError:
-        raise RuntimeError("OpenFold is not installed. See: https://github.com/aqlaboratory/openfold")
+    except ImportError as err:
+        raise RuntimeError("OpenFold is not installed. See: https://github.com/aqlaboratory/openfold") from err
 
     # TODO: implement using the OpenFold data pipeline + model runner.
     # Example sketch:

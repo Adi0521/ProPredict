@@ -207,7 +207,6 @@ def call_boltz(
         if not cif_hits:
             raise FileNotFoundError(f"Boltz-2 produced no *model_0.cif under {out_dir}. stderr: {proc.stderr[-1000:]}")
         cif_path = cif_hits[0]
-        results_dir = os.path.dirname(cif_path)
         pdb_string = _cif_to_pdb(cif_path)
 
         import importlib.metadata

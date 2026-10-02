@@ -45,7 +45,7 @@ def spearman(x, y):
     rx, ry = rank(x), rank(y)
     n = len(x)
     mx, my = sum(rx) / n, sum(ry) / n
-    num = sum((a - mx) * (b - my) for a, b in zip(rx, ry))
+    num = sum((a - mx) * (b - my) for a, b in zip(rx, ry, strict=True))
     den = math.sqrt(sum((a - mx) ** 2 for a in rx) * sum((b - my) ** 2 for b in ry))
     return num / den if den else float("nan")
 
@@ -56,7 +56,7 @@ def linfit(x, y):
     den = sum((a - mx) ** 2 for a in x)
     if den == 0:
         return float("nan"), float("nan")
-    slope = sum((a - mx) * (b - my) for a, b in zip(x, y)) / den
+    slope = sum((a - mx) * (b - my) for a, b in zip(x, y, strict=True)) / den
     return slope, my - slope * mx
 
 
@@ -72,7 +72,7 @@ def main():
     ap.add_argument("results", help="results.jsonl from benchmark_affinity_invariance.py")
     args = ap.parse_args()
 
-    rows = [json.loads(l) for l in open(args.results)]
+    rows = [json.loads(line) for line in open(args.results)]
     rows = [r for r in rows if r.get("ok")]
 
     # WT baseline per (drug, msa arm)

@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from config import API_DEBUG, LOG_LEVEL
 from models.database import Job, get_db, init_db
 from models.schemas import JobStatus, PredictionRequest, PredictionResponse
+from orchestrator.progress import PROGRESS_DICT_NAME, celery_state_to_status
 
 MODAL_ENABLED = os.getenv("MODAL_ENABLED", "False") == "True"
 
@@ -22,8 +23,6 @@ if MODAL_ENABLED:
     _modal_predict = modal.Function.from_name("propredict", "run_prediction")
 else:
     from orchestrator.tasks import predict_protein_structure
-
-from orchestrator.progress import PROGRESS_DICT_NAME, celery_state_to_status
 
 
 def _read_modal_progress(run_id: str) -> Optional[dict]:
@@ -115,7 +114,7 @@ async def predict(request: PredictionRequest, db: Session = Depends(get_db)):
         raise
     except Exception as e:
         logger.error(f"Error submitting prediction request: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to submit prediction")
+        raise HTTPException(status_code=500, detail="Failed to submit prediction") from e
 
 
 @app.get("/predict/{run_id}", response_model=PredictionResponse)
@@ -198,7 +197,7 @@ async def get_prediction(run_id: str, db: Session = Depends(get_db)):
         raise
     except Exception as e:
         logger.error(f"Error retrieving results for {run_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to retrieve results")
+        raise HTTPException(status_code=500, detail="Failed to retrieve results") from e
 
 
 @app.get("/predict/{run_id}/status", response_model=JobStatus)
@@ -243,7 +242,7 @@ async def get_job_status(run_id: str, db: Session = Depends(get_db)):
         raise
     except Exception as e:
         logger.error(f"Error getting status for {run_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to get job status")
+        raise HTTPException(status_code=500, detail="Failed to get job status") from e
 
 
 def _get_completed_result(run_id: str, db: Session) -> dict:
@@ -257,10 +256,10 @@ def _get_completed_result(run_id: str, db: Session) -> dict:
         fc = modal.functions.FunctionCall.from_id(job.modal_call_id)
         try:
             return fc.get(timeout=0)
-        except TimeoutError:
-            raise HTTPException(status_code=404, detail="PDB not available — job is still running")
+        except TimeoutError as err:
+            raise HTTPException(status_code=404, detail="PDB not available — job is still running") from err
         except Exception as exc:
-            raise HTTPException(status_code=400, detail=f"PDB not available — job failed: {exc}")
+            raise HTTPException(status_code=400, detail=f"PDB not available — job failed: {exc}") from exc
     else:
         task = predict_protein_structure.AsyncResult(run_id)
         if task.state != "SUCCESS" or not task.result:

@@ -118,7 +118,9 @@ def mutations_from_sequences(wild_type: str, mutant: str) -> List[str]:
             f"length mismatch: wild_type is {len(wild_type)}, mutant is {len(mutant)}. "
             "Mutation search only produces substitutions (equal length)."
         )
-    return [format_mutation(wt, i + 1, mt) for i, (wt, mt) in enumerate(zip(wild_type, mutant)) if wt != mt]
+    return [
+        format_mutation(wt, i + 1, mt) for i, (wt, mt) in enumerate(zip(wild_type, mutant, strict=True)) if wt != mt
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -424,14 +426,13 @@ def adalead_search(
     re-fold validation is wired in a later task.
     """
     rng = np.random.default_rng(seed)
-    length = len(wild_type)
 
     seeds = initial_sequences if initial_sequences is not None else [wild_type]
     seeds = list(dict.fromkeys(seeds))  # de-dup, preserve order
     # measured is insertion-ordered (dict) so all later sampling from it is reproducible.
     measured: Dict[str, float] = {}
     seed_fits = oracle(seeds)
-    for s, f in zip(seeds, seed_fits):
+    for s, f in zip(seeds, seed_fits, strict=True):
         measured[s] = f
 
     max_attempts = candidates_per_round * 25  # cap generation so dedup starvation can't spin
@@ -458,7 +459,7 @@ def adalead_search(
         if not batch:
             continue  # pool exhausted under the k-cap; nothing new to score this round
         fits = oracle(batch)
-        for s, f in zip(batch, fits):
+        for s, f in zip(batch, fits, strict=True):
             measured[s] = f
 
     # Rank all scored mutants (exclude WT), best-first; tie-break by sequence for determinism.

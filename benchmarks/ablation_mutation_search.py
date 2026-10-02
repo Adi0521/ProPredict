@@ -32,7 +32,7 @@ _AA = "ACDEFGHIKLMNPQRSTVWY"
 def make_landscape(synergy: float) -> Callable[[str], float]:
     def landscape(seq: str) -> float:
         f = 0.0
-        for i, (w, c) in enumerate(zip(_WT, seq)):
+        for i, (w, c) in enumerate(zip(_WT, seq, strict=True)):
             if w == c:
                 continue
             if i == 0 and c == "C":

@@ -113,7 +113,7 @@ def _spearman(x, y):
     rx, ry = rank(x), rank(y)
     n = len(x)
     mx, my = sum(rx) / n, sum(ry) / n
-    num = sum((a - mx) * (b - my) for a, b in zip(rx, ry))
+    num = sum((a - mx) * (b - my) for a, b in zip(rx, ry, strict=True))
     dx = sum((a - mx) ** 2 for a in rx) ** 0.5
     dy = sum((b - my) ** 2 for b in ry) ** 0.5
     return None if dx == 0 or dy == 0 else num / (dx * dy)
@@ -127,7 +127,7 @@ def _slope(x, y):
         return None
     mx, my = sum(x) / n, sum(y) / n
     den = sum((a - mx) ** 2 for a in x)
-    return None if den == 0 else sum((a - mx) * (b - my) for a, b in zip(x, y)) / den
+    return None if den == 0 else sum((a - mx) * (b - my) for a, b in zip(x, y, strict=True)) / den
 
 
 def _summarize(rows):
@@ -218,7 +218,7 @@ def affinity_invariance(
 
     all_rows = []
     if os.path.exists(out):
-        all_rows = [json.loads(l) for l in open(out) if l.strip()]
+        all_rows = [json.loads(line) for line in open(out) if line.strip()]
 
     with open(out, "a") as fh:
         for rec in affinity_one.starmap(tasks, return_exceptions=True):

@@ -245,7 +245,7 @@ def _landscape(seq: str) -> float:
     fuses them. Global optimum under k=3 is D3+K6+one decoy = +5.2.
     """
     f = 0.0
-    for i, (w, c) in enumerate(zip(_WT, seq)):
+    for i, (w, c) in enumerate(zip(_WT, seq, strict=True)):
         if w == c:
             continue
         if i == 0 and c == "C":
@@ -349,7 +349,7 @@ def test_adalead_additive_landscape_stacks_to_k_cap():
     # them together, each must be independently discovered among 19*L substitutions.)
     def additive(seq):
         f = 0.0
-        for i, (w, c) in enumerate(zip(_WT, seq)):
+        for i, (w, c) in enumerate(zip(_WT, seq, strict=True)):
             if w == c:
                 continue
             f += 1.0 if i in (0, 1, 2) else -0.5
@@ -528,7 +528,7 @@ def test_cli_prints_ranked_candidates(tmp_path, capsys):
 
     # Stub the oracle so the cheap search runs in-memory (fewer mutations = higher fitness).
     def fake_score_only(pdb_string, sequences, **kw):
-        return [-float(sum(a != b for a, b in zip(_WT, s))) for s in sequences]
+        return [-float(sum(a != b for a, b in zip(_WT, s, strict=True))) for s in sequences]
 
     argv = [
         "prog",

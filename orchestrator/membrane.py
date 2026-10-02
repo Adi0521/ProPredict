@@ -244,18 +244,18 @@ def embed_in_membrane_openmm(
     try:
         from openmm import unit
         from openmm.app import Modeller
-    except ImportError:
-        raise RuntimeError("OpenMM is not installed. Install: conda install -c conda-forge openmm")
+    except ImportError as err:
+        raise RuntimeError("OpenMM is not installed. Install: conda install -c conda-forge openmm") from err
 
     try:
         # openmmforcefields provides CHARMM36m lipids
         import openmmforcefields  # noqa: F401
-    except ImportError:
+    except ImportError as err:
         raise RuntimeError(
             "openmmforcefields is not installed. "
             "Install: conda install -c conda-forge openmmforcefields\n"
             "This package is required for CHARMM36m lipid parameters."
-        )
+        ) from err
 
     lipid = _lipid_name(membrane_context.get("type"))
     logger.info(f"OpenMM: embedding protein in {lipid} bilayer using CHARMM36m...")
@@ -277,7 +277,7 @@ def embed_in_membrane_openmm(
             f"OpenMM addMembrane failed for lipid '{lipid}': {e}\n"
             "Check that the lipid type is supported by CHARMM36m "
             "and that openmmforcefields is installed."
-        )
+        ) from e
 
     n_atoms = modeller.topology.getNumAtoms()
     logger.info(f"OpenMM: membrane system has {n_atoms} atoms")

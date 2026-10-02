@@ -694,7 +694,7 @@ def run_agent_refinement(
         f"  pH: {context.get('pH', 7.4)}\n"
         f"  Temperature: {context.get('temperature_c', 25.0)} C\n"
         f"  Membrane: {context.get('membrane')}\n"
-        f"  Ligands: {[l.get('name') for l in context.get('ligands', [])] or None}\n"
+        f"  Ligands: {[lig.get('name') for lig in context.get('ligands', [])] or None}\n"
         f"  Mutations requested: {context.get('mutations')}\n\n"
         f"Available backends: "
         f"Rosetta={'enabled' if ROSETTA_ENABLED else 'disabled'}, "

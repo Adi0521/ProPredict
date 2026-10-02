@@ -56,8 +56,8 @@ def smiles_to_3d(smiles: str, ligand_name: str, out_dir: str) -> str:
     try:
         from rdkit import Chem
         from rdkit.Chem import AllChem
-    except ImportError:
-        raise RuntimeError("RDKit is not installed. Install: conda install -c conda-forge rdkit")
+    except ImportError as err:
+        raise RuntimeError("RDKit is not installed. Install: conda install -c conda-forge rdkit") from err
 
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
@@ -230,13 +230,13 @@ def dock_vina(
     """
     try:
         from vina import Vina
-    except ImportError:
-        raise RuntimeError("vina is not installed. Install: pip install vina")
+    except ImportError as err:
+        raise RuntimeError("vina is not installed. Install: pip install vina") from err
     try:
         from rdkit import Chem
         from rdkit.Chem import AllChem
-    except ImportError:
-        raise RuntimeError("RDKit is required for Vina docking SDF conversion.")
+    except ImportError as err:
+        raise RuntimeError("RDKit is required for Vina docking SDF conversion.") from err
 
     # Vina requires PDBQT format; convert via RDKit + meeko if available,
     # otherwise use a simple charge-stripping conversion.
@@ -513,30 +513,32 @@ def parameterize_ligand_openff(
         from openff.toolkit import ForceField as OpenFFForceField
         from openff.toolkit import Molecule
         from openff.toolkit.utils.exceptions import RadicalsNotSupportedError
-    except ImportError:
-        raise RuntimeError("openff-toolkit is not installed. Install: pip install openff-toolkit openff-forcefields")
+    except ImportError as err:
+        raise RuntimeError(
+            "openff-toolkit is not installed. Install: pip install openff-toolkit openff-forcefields"
+        ) from err
 
     try:
         from openff.interchange import Interchange
-    except ImportError:
-        raise RuntimeError("openff-interchange is not installed. Install: pip install openff-interchange")
+    except ImportError as err:
+        raise RuntimeError("openff-interchange is not installed. Install: pip install openff-interchange") from err
 
     logger.info(f"OpenFF: parameterizing {ligand_name} with SMIRNOFF sage-2.1.0...")
 
     try:
         mol = Molecule.from_file(docked_sdf, file_format="sdf")
     except Exception as e:
-        raise RuntimeError(f"OpenFF could not load SDF for {ligand_name}: {e}")
+        raise RuntimeError(f"OpenFF could not load SDF for {ligand_name}: {e}") from e
 
     try:
         ff = OpenFFForceField("openff-2.1.0.offxml")
         interchange = Interchange.from_smirnoff(force_field=ff, topology=mol.to_topology())
-    except RadicalsNotSupportedError:
+    except RadicalsNotSupportedError as err:
         raise RuntimeError(
             f"OpenFF does not support radicals in {ligand_name}. Use ACPYPE (GAFF2) for this ligand instead."
-        )
+        ) from err
     except Exception as e:
-        raise RuntimeError(f"OpenFF parameterization failed for {ligand_name}: {e}")
+        raise RuntimeError(f"OpenFF parameterization failed for {ligand_name}: {e}") from e
 
     xml_path = os.path.join(out_dir, f"{ligand_name}_openff.xml")
     interchange.to_openmm_system()  # validates the system

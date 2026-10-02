@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from models.schemas import StructurePrediction
+from models.schemas import MutationCandidate, MutationSearchResult, StructurePrediction
 from orchestrator.agent import _execute_agent_tool, run_agent_refinement
 
 
@@ -348,8 +348,6 @@ def test_scan_mutations_scorer_failure_is_wrapped(mock_score):
 # ---------------------------------------------------------------------------
 # search_mutations tool (P2-4) — read-only combinatorial search
 # ---------------------------------------------------------------------------
-
-from models.schemas import MutationCandidate, MutationSearchResult
 
 
 def _search(tool_input, state):

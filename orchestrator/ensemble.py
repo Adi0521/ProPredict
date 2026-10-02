@@ -59,7 +59,7 @@ def align_and_compare_structures(pdb_strings: List[str]) -> Dict[str, Any]:
         sup.set_atoms(ref_atoms, mobile)
         sup.apply(mobile)
 
-        for j, (ref_a, mob_a) in enumerate(zip(ref_atoms, mobile)):
+        for j, (ref_a, mob_a) in enumerate(zip(ref_atoms, mobile, strict=True)):
             dist_nm = (ref_a.get_vector() - mob_a.get_vector()).norm() / 10.0
             per_pair_dists[j].append(dist_nm)
 
@@ -70,7 +70,7 @@ def align_and_compare_structures(pdb_strings: List[str]) -> Dict[str, Any]:
     r_start = 0
     r_vals: List[float] = []
 
-    for idx, (res_num, dist) in enumerate(zip(common, mean_per_residue)):
+    for idx, (res_num, dist) in enumerate(zip(common, mean_per_residue, strict=True)):
         if dist > DISAGREEMENT_THRESHOLD_NM:
             if not in_region:
                 in_region, r_start, r_vals = True, res_num, []

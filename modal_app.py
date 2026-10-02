@@ -496,7 +496,7 @@ def report_boltz_version() -> dict:
         out["pip_freeze_boltz"] = (
             subprocess.run(["pip", "freeze"], capture_output=True, text=True, timeout=120).stdout.strip().splitlines()
         )
-        out["pip_freeze_boltz"] = [l for l in out["pip_freeze_boltz"] if "boltz" in l.lower()]
+        out["pip_freeze_boltz"] = [pkg for pkg in out["pip_freeze_boltz"] if "boltz" in pkg.lower()]
     except Exception as e:  # noqa: BLE001
         out["pip_freeze_error"] = repr(e)
 

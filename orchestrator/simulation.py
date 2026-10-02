@@ -30,8 +30,10 @@ def run_rosetta_relax(pdb_string: str) -> Tuple[str, float]:
     """
     try:
         import pyrosetta  # type: ignore
-    except ImportError:
-        raise RuntimeError("PyRosetta is not installed. Install with: conda install -c rosettacommons pyrosetta")
+    except ImportError as err:
+        raise RuntimeError(
+            "PyRosetta is not installed. Install with: conda install -c rosettacommons pyrosetta"
+        ) from err
 
     logger.info("Initialising PyRosetta...")
     pyrosetta.init("-mute all")
@@ -793,8 +795,8 @@ def run_openmm_simulation(
         import openmm as omm
         from openmm import unit
         from openmm.app import PME, ForceField, HBonds, Modeller, PDBFile, Simulation
-    except ImportError:
-        raise RuntimeError("OpenMM is not installed. Install: conda install -c conda-forge openmm")
+    except ImportError as err:
+        raise RuntimeError("OpenMM is not installed. Install: conda install -c conda-forge openmm") from err
 
     import numpy as np
 

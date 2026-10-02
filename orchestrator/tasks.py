@@ -7,6 +7,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
 
+import redis as redis_lib
 import requests
 from celery import Celery, Task
 
@@ -67,7 +68,6 @@ app.conf.update(
 
 logger = logging.getLogger(__name__)
 
-import redis as redis_lib
 
 _redis_client: Optional[redis_lib.Redis] = None
 
@@ -364,7 +364,7 @@ def _run_prediction_core(
                             f"Running OpenMM simulation at pH {pH:.1f}, "
                             f"{temperature_c:.1f} °C, {MD_PRODUCTION_NS} ns"
                             + (f", membrane={membrane_ctx.get('type')}" if membrane_ctx else "")
-                            + (f", ligands={[l.get('name') for l in ligand_ctx]}" if ligand_ctx else "")
+                            + (f", ligands={[lig.get('name') for lig in ligand_ctx]}" if ligand_ctx else "")
                         )
                         sim_result = run_openmm_simulation(
                             best_prediction.structure_pdb,
@@ -379,7 +379,7 @@ def _run_prediction_core(
                             f"Running GROMACS MD at pH {pH:.1f}, "
                             f"{temperature_c:.1f} °C, {MD_PRODUCTION_NS} ns"
                             + (f", membrane={membrane_ctx.get('type')}" if membrane_ctx else "")
-                            + (f", ligands={[l.get('name') for l in ligand_ctx]}" if ligand_ctx else "")
+                            + (f", ligands={[lig.get('name') for lig in ligand_ctx]}" if ligand_ctx else "")
                         )
                         sim_result = run_gromacs_md(
                             best_prediction.structure_pdb,

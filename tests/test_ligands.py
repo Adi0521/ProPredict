@@ -187,7 +187,7 @@ def test_dock_gnina_blind_command(mock_run, tmp_path):
 
     mock_run.side_effect = _side
     with patch("orchestrator.ligands.shutil.which", return_value="/usr/bin/gnina"):
-        out = dock_gnina("lig.sdf", receptor, None, out_dir)
+        dock_gnina("lig.sdf", receptor, None, out_dir)
 
     cmd = mock_run.call_args.args[0]
     assert "--autobox_ligand" in cmd
