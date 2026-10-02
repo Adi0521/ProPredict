@@ -5,7 +5,7 @@ import logging
 import os
 import subprocess
 import tempfile
-from typing import Optional, Dict, Any, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from config import (
     BOLTZ_DIFFUSION_SAMPLES,
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 def _cif_to_pdb(cif_path: str) -> str:
     """Convert a Boltz-2 CIF output file to a PDB string via BioPython."""
-    from Bio.PDB import MMCIFParser, PDBIO  # type: ignore
+    from Bio.PDB import PDBIO, MMCIFParser  # type: ignore
     parser = MMCIFParser(QUIET=True)
     structure = parser.get_structure("boltz", cif_path)
     pdbio = PDBIO()

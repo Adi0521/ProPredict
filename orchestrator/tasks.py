@@ -4,52 +4,51 @@ import logging
 import random
 import time
 import uuid
-from typing import Optional, Dict, Any, List, Callable
-from celery import Celery, Task
 from datetime import datetime
+from typing import Any, Callable, Dict, List, Optional
+
 import requests
+from celery import Celery, Task
 
 from config import (
+    AGENT_ENABLED,
+    BOLTZ_ENABLED,
+    CACHE_TTL,
     CELERY_BROKER_URL,
     CELERY_RESULT_BACKEND,
-    ROSETTA_ENABLED,
-    GROMACS_ENABLED,
-    OPENMM_ENABLED,
-    ROSETTAFOLD_ENABLED,
-    OPENFOLD_ENABLED,
-    BOLTZ_ENABLED,
-    MD_PRODUCTION_NS,
-    AGENT_ENABLED,
     ENSEMBLE_NUM_SEEDS,
+    GROMACS_ENABLED,
+    MD_PRODUCTION_NS,
+    OPENFOLD_ENABLED,
+    OPENMM_ENABLED,
+    REDIS_CACHE_PREFIX,
+    REDIS_URL,
     REFINEMENT_MAX_ITERATIONS,
     REFINEMENT_PLDDT_PLATEAU_DELTA,
-    REDIS_URL,
-    CACHE_TTL,
-    REDIS_CACHE_PREFIX,
+    ROSETTA_ENABLED,
+    ROSETTAFOLD_ENABLED,
 )
-from models.schemas import StructurePrediction, PostProcessingResult
-
-from orchestrator.backends.esmfold import (
-    call_esmfold_api,
-    _parse_plddt_from_pdb,
-)
+from models.schemas import StructurePrediction
+from orchestrator.agent import run_agent_refinement
 from orchestrator.backends.boltz import call_boltz
-from orchestrator.backends.stubs import call_rosettafold2, call_openfold
-from orchestrator.ensemble import align_and_compare_structures
-from orchestrator.simulation import (
-    run_rosetta_relax,
-    run_gromacs_em,
-    run_gromacs_md,
-    run_openmm_simulation,
+from orchestrator.backends.esmfold import (
+    _parse_plddt_from_pdb,
+    call_esmfold_api,
 )
-from orchestrator.scoring import count_clashes, compute_post_processing, validate_simulation_metrics
+from orchestrator.backends.stubs import call_openfold, call_rosettafold2
+from orchestrator.ensemble import align_and_compare_structures
 from orchestrator.progress import (
+    STAGE_FINALIZING,
     STAGE_FOLDING,
     STAGE_POST_PROCESSING,
     STAGE_SIMULATION,
-    STAGE_FINALIZING,
 )
-from orchestrator.agent import run_agent_refinement
+from orchestrator.scoring import compute_post_processing, validate_simulation_metrics
+from orchestrator.simulation import (
+    run_gromacs_md,
+    run_openmm_simulation,
+    run_rosetta_relax,
+)
 
 # Configure Celery app
 app = Celery(

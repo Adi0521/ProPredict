@@ -20,7 +20,6 @@ import logging
 import os
 import shutil
 import subprocess
-import tempfile
 from typing import Any, Dict, Optional, Tuple
 
 logger = logging.getLogger(__name__)

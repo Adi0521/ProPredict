@@ -24,7 +24,6 @@ import pytest
 from orchestrator import qmmm_oracle
 from orchestrator.qmmm_oracle import make_qmmm_oracle
 
-
 _WT = "ACDEFGHIK"   # 9-residue toy wild type
 _SMILES = "CC(=O)O"
 

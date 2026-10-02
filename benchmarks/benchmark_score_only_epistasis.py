@@ -30,7 +30,7 @@ import sys
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import PROTEINMPNN_PATH, PROTEINMPNN_MODEL_NAME, PROTEINMPNN_SEED
+from config import PROTEINMPNN_MODEL_NAME, PROTEINMPNN_PATH, PROTEINMPNN_SEED
 from orchestrator.mutation_search import score_only_oracle
 
 _HERE = os.path.dirname(os.path.abspath(__file__))

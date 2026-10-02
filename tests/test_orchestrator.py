@@ -13,7 +13,6 @@ from unittest.mock import patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
 # ---------------------------------------------------------------------------
@@ -309,8 +308,8 @@ class TestValidateSimulationMetrics:
 
     def test_decision_flips_to_escalate_on_failure(self):
         # End-to-end: a failing sim_result should drive an escalate decision.
-        from orchestrator.scoring import validate_simulation_metrics
         from models.schemas import PostProcessingResult
+        from orchestrator.scoring import validate_simulation_metrics
 
         post_proc = PostProcessingResult(num_clashes=0, score=90.0, decision="accept")
         reason = validate_simulation_metrics(_healthy_sim(rmsd_nm=[0.0, 5.0]))
@@ -391,7 +390,8 @@ def _accept_prediction():
 
 class TestRunPredictionCoreProgress:
     def _run(self, cb):
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import MagicMock, patch
+
         import orchestrator.tasks as tasks
 
         fake_redis = MagicMock()
@@ -460,7 +460,8 @@ class TestPredictionFieldPreservation:
         )
 
     def test_rosetta_relax_preserves_affinity_and_build(self):
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import MagicMock, patch
+
         import orchestrator.tasks as tasks
 
         fake_redis = MagicMock()

@@ -153,8 +153,8 @@ secrets = [Secret.from_name("propredict-secrets")]
 )
 def run_prediction(request_data: dict) -> dict:
     """Worker function — replaces the Celery worker in production."""
-    from orchestrator.tasks import _run_prediction_core
     from orchestrator.progress import PROGRESS_DICT_NAME
+    from orchestrator.tasks import _run_prediction_core
 
     run_id = request_data.get("run_id")
 
@@ -224,7 +224,7 @@ def test_membrane_modal() -> dict:
     )
     results: dict = {"insane_in_image": False}
 
-    from openmm.app import PDBFile, ForceField, Modeller
+    from openmm.app import ForceField, Modeller, PDBFile
 
     # 1. PDBFixer -> clean structure
     try:
@@ -286,11 +286,11 @@ def test_ligands_modal() -> dict:
     import tempfile
 
     from orchestrator.ligands import (
-        smiles_to_3d,
         dock_vina,
-        parameterize_ligand_openff,
         parameterize_ligand_acpype,
+        parameterize_ligand_openff,
         prepare_ligands,
+        smiles_to_3d,
     )
 
     # A minimal but valid multi-residue receptor (real CA coords) — enough for Vina's
@@ -382,7 +382,7 @@ def test_gnina_modal() -> dict:
     import shutil
     import tempfile
 
-    from orchestrator.ligands import smiles_to_3d, dock_gnina
+    from orchestrator.ligands import dock_gnina, smiles_to_3d
 
     # Same minimal multi-residue receptor as test_ligands_modal (real CA coords).
     receptor_pdb = (

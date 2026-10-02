@@ -3,7 +3,13 @@
 Source: Stanford HIVDB PhenoSense genotype-phenotype dataset (PI_DataSet.txt).
 Output: dataset.json — a manifest of (isolate, drug, sequence, experimental fold-change).
 """
-import csv, json, math, os, random, sys, urllib.request
+import csv
+import json
+import math
+import os
+import random
+import sys
+import urllib.request
 
 HIVDB_URL = "https://hivdb.stanford.edu/download/GenoPhenoDatasets/PI_DataSet.txt"
 CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hivdb_cache")

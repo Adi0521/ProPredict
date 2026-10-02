@@ -41,17 +41,17 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 import numpy as np
 
 from models.schemas import MutationCandidate, MutationSearchResult, StructurePrediction
-# count_clashes lives in scoring.py, which only imports config + schemas at module level
-# (BioPython is lazy-imported inside it) — safe to import here without pulling heavy deps.
-from orchestrator.scoring import count_clashes
 
 # Reuse mutation_scan's verified alphabet and conditional-probs runner so the two modules
 # can never drift (same [L,21] ordering, same seed guard, same decoding-order averaging).
 from orchestrator.mutation_scan import (
     _ALPHABET,
     _STANDARD_AA,
-    _run_proteinmpnn_conditional_probs,
 )
+
+# count_clashes lives in scoring.py, which only imports config + schemas at module level
+# (BioPython is lazy-imported inside it) — safe to import here without pulling heavy deps.
+from orchestrator.scoring import count_clashes
 
 logger = logging.getLogger(__name__)
 

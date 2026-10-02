@@ -1,9 +1,11 @@
 import os
-import sys
 import subprocess
+import sys
 from pathlib import Path
-from colabfold.batch import run, get_queries
+
 import py3Dmol
+from colabfold.batch import get_queries, run
+
 
 def ensure_weights():
     """Check if model weights exist, otherwise download them."""

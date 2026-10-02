@@ -35,8 +35,9 @@ Usage:
 """
 
 import json
-import time
 import math
+import time
+
 import numpy as np
 
 from modal_app import app, image
@@ -56,7 +57,6 @@ from benchmark_modal import (
     score_structures,
 )
 
-
 # ---------------------------------------------------------------------------
 # Sequence extraction — same 3-to-1 logic benchmark_one uses, factored out
 # ---------------------------------------------------------------------------
@@ -69,6 +69,7 @@ def _extract_sequence(true_pdb: str, chain: str):
     records only.
     """
     import io
+
     from Bio.PDB import PDBParser
     from Bio.PDB.Polypeptide import is_aa, protein_letters_3to1
 
@@ -109,6 +110,7 @@ def benchmark_pipeline_one(target: dict) -> dict:
     re-runs N raw Boltz seeds to match C's compute — hence the 1-hour timeout.
     """
     import os
+
     import requests
 
     cfg = target.get("_cfg", {})
@@ -127,8 +129,8 @@ def benchmark_pipeline_one(target: dict) -> dict:
         "BOLTZ_MSA_SERVER_URL": str(cfg.get("BOLTZ_MSA_SERVER_URL", "https://api.colabfold.com")),
     })
 
-    from orchestrator.backends.boltz import call_boltz
     from orchestrator import tasks as _tasks
+    from orchestrator.backends.boltz import call_boltz
 
     # The pipeline does a Redis GET/SET around the whole run. There is no Redis in this
     # container and _get_redis() has no socket timeout, so a live lookup would hang.

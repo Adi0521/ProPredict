@@ -4,11 +4,11 @@ import os
 import shutil
 import subprocess
 import tempfile
-from typing import Optional, Dict, Any, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from config import (
-    GROMACS_BIN,
     GNINA_BIN,
+    GROMACS_BIN,
     INSANE_PATH,
     MEMBRANE_FF,
 )
@@ -752,7 +752,7 @@ def run_openmm_simulation(
     try:
         import openmm as omm
         from openmm import unit
-        from openmm.app import PDBFile, ForceField, Modeller, Simulation, PME, HBonds
+        from openmm.app import PME, ForceField, HBonds, Modeller, PDBFile, Simulation
     except ImportError:
         raise RuntimeError(
             "OpenMM is not installed. "

@@ -21,16 +21,15 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from orchestrator.ligands import (
-    smiles_to_3d,
+    _all_ca_coords,
+    _ca_centroid,
     dock_gnina,
     dock_vina,
     parameterize_ligand_acpype,
     parameterize_ligand_openff,
     prepare_ligands,
-    _ca_centroid,
-    _all_ca_coords,
+    smiles_to_3d,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

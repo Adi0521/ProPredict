@@ -7,12 +7,12 @@ orchestrator.agent namespace, then calls _execute_agent_tool() directly. No real
 ESMFold/Boltz/BioPython needed. Mirrors tests/test_boltz.py style.
 """
 import json
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from orchestrator.agent import _execute_agent_tool, run_agent_refinement
 from models.schemas import StructurePrediction
+from orchestrator.agent import _execute_agent_tool, run_agent_refinement
 
 
 def _fake_pred(pdb="ATOM_MUT", plddt=None, mean=80.0, affinity=None, affinity_prob=None):

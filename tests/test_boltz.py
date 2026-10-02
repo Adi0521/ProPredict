@@ -6,12 +6,9 @@ bottom requires Boltz-2 installed and a GPU (run on Modal or a local GPU machine
 """
 import json
 import os
-import sys
-import tempfile
-from unittest.mock import MagicMock, patch, mock_open
+from unittest.mock import MagicMock, patch
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

@@ -1,0 +1,91 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "propredict"
+version = "0.1.0"
+description = "Agentic protein structure prediction with environmental context (pH, ligands, membrane, ions)."
+readme = "README.md"
+license = { file = "LICENSE" }
+# Local dev env is 3.10; Docker and Modal images run 3.11.
+requires-python = ">=3.10"
+
+# Mirrors requirements.txt (still what Docker + Modal install from) — keep the two in sync
+# until those builds migrate to this file. See Process/pyproject.md.
+# Conda-only tools (OpenMM, RDKit, OpenFF, Vina, PyRosetta, MDAnalysis) stay in
+# environment-conda.yml; GROMACS is brew/apt. All are gated by feature flags in config.py.
+dependencies = [
+    "fastapi==0.104.1",
+    "uvicorn[standard]==0.24.0",
+    "pydantic==2.13.4",
+    "celery==5.3.4",
+    "redis==5.0.1",
+    "psycopg2-binary==2.9.9",
+    "requests==2.31.0",
+    "python-dotenv==1.0.0",
+    "flower==2.0.1",
+    "sqlalchemy==2.0.23",
+    "biopython==1.83",
+    "propka==3.5.0",
+    "anthropic>=0.40.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+ml = [
+    "torch>=2.1.0",
+    "transformers>=4.36.0",
+    "meeko",
+]
+modal = ["modal>=0.73.0"]
+tracking = ["wandb>=0.16.0"]
+# Boltz-2, PINNED to an exact commit — keep in lockstep with modal_app.py and
+# requirements-gpu.txt. b1ebfc46 reports version "2.2.1" but is 6 commits AHEAD of the
+# v2.2.1 tag (two numerics fixes); `boltz==2.2.1` from PyPI is a DIFFERENT build and would
+# silently change results. See Process/boltz-version-pin.md.
+gpu = [
+    "propredict[ml]",
+    "boltz @ git+https://github.com/jwohlwend/boltz@b1ebfc46ecf57f5414e0d1a6f9027bbb122c53bc",
+]
+dev = [
+    "pytest==7.4.3",
+    "pytest-asyncio==0.21.1",
+    "httpx==0.25.2",
+    "ruff>=0.16,<0.17",
+]
+# Everything requirements.txt installs today (no Boltz).
+all = ["propredict[ml,modal,tracking,dev]"]
+
+[tool.setuptools]
+packages = ["api", "models", "orchestrator", "orchestrator.backends", "benchmarks"]
+py-modules = ["config"]
+
+[tool.pytest.ini_options]
+# A single unimportable module (e.g. a missing optional dep) must not abort the
+# entire suite during collection — report the error and keep running the rest.
+addopts = "--continue-on-collection-errors"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+# .gitignore'd paths (wandb/, caches, etc.) are skipped by default; these are tracked
+# data/output dirs with no source worth linting.
+extend-exclude = [
+    "results",
+    "research_plan",
+    "mutation-plans",
+    "benchmarks/proteingym_cache",
+    # Upstream ColabFold notebook kept as a reference prototype — not our code.
+    "tests/Colab-Prototypes",
+]
+
+[tool.ruff.lint]
+# Classic core set (E4, E7, E9, F) + import sorting + bugbear. Listed explicitly via `select`
+# rather than `extend-select`: ruff 0.16 widened its built-in default set, so relying on the
+# defaults makes the rule set drift with the ruff version. Deliberately conservative so the
+# first pass is reviewable; widen once the existing findings are cleaned up.
+select = ["E4", "E7", "E9", "F", "I", "B"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["api", "models", "orchestrator", "benchmarks", "config"]

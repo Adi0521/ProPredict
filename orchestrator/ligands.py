@@ -20,7 +20,6 @@ import logging
 import os
 import shutil
 import subprocess
-import tempfile
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -494,7 +493,8 @@ def parameterize_ligand_openff(
         If openff-toolkit is not installed or parameterization fails.
     """
     try:
-        from openff.toolkit import Molecule, ForceField as OpenFFForceField
+        from openff.toolkit import ForceField as OpenFFForceField
+        from openff.toolkit import Molecule
         from openff.toolkit.utils.exceptions import RadicalsNotSupportedError
     except ImportError:
         raise RuntimeError(

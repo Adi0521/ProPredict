@@ -21,6 +21,7 @@ import pytest
 
 from models.schemas import MutationCandidate, StructurePrediction
 from orchestrator.mutation_search import (
+    _run_proteinmpnn_score_only,
     adalead_search,
     additive_oracle,
     apply_mutations,
@@ -30,9 +31,7 @@ from orchestrator.mutation_search import (
     refold_validate,
     score_only_oracle,
     search_and_validate,
-    _run_proteinmpnn_score_only,
 )
-
 
 # ---------------------------------------------------------------------------
 # Mutation representation helpers

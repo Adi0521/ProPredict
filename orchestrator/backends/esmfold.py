@@ -1,4 +1,3 @@
-import io
 import logging
 import time
 from typing import List
@@ -6,11 +5,11 @@ from typing import List
 import requests
 
 from config import (
+    ESMFOLD_API_URL,
     ESMFOLD_LOCAL,
     ESMFOLD_MODEL_NAME,
-    ESMFOLD_API_URL,
-    ESMFOLD_TIMEOUT,
     ESMFOLD_RETRIES,
+    ESMFOLD_TIMEOUT,
 )
 from models.schemas import StructurePrediction
 
@@ -24,8 +23,8 @@ def _get_esmfold_local():
     """Lazy-load the ESMFold model and tokenizer (heavy — only once per worker)."""
     global _esmfold_model, _esmfold_tokenizer
     if _esmfold_model is None:
-        from transformers import EsmForProteinFolding, AutoTokenizer  # type: ignore
         import torch
+        from transformers import AutoTokenizer, EsmForProteinFolding  # type: ignore
         logger.info(f"Loading ESMFold model: {ESMFOLD_MODEL_NAME}")
         _esmfold_tokenizer = AutoTokenizer.from_pretrained(ESMFOLD_MODEL_NAME)
         _esmfold_model = EsmForProteinFolding.from_pretrained(ESMFOLD_MODEL_NAME)

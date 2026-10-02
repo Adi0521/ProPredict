@@ -45,13 +45,12 @@ import pandas as pd
 from scipy.stats import spearmanr
 
 from config import (
+    PROTEINMPNN_NUM_DECODING_ORDERS,
     PROTEINMPNN_PATH,
     PROTEINMPNN_SEED,
-    PROTEINMPNN_NUM_DECODING_ORDERS,
 )
 from orchestrator.backends.esmfold import call_esmfold_local
 from orchestrator.mutation_scan import _ALPHABET, _run_proteinmpnn_conditional_probs
-
 
 CACHE_DIR = os.path.join(os.path.dirname(__file__), "proteingym_cache")
 PARQUET_S3 = "s3://proteingym/DMS_substitutions.parquet"

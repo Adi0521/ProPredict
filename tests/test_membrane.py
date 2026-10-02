@@ -18,12 +18,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from orchestrator.membrane import (
-    _resolve_insane,
     _lipid_name,
+    _resolve_insane,
     embed_in_membrane_gromacs,
     embed_in_membrane_openmm,
 )
-
 
 # ---------------------------------------------------------------------------
 # _resolve_insane

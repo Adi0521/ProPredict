@@ -6,13 +6,13 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import JSONResponse, PlainTextResponse
 from sqlalchemy.orm import Session
 
 from config import API_DEBUG, LOG_LEVEL
-from models.database import Job, SessionLocal, get_db, init_db
-from models.schemas import PredictionRequest, PredictionResponse, JobStatus, StructurePrediction
+from models.database import Job, get_db, init_db
+from models.schemas import JobStatus, PredictionRequest, PredictionResponse
 
 MODAL_ENABLED = os.getenv("MODAL_ENABLED", "False") == "True"
 
@@ -256,7 +256,7 @@ def _get_completed_result(run_id: str, db: Session) -> dict:
         try:
             return fc.get(timeout=0)
         except TimeoutError:
-            raise HTTPException(status_code=404, detail=f"PDB not available — job is still running")
+            raise HTTPException(status_code=404, detail="PDB not available — job is still running")
         except Exception as exc:
             raise HTTPException(status_code=400, detail=f"PDB not available — job failed: {exc}")
     else:

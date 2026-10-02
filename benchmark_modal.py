@@ -13,13 +13,12 @@ Usage:
 
 import json
 import time
-import numpy as np
 from typing import Optional
 
+import numpy as np
 import requests
 
 from modal_app import app, image
-
 
 # ---------------------------------------------------------------------------
 # Target fetching
@@ -231,6 +230,7 @@ def score_structures(pred_pdb: str, true_pdb: str, chain_id: str = "A") -> dict:
 def benchmark_one(target: dict) -> dict:
     import io
     import os
+
     import requests
     from Bio.PDB import PDBParser
     from Bio.PDB.Polypeptide import is_aa, protein_letters_3to1
@@ -333,9 +333,12 @@ def run_benchmark(
         modal run benchmark_modal.py --notes "enabled MSA" --wandb-project propredict
     """
     import os
+
     from config import (
-        BOLTZ_DIFFUSION_SAMPLES, BOLTZ_SAMPLING_STEPS,
-        BOLTZ_USE_MSA, BOLTZ_MSA_SERVER_URL,
+        BOLTZ_DIFFUSION_SAMPLES,
+        BOLTZ_MSA_SERVER_URL,
+        BOLTZ_SAMPLING_STEPS,
+        BOLTZ_USE_MSA,
     )
 
     if pdb_ids:

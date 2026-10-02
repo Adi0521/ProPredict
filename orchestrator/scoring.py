@@ -6,10 +6,10 @@ from typing import Any, Dict, List, Optional
 from config import (
     PLDDT_ACCEPT_THRESHOLD,
     PLDDT_REFINE_THRESHOLD,
-    SIM_RMSD_MAX_NM,
     SIM_RG_DIVERGENCE_FACTOR,
+    SIM_RMSD_MAX_NM,
 )
-from models.schemas import StructurePrediction, PostProcessingResult
+from models.schemas import PostProcessingResult, StructurePrediction
 
 logger = logging.getLogger(__name__)
 

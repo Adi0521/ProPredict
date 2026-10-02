@@ -1,5 +1,6 @@
 import pytest
 from fastapi.testclient import TestClient
+
 from api.main import app
 from models.database import Job, SessionLocal, init_db
 
