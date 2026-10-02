@@ -33,11 +33,11 @@ image = (
     image
     .add_local_file(
         "benchmarks/benchmark_affinity_invariance.py",
-        remote_path="/root/benchmarks/benchmark_affinity_invariance.py",
+        remote_path="/root/benchmark_affinity_invariance.py",
     )
     .add_local_file(
         "benchmarks/hiv_pr_resistance_dataset.json",
-        remote_path="/root/benchmarks/hiv_pr_resistance_dataset.json",
+        remote_path="/root/hiv_pr_resistance_dataset.json",
     )
 )
 
@@ -64,7 +64,7 @@ def affinity_one(
     """
     import sys
     sys.path.insert(0, "/root")
-    from benchmarks.benchmark_affinity_invariance import run_boltz
+    from benchmark_affinity_invariance import run_boltz
 
     rec = {k: job.get(k) for k in _PASSTHROUGH}
     rec.update({"msa": use_msa, "seed": seed})

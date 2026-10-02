@@ -1,7 +1,17 @@
 # Plan — Row A: Is Boltz-2's affinity head blind to resistance mutations?
 
-**Status: two blocking bugs found and verified. The experiment cannot run today.
-Both fixes are small. Dataset is built and attached; analysis is written and tested.**
+> **STATUS (2026-10-02): COMPLETE — the experiment has run and returned `H_invariant`.**
+> Pooled slope **+0.013**, predicted Δ spread **26%** of experimental, over 164 Modal jobs.
+> Results and the full read-out: **`Process/rowA-affinity-invariance-result.md`**.
+>
+> **This document is left as written — it is the pre-registration.** Everything below was
+> recorded *before* any real number existed, including the two blocking bugs (both since
+> fixed), the dataset design, and the warning that per-drug ρ up to \|0.35\| arises from pure
+> noise at n≈37. That warning is what made it legitimate to discard DRV's ρ = +0.351 after the
+> fact. Do not retrofit this file to match the result; the separation is the point.
+
+**Status at time of writing: two blocking bugs found and verified. The experiment cannot run
+today. Both fixes are small. Dataset is built and attached; analysis is written and tested.**
 
 Everything below was verified against source or real data in a sandbox, not from docs
 prose or memory. Boltz-2 inference itself needs a GPU and could not be run here — that
