@@ -96,3 +96,19 @@ Verified by rebuilding the worker: `/app/.env`, `/app/.git`, `/app/wandb` are ab
   session fixture, not on import; the fixture **deletes every `jobs` row**.
 - ESMFold ~8 GB; dependencies declared in both pyproject.toml and requirements*.txt (Boltz pin in
   three places); don't remove `.env` from `.dockerignore`.
+
+## Follow-up: which ESMFold weight file loads (2026-10-03)
+
+- The `facebook/esmfold_v1` **main** branch ships only `pytorch_model.bin`. The cached
+  `model.safetensors` came from **refs/pr/6**, an unmerged safetensors-conversion PR.
+- Checked by intercepting `transformers.modeling_utils._get_resolved_checkpoint_files` (stops
+  before the 8 GB load): on the host (transformers 5.7.0) the model resolves to
+  `pytorch_model.bin` both online and with `HF_HUB_OFFLINE=1`. The PR #6 safetensors was unused.
+- The user removed the unused revision via `huggingface_hub.scan_cache_dir().delete_revisions(
+  "ba837a39…").execute()` (blob + snapshot + `refs/pr/6`; dry-run reviewed first). Host cache
+  16 GB → 7.9 GB; offline resolution still `pytorch_model.bin`.
+- **Not verified:** what transformers 5.18 (worker image) resolves to from an empty cache. Two
+  in-container attempts were abandoned — the download ran at ~1.2 → 0.7 → 0.14 MB/s (with and
+  without `HF_TOKEN`; token auth confirmed working), i.e. the bottleneck is the network path, not
+  HF anonymous rate limits. `HF_TOKEN` was added to the user's `.env`; pass it into containers
+  with `--env-file .env` (`.dockerignore` keeps it out of the image).
