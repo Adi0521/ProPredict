@@ -65,6 +65,9 @@ scripts/API-Testing/ColabFold-Testing/results/
 *.m8
 out.tar.gz
 
+#HIV DB Cache
+benchmarks/hivdb_cache/
+
 # ---- Modal / cloud local state ----
 .modal/
 
