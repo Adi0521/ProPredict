@@ -480,27 +480,54 @@ def test_call_boltz_raises_on_missing_cif():
 
 
 def test_boltz_appended_to_predictions_when_enabled():
-    """Verify that a successful Boltz call adds to the predictions list."""
+    """
+    With BOLTZ_ENABLED, the real _run_prediction_core calls Boltz in the initial ensemble
+    and its prediction reaches result["predictions"] alongside ESMFold's.
+
+    Only the backends and Redis are mocked; the pipeline wiring itself runs. ESMFold
+    returns pLDDT 95 so the decision is "accept" and the refinement loop (which can also
+    call Boltz) never runs — call_boltz is therefore hit exactly once, by the ensemble.
+    """
+    import orchestrator.tasks as tasks
     from models.schemas import StructurePrediction
 
-    fake_pred = StructurePrediction(
-        structure_pdb="ATOM ...",
+    esm_pred = StructurePrediction(
+        structure_pdb="ATOM",
+        plddt_scores=[95.0],
+        mean_plddt=95.0,
+        seed=0,
+        model_name="esmfold",
+    )
+    boltz_pred = StructurePrediction(
+        structure_pdb="ATOM",
         plddt_scores=[90.0],
         mean_plddt=90.0,
-        seed=0,
+        seed=7,
         model_name="boltz2",
     )
+    fake_redis = MagicMock()
+    fake_redis.get.return_value = None  # cache miss -> full pipeline runs
+    context = {"pH": 6.5}  # non-empty, but no membrane/ligands -> no MD
 
     with (
-        patch("orchestrator.tasks.BOLTZ_ENABLED", True),
-        patch("orchestrator.tasks.call_boltz", return_value=fake_pred) as mock_boltz,
+        patch.object(tasks, "_get_redis", return_value=fake_redis),
+        patch.object(tasks, "call_esmfold_api", return_value=esm_pred),
+        patch.object(tasks, "call_boltz", return_value=boltz_pred) as mock_boltz,
+        patch.object(tasks, "BOLTZ_ENABLED", True),
+        patch.object(tasks, "ENSEMBLE_NUM_SEEDS", 1),
+        patch.object(tasks, "AGENT_ENABLED", False),
+        patch("orchestrator.scoring.count_clashes", return_value=0),
     ):
-        from orchestrator.tasks import call_boltz as cb
+        result = tasks._run_prediction_core({"run_id": "test-boltz-wiring", "sequence": "MKTAYIAK", "context": context})
 
-        result = cb("MKTAYIAK", context={}, seed=0)
-
-    assert result.model_name == "boltz2"
-    assert result.mean_plddt == 90.0
+    assert result["status"] == "completed"
+    mock_boltz.assert_called_once()
+    args, kwargs = mock_boltz.call_args
+    assert args[0] == "MKTAYIAK"
+    assert kwargs["context"] == context
+    assert isinstance(kwargs["seed"], int)
+    assert [p["model_name"] for p in result["predictions"]] == ["esmfold", "boltz2"]
+    assert result["predictions"][1]["mean_plddt"] == 90.0
 
 
 # ---------------------------------------------------------------------------

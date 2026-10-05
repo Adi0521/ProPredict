@@ -295,3 +295,35 @@ committed artifact — the ISSUES.md I-3 pattern) against one freshly downloaded
 `ensure_dataset()`'s docstring says third-party data goes into "a gitignored cache", but
 `benchmarks/hivdb_cache/` is **not** in `.gitignore` — a first run would leave a 654 KB
 untracked file that could be committed by accident.
+
+---
+
+# Follow-up: group C3 — Boltz wiring test that only tested its mock
+
+**Date:** 2026-10-04
+
+## Problem
+
+`tests/test_boltz.py::test_boltz_appended_to_predictions_when_enabled` patched
+`orchestrator.tasks.call_boltz`, then imported and called that same patched name — so it only
+asserted that a `MagicMock` returns its `return_value` (ruff F841: `mock_boltz` unused). Its
+stated purpose, "main task wires Boltz into predictions list", was never exercised.
+
+## Change
+
+Rewrote it to run the real `_run_prediction_core`, mocking only the backends and Redis
+(same pattern as `TestRunPredictionCoreProgress` in tests/test_orchestrator.py):
+`BOLTZ_ENABLED=True`, `ENSEMBLE_NUM_SEEDS=1`, agent off, ESMFold → pLDDT 95 (so the decision is
+"accept" and the refinement loop — which can also call Boltz — never runs), `call_boltz` → a
+`boltz2` prediction, context `{"pH": 6.5}` (non-empty but no MD trigger). Asserts:
+`call_boltz` called exactly once with the request's sequence and context and an int seed, and
+`result["predictions"]` is `[esmfold, boltz2]` with Boltz's pLDDT intact. The inter-model
+alignment step is left unmocked — `tasks.py` already guards it with try/except.
+
+## Verification (mutation check)
+
+- New test passes; `ruff check .` → **0 findings** (the last of the 60).
+- Temporarily replaced `predictions.append(boltz_pred)` in `tasks.py` with `pass`: the test
+  **fails** (`assert ['esmfold'] == ['esmfold', 'boltz2']`). The old test would have passed.
+- Restored; `tasks.py` sha256 identical before/after (`cfead748…`). test_boltz + test_orchestrator
+  → 67 passed, 2 skipped.
