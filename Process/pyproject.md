@@ -327,3 +327,85 @@ alignment step is left unmocked — `tasks.py` already guards it with try/except
   **fails** (`assert ['esmfold'] == ['esmfold', 'boltz2']`). The old test would have passed.
 - Restored; `tasks.py` sha256 identical before/after (`cfead748…`). test_boltz + test_orchestrator
   → 67 passed, 2 skipped.
+
+---
+
+# Follow-up: fix the `[gpu]` / `requirements-gpu.txt` resolution conflict
+
+**Date:** 2026-10-05
+
+## Problem
+
+`pip install ".[gpu]"` failed with `ResolutionImpossible`. Boltz at the pinned commit
+`b1ebfc46` uses hard `==` pins that collide with ours:
+
+| Package | ProPredict pinned | Boltz `b1ebfc46` pins |
+|---|---|---|
+| `requests` | `2.31.0` | `2.32.3` |
+| `biopython` | `1.83` | `1.84` |
+
+**`requirements-gpu.txt` was broken the same way, and that is not latent — it is live.** That
+file is `-r requirements.txt` plus the Boltz line, i.e. a *single* pip resolution, so
+`pip install -r requirements-gpu.txt` already failed before this change. Verified directly.
+
+The Modal image escapes it only by accident of layering: `modal_app.py` calls
+`.pip_install_from_requirements("requirements.txt")` and then a *separate*
+`.pip_install("git+...boltz@b1ebfc46")`. Two pip invocations, so the second silently upgrades
+`requests` → 2.32.3 and `biopython` → 1.84 with no conflict detection. Confirmed by installing
+`requests==2.31.0` + `biopython==1.83` into a venv and dry-running the Boltz install against it:
+pip reports both being replaced.
+
+So the GPU image has been **running** 2.32.3 / 1.84 all along, while the manifests claimed
+2.31.0 / 1.83.
+
+## Change
+
+Bumped both pins to match Boltz exactly, in `pyproject.toml` and `requirements.txt` (the only
+two sites; `requirements-gpu.txt` inherits via `-r`, and nothing else pins them). Comments at
+both sites say the values are dictated by Boltz's hard pins and must be re-checked when the
+Boltz commit moves.
+
+Chose exact-match over loosening to `>=`: the resolver would then pick freely, which is the
+opposite of what the Boltz-pin work (Process/boltz-version-pin.md) exists to prevent.
+
+## Verification
+
+All four install paths dry-run resolve (none did for the two GPU ones before):
+
+| Path | Before | After |
+|---|---|---|
+| `pip install -r requirements-gpu.txt` | **ResolutionImpossible** | resolves (boltz 2.2.1) |
+| `pip install ".[gpu,dev]"` | **ResolutionImpossible** | resolves (boltz 2.2.1) |
+| `pip install ".[all]"` | resolves | resolves |
+| `pip install -e ".[dev]"` | resolves | resolves |
+
+**BioPython 1.83 → 1.84 is the only behavioural risk** (`requests` is a patch bump, and the GPU
+image already ran it). The mocked suite does **not** mock `Bio`, so it exercises the real
+library: 208 passed, 4 skipped on 1.84, unchanged.
+
+Beyond the suite, ran the same digest script under both versions, with
+`BiopythonDeprecationWarning` promoted to an error:
+
+- `Superimposer` doing real work — a rigid z-rotation plus per-atom noise applied to a second
+  copy of `benchmarks/epistasis_structures/4G3O.raw.pdb`, so the alignment must undo the
+  rotation but not the noise: `mean_disagreement_nm` 0.0584, `per_res_max` 0.0931,
+  `per_res_sum` 3.097, 53 common residues.
+- `NeighborSearch` returning a genuine non-zero count — synthetic CA chain at 1.5 Å spacing so
+  non-adjacent residues fall inside the 3.8 Å cutoff: **6 clashes**.
+  (First attempt used 2.0 Å spacing and scored 0, which would have tested nothing.)
+- `protein_letters_3to1` / `is_aa` sequence extraction (the `benchmark_modal` path), and the
+  `PDBIO` / `MMCIFParser` imports in `backends/boltz.py`.
+
+**Digests were identical on 1.83 and 1.84** apart from the version field, and no deprecation
+warning fired. `ruff check .` → all checks passed; `ruff format --check .` → 95 files formatted.
+
+## Noted, not changed
+
+- Under `[gpu]`, Boltz's `numpy>=1.26,<2.0` pulls **numpy 1.26.4**, while `[all]` resolves
+  **2.2.6** — GPU and non-GPU environments run different numpy majors. Pre-existing, inherited
+  from Boltz, not introduced here.
+- Boltz declares `requires-python = ">=3.10,<3.13"`; our `requires-python = ">=3.10"` does not
+  reflect the upper bound, so a 3.13 env fails only at Boltz install time.
+- `pyproject.toml` is now a **third** Boltz-coupled site, and `scripts/check_boltz_updates.py`
+  only knows about `modal_app.py` and `requirements-gpu.txt`. A Boltz bump that changes its
+  `requests`/`biopython` pins will silently re-break `[gpu]`. Next step.
