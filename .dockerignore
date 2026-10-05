@@ -15,7 +15,7 @@ CLAUDE.local.md
 
 # ---- Python / test / lint caches ----
 **/__pycache__
-*.py[cod]
+**/*.py[cod]
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
@@ -34,3 +34,31 @@ out.tar.gz
 *.trr
 *.edr
 *.tpr
+*.gro
+
+# ---- Local run artifacts (outputs, not read at runtime) ----
+# Listed by name rather than `*.pdb`: benchmarks/epistasis_structures/ has a tracked PDB.
+result.pdb
+myprotein.pdb
+input.pka
+benchmark_results.json
+benchmarks/hivdb_cache/
+
+# ---- Virtual environments ----
+.venv/
+venv/
+env/
+ENV/
+
+# ---- Editors / OS / notebooks ----
+.vscode/
+.idea/
+**/.DS_Store
+**/*.swp
+**/.ipynb_checkpoints/
+
+# ---- Coverage / tox ----
+.coverage
+.coverage.*
+htmlcov/
+.tox/

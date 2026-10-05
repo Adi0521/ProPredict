@@ -123,8 +123,9 @@ docker compose up
 ```
 
 Brings up Postgres, Redis, the API (`:8000`), a Celery worker, and Flower (`:5555`).
-The first prediction downloads `facebook/esmfold_v1` (~8 GB) into the worker container's Hugging Face
-cache. That cache isn't on a volume, so it survives restarts but not `docker compose down` / rebuilds.
+The first prediction downloads `facebook/esmfold_v1` (~8 GB) into the `hf_cache` volume, so it
+persists across container recreation and rebuilds (`docker compose down -v` deletes it). Set
+`HF_TOKEN` in `.env` for authenticated downloads.
 
 The Celery image also bakes in GROMACS, the CHARMM36m force field, OpenMM/RDKit/OpenFF/Vina
 via conda-forge, and a ProteinMPNN clone at `/opt/ProteinMPNN`.

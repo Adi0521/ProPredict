@@ -112,3 +112,28 @@ Verified by rebuilding the worker: `/app/.env`, `/app/.git`, `/app/wandb` are ab
   without `HF_TOKEN`; token auth confirmed working), i.e. the bottleneck is the network path, not
   HF anonymous rate limits. `HF_TOKEN` was added to the user's `.env`; pass it into containers
   with `--env-file .env` (`.dockerignore` keeps it out of the image).
+
+## Follow-up: persistent Hugging Face cache volume (2026-10-04)
+
+- Added a named volume `hf_cache` → `/root/.cache/huggingface` on `celery_worker` in
+  `docker-compose.yml` (compose name `propredict_hf_cache`). The ~8 GB ESMFold weights now
+  download once per machine instead of once per container; they survive `docker compose down`
+  and image rebuilds, and are only removed by `docker compose down -v`.
+- Chosen over bind-mounting the host's `~/.cache/huggingface` read-only: the named volume is
+  portable across machines; the cost is one initial download (~8 GB, slow on this network).
+- Verified with two throwaway `docker compose run --rm --no-deps celery_worker` containers:
+  a marker written by the first was read by the second, then removed.
+- `HF_TOKEN` reaches the worker without extra wiring: `.env` is bind-mounted via `.:/app` and
+  `config.py` runs `load_dotenv(override=True)` before any model load.
+- README updated (it previously said the cache wasn't on a volume).
+
+## Follow-up: `.dockerignore` gaps vs `.gitignore` (2026-10-04)
+
+Added: local run artifacts by name (`result.pdb`, `myprotein.pdb`, `input.pka`,
+`benchmark_results.json`, `*.gro`), `benchmarks/hivdb_cache/`, virtualenvs, editor/OS files,
+notebook checkpoints, coverage/tox output. Deliberately **not** `*.pdb` — one PDB in
+`benchmarks/epistasis_structures/` is tracked. Note `.dockerignore` patterns are root-anchored
+(unlike `.gitignore`), so files that appear in subdirectories use `**/` (`**/.DS_Store`,
+`**/*.swp`, `**/.ipynb_checkpoints/`, `**/*.py[cod]`).
+Verified on rebuild: the four artifacts and `.env` are absent from `/app`, the tracked PDB is
+present, no `.DS_Store`, core modules import.
