@@ -251,3 +251,47 @@ To reach `gmx energy`, the probe had to inject `grompp -maxwarn 1` (probe only, 
 `run_gromacs_em` never runs `genion`, so on any net-charged protein GROMACS 2025's `grompp`
 aborts on the Ewald net-charge warning. It also has no callers. Logged rather than fixed here.
 Also noted: the worker image is ~6 months old (Python 3.10 vs `Dockerfile.celery`'s 3.11).
+
+---
+
+# Follow-up: group C2 — dead `seed` in `build_hiv_pr_dataset.py`
+
+**Date:** 2026-10-04
+
+## Problem
+
+- `main(path=None, n_per_drug=40, seed=0)` built `rng = random.Random(seed)` and never used it
+  (ruff F841). Selection is deterministic — candidates are sorted by log10 fold-change and
+  `n_per_drug` evenly spaced indices are taken — so `seed` had no effect.
+- Found while checking: the entry point is `main(*sys.argv[1:])`, so CLI args arrive as
+  strings. Passing `n_per_drug` (`... PI_DataSet.txt 40`) crashed with
+  `TypeError: '>' not supported between instances of 'int' and 'str'` — only `path` ever
+  worked from the command line.
+
+## Change
+
+- Removed `rng`, the `seed` parameter, and the now-unused `import random`; comment notes the
+  selection is deterministic.
+- `n_per_drug = int(n_per_drug)` so the second CLI arg works.
+- More than two CLI args now exits with a usage message (`SystemExit`, exit 1) rather than
+  being silently accepted — user's call (raise rather than ignore-with-warning).
+
+## Verification
+
+Ran the old and new scripts from scratchpad copies (`main()` always writes
+`hiv_pr_resistance_dataset.json` next to the script, so running in place would overwrite the
+committed artifact — the ISSUES.md I-3 pattern) against one freshly downloaded HIVDB
+`PI_DataSet.txt` (654 KB):
+
+- old vs new, default args → **byte-identical** output (sha256 `962432681ae33556…`).
+- new vs the **committed** `benchmarks/hiv_pr_resistance_dataset.json` → **byte-identical**: the
+  published Row A input regenerates exactly from current HIVDB data.
+- `n_per_drug=40` via CLI: old crashes (TypeError), new = identical to default; `n_per_drug=10`
+  → 40 isolate runs (10 × 4 drugs).
+- extra arg → `usage: ... [PI_DataSet.txt path] [n_per_drug] (got 3 args)`, exit 1.
+
+## Noted, not changed
+
+`ensure_dataset()`'s docstring says third-party data goes into "a gitignored cache", but
+`benchmarks/hivdb_cache/` is **not** in `.gitignore` — a first run would leave a 654 KB
+untracked file that could be committed by accident.

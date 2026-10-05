@@ -8,7 +8,6 @@ import csv
 import json
 import math
 import os
-import random
 import sys
 import urllib.request
 
@@ -85,9 +84,10 @@ def build_seq(muts):
     return "".join(s)
 
 
-def main(path=None, n_per_drug=40, seed=0):
+def main(path=None, n_per_drug=40):
+    # Selection is deterministic (stratified by log10 fold-change below), so there is no seed.
+    n_per_drug = int(n_per_drug)  # CLI args arrive as strings
     rows = parse(ensure_dataset(path or CACHE_PATH))
-    rng = random.Random(seed)
     records, skipped = [], 0
 
     for drug, (drug_name, smiles) in DRUGS.items():
@@ -174,4 +174,6 @@ def main(path=None, n_per_drug=40, seed=0):
 
 
 if __name__ == "__main__":
+    if len(sys.argv) > 3:
+        raise SystemExit(f"usage: {sys.argv[0]} [PI_DataSet.txt path] [n_per_drug]  (got {len(sys.argv) - 1} args)")
     main(*sys.argv[1:])
