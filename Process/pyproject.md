@@ -409,3 +409,112 @@ warning fired. `ruff check .` → all checks passed; `ruff format --check .` →
 - `pyproject.toml` is now a **third** Boltz-coupled site, and `scripts/check_boltz_updates.py`
   only knows about `modal_app.py` and `requirements-gpu.txt`. A Boltz bump that changes its
   `requests`/`biopython` pins will silently re-break `[gpu]`. Next step.
+
+---
+
+# Follow-up: teach `check_boltz_updates.py` about the third pin site + Boltz's own pins
+
+**Date:** 2026-10-05
+
+## Why
+
+Two gaps left by the `[gpu]` fix above:
+
+1. `pyproject.toml` became a **third** Boltz pin site, but `scripts/check_boltz_updates.py`
+   and the weekly workflow only knew about `modal_app.py` and `requirements-gpu.txt`. The
+   generated issue told whoever read it to update *two* files — the instruction was itself a
+   drift mechanism.
+2. SHA agreement is not sufficient. What actually broke `[gpu]` was Boltz's own
+   `requests`/`biopython` `==` pins diverging from ours. A bump can re-break installs with all
+   three SHAs in perfect agreement.
+
+## What changed
+
+**`scripts/check_boltz_updates.py`**
+
+- `pyproject.toml` added to `PIN_SITES`. No regex change needed — `_SHA_RE` already matched its
+  `boltz @ git+...@<sha>` form, with no false positive from the prose `b1ebfc46` nearby (that's
+  8 chars; the regex demands 40). `read_pins()`'s CONFLICT logic works unchanged at three sites.
+- New exact-pin cross-check: fetch Boltz's own `pyproject.toml` at a given SHA and report any
+  package **both** sides pin with a hard `==` to **different** versions — the precise condition
+  for `ResolutionImpossible`. Run against the pinned SHA (are we broken now?) and, when behind,
+  against upstream `main` (would adopting the bump break us?).
+- Exit code **2** for a conflict, ranking above "behind" (1): broken installs now are worse news
+  than an available upgrade. Fits exit 2's existing "repo is internally inconsistent" meaning.
+- A failed fetch is `dep_check: "unavailable"` with a stderr warning, **not** fatal. A conflict
+  is a property of files in this repo, so it only appears when someone edits them and the next
+  run catches it; going red on a transient raw.githubusercontent hiccup trains people to ignore
+  the job.
+- New JSON fields: `dep_check`, `dep_conflicts_at_pinned`, `dep_conflicts_if_bumped`.
+
+Deliberate constraints kept:
+
+- **Still stdlib-only, still 3.10-safe.** Boltz's pyproject is parsed by regex, not `tomllib`
+  — `tomllib` is 3.11+ and `requires-python` is `>=3.10` (the local conda env is 3.10.19, where
+  importing it fails). The CI job still installs nothing.
+- Fetched from `raw.githubusercontent.com`, which needs no auth and isn't metered against the
+  API rate limit the rest of the script uses.
+- **Only exact-vs-exact is compared.** Judging whether a *range* of ours excludes their pinned
+  version means reimplementing PEP 440 specifiers without `packaging` (not stdlib), and ranges
+  have never been the failure mode: `pyyaml>=6.0` vs their `==6.0.2` resolves, as does
+  `torch>=2.1.0` vs `>=2.2`.
+
+**`.github/workflows/boltz-version-check.yml`**
+
+- Three-site wording in the header comment, the exit-2 cause list, and the adopt instructions.
+- Exit 2 can now arrive *with* valid JSON (a dep conflict is a finding, not a failure to
+  measure), so a new branch renders the conflicting pins as a table instead of discarding the
+  detail as "unknown".
+- A bump that also moves Boltz's pins renders them under "⚠️ This bump also moves dependency
+  pins", and the adopt steps gained "move any dependency pins listed above".
+- Issue de-dupe generalised from `latest_main` to a `stateKey`: the latest SHA for a bump, the
+  conflict signature for a conflict. One issue per *state* still, but a *different* conflict now
+  reports instead of being swallowed. A null key (couldn't measure) never matches, so those keep
+  reporting, as before.
+
+## Verification
+
+Live run on the real repo: 3 sites agree, 15 exact pins checked, no conflict, up to date,
+exit 0. That path alone proves little, so each other branch was forced.
+
+**Script, by mutation** — against a throwaway copy of the four files it reads
+(`$TMP/fakerepo`), so the real repo was never edited; `git diff --stat` confirms only the two
+intended files changed:
+
+| Mutation | Expected | Got |
+|---|---|---|
+| all three pinned to `ac1c8582` (v2.2.0) | behind, exit 1 | behind by 48, exit 1 |
+| + `requests` back to `2.31.0` | conflict outranks behind, exit 2 | exit 2, reported `requests ours ==2.31.0 / boltz ==2.32.3` |
+| `pyproject.toml` SHA alone drifts | exit 2, all three listed | exit 2, all three listed |
+
+The second row reproduces the exact bug fixed in the previous step; the third is the case that
+was **invisible before this change**.
+
+**Helpers, by assertion** — `[tool.*]` tables don't leak in as dependencies (a planted
+`poison==9.9.9` under `[tool.other]` and ruff's `select = ["E4"]` are both excluded); extras
+parse (`uvicorn[standard]==0.24.0` → `uvicorn`); ranges and bare names are skipped; environment
+markers stripped; a bare `requests` in Boltz's `test = ["pytest", "requests"]` does not erase
+the exact pin; PEP 503 normalisation; and `conflicting_exact_pins` ignores shared-but-equal and
+one-sided packages.
+
+**Workflow JS, executed** — extracted from the YAML and run under node with stubbed
+`github`/`core`/`context`/`fs` and the `${{ }}` expression substituted, since a syntax or logic
+error there would otherwise surface only on a Monday cron. YAML parses; all 7 branches behave:
+dep-conflict issue, behind issue, could-not-measure issue, same-conflict → quiet,
+different-conflict → update + conflict-specific comment, same-SHA → quiet, and the
+"bump also moves pins" table.
+
+`dep_conflicts_if_bumped` could not be exercised from real history — every Boltz commit back
+through v2.1.0 pins `requests==2.32.3` / `biopython==1.84`, so there is no real bump that moves
+them. Covered by assertion on the comparison function plus a hand-built payload for the JS
+rendering; flagged here because that one path has no real-data coverage.
+
+`ruff check .` → all checks passed; `ruff format --check .` → 95 files formatted;
+`pytest tests/test_boltz.py` → 24 passed, 2 skipped.
+
+## Not done
+
+No unit-test file for the script (user's call — the helpers are pure and would test cleanly
+with tmp files and a canned Boltz pyproject string, so `tests/test_boltz_version_check.py`
+stays available as a cheap follow-up). The verification above was run ad hoc instead, so it is
+not locked against regression.

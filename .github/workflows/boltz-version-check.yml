@@ -1,8 +1,10 @@
 # Weekly check for Boltz-2 upstream commits past our pinned build.
 #
-# Boltz-2 is pinned to an exact commit in modal_app.py AND requirements-gpu.txt so the
-# benchmark record stays reproducible (Process/boltz-version-pin.md). The cost of pinning is
-# that upstream fixes are invisible until someone looks — this is the automated look.
+# Boltz-2 is pinned to an exact commit in modal_app.py, requirements-gpu.txt AND
+# pyproject.toml so the benchmark record stays reproducible (Process/boltz-version-pin.md).
+# The cost of pinning is that upstream fixes are invisible until someone looks — this is the
+# automated look. It also cross-checks that our exact dependency pins still agree with
+# Boltz's own, since a disagreement makes `[gpu]` installs unresolvable (Process/pyproject.md).
 #
 # Report-only by design: it never bumps the pin. Adopting a bump requires re-running the
 # CASP15 baseline, which is a human decision, not something a cron job should trigger.
@@ -76,11 +78,44 @@ jobs:
             const failed = '${{ steps.check.outputs.exit_code }}' === '2';
             const MARKER = '<!-- boltz-version-check -->';   // identifies our own issue
 
-            let title, body;
+            // Renders a {pkg: {ours, boltz}} map as a table. Used for both the
+            // broken-right-now case and the "this bump would also need these" warning.
+            const depTable = (obj) => [
+              '| package | ours | Boltz |',
+              '|---|---|---|',
+              ...Object.entries(obj).map(([k, v]) => `| \`${k}\` | \`==${v.ours}\` | \`==${v.boltz}\` |`),
+            ].join('\n');
 
-            if (failed || !data) {
-              // Exit 2 is an ERROR, not an available update. The nastiest case it covers is
-              // the two pin sites disagreeing — which means Modal and local GPU installs
+            // Exit 2 can now arrive WITH valid JSON: a dependency-pin conflict is a real
+            // finding, not a failure to measure, so don't discard the detail as "unknown".
+            const conflicts = (data && data.dep_conflicts_at_pinned) || {};
+            const hasConflicts = Object.keys(conflicts).length > 0;
+
+            let title, body, stateKey;
+
+            if (hasConflicts) {
+              title = 'Boltz-2 pin check FAILED — our dependency pins conflict with Boltz';
+              body = [
+                MARKER,
+                '## `[gpu]` installs cannot resolve',
+                '',
+                'We pin these packages to versions that differ from the **pinned Boltz commit\'s own**',
+                'hard `==` pins, so `pip install ".[gpu]"` and `pip install -r requirements-gpu.txt`',
+                'both fail with `ResolutionImpossible`:',
+                '',
+                depTable(conflicts),
+                '',
+                'Fix: move ours to Boltz\'s versions in **`pyproject.toml` and `requirements.txt`**',
+                '(`requirements-gpu.txt` inherits via `-r`). See `Process/pyproject.md`.',
+                '',
+                `_Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}_`,
+                // Dedupe on the conflict itself, so a *different* conflict still reports.
+                `<!-- state: deps:${Object.entries(conflicts).map(([k, v]) => `${k}=${v.ours}/${v.boltz}`).sort().join(',')} -->`,
+              ].join('\n');
+              stateKey = `deps:${Object.entries(conflicts).map(([k, v]) => `${k}=${v.ours}/${v.boltz}`).sort().join(',')}`;
+            } else if (failed || !data) {
+              // Exit 2 without data: we could not measure. The nastiest case it covers is
+              // the pin sites disagreeing — which means Modal and local GPU installs
               // would silently run different Boltz builds.
               title = 'Boltz-2 upstream check FAILED';
               body = [
@@ -89,14 +124,16 @@ jobs:
                 '',
                 'Exit code `2`. Causes, in order of seriousness:',
                 '',
-                '1. **The two pin sites disagree** (`modal_app.py` vs `requirements-gpu.txt`)',
-                '   — Modal runs and local GPU installs would use *different* Boltz builds.',
+                '1. **The three pin sites disagree** (`modal_app.py`, `requirements-gpu.txt`,',
+                '   `pyproject.toml`) — Modal runs, local GPU installs and `pip install -e ".[gpu]"`',
+                '   would use *different* Boltz builds.',
                 '2. GitHub API unreachable or rate-limited.',
                 '',
                 'See the workflow run log for the exact message.',
                 '',
                 `_Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}_`,
               ].join('\n');
+              stateKey = null;
             } else {
               const notable = data.notable_numerics_commits || [];
               const commits = (data.commits || [])
@@ -121,15 +158,28 @@ jobs:
                   ? `### ⚠️ ${notable.length} commit(s) look numerics-related\nThese can move results. Treat a bump as a **new baseline**, not a free upgrade.`
                   : '_No commits flagged as numerics-related._',
                 '',
+                Object.keys(data.dep_conflicts_if_bumped || {}).length
+                  ? [
+                      '### ⚠️ This bump also moves dependency pins',
+                      'Boltz changed its own hard `==` pins. Bumping the SHA **without** moving these',
+                      'makes `[gpu]` and `requirements-gpu.txt` unresolvable:',
+                      '',
+                      depTable(data.dep_conflicts_if_bumped),
+                    ].join('\n')
+                  : '_This bump needs no dependency-pin changes._',
+                '',
                 '### Adopting this bump',
-                '1. Update the SHA in **both** `modal_app.py` and `requirements-gpu.txt` — they must stay in lockstep.',
-                '2. Re-run the CASP15 baseline and log it as a **new run** in `benchmarks/BENCHMARKS.md`.',
-                '3. Do **not** compare results across the version boundary.',
-                '4. Never substitute `boltz==2.2.1` for the pinned commit — the version string does not',
+                '1. Update the SHA in **all three** of `modal_app.py`, `requirements-gpu.txt` and',
+                '   `pyproject.toml` — they must stay in lockstep.',
+                '2. Move any dependency pins listed above in `pyproject.toml` **and** `requirements.txt`.',
+                '3. Re-run the CASP15 baseline and log it as a **new run** in `benchmarks/BENCHMARKS.md`.',
+                '4. Do **not** compare results across the version boundary.',
+                '5. Never substitute `boltz==2.2.1` for the pinned commit — the version string does not',
                 '   uniquely identify a build. See `Process/boltz-version-pin.md`.',
                 '',
                 `_Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}_`,
               ].join('\n');
+              stateKey = data.latest_main;
             }
 
             // One issue per upstream state, not one per week: reuse our existing open issue
@@ -150,9 +200,11 @@ jobs:
               return;
             }
 
-            const alreadyKnown = data && (ours.body || '').includes(data.latest_main);
-            if (alreadyKnown) {
-              core.notice(`Issue #${ours.number} already reports ${data.latest_main} — staying quiet.`);
+            // One issue per upstream *state*: for a bump that's the latest SHA, for a pin
+            // conflict it's the conflict itself. A null key (couldn't measure) never matches,
+            // so those keep reporting.
+            if (stateKey && (ours.body || '').includes(stateKey)) {
+              core.notice(`Issue #${ours.number} already reports ${stateKey} — staying quiet.`);
               return;
             }
 
@@ -163,6 +215,8 @@ jobs:
             await github.rest.issues.createComment({
               owner: context.repo.owner, repo: context.repo.repo,
               issue_number: ours.number,
-              body: `${MARKER}\nUpstream moved again — updated above to \`${data ? data.latest_main : 'n/a'}\`.`,
+              body: hasConflicts
+                ? `${MARKER}\nDependency-pin conflict changed — updated above.`
+                : `${MARKER}\nUpstream moved again — updated above to \`${data ? data.latest_main : 'n/a'}\`.`,
             });
             core.notice(`Updated issue #${ours.number}`);
