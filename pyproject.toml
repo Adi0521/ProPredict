@@ -19,8 +19,9 @@ license-files = ["LICENSE"]
 # Boltz independently declares the same `>=3.10,<3.13`. Revisit when the biopython pin moves.
 requires-python = ">=3.10,<3.13"
 
-# Mirrors requirements.txt (still what Docker + Modal install from) — keep the two in sync
-# until those builds migrate to this file. See Process/pyproject.md.
+# Docker images install from THIS file (scripts/pyproject_deps.py). requirements.txt still
+# mirrors it for Modal (modal_app.py) — keep the two in sync until Modal migrates too.
+# See Process/pyproject.md and Process/pyproject-adoption.md.
 # Conda-only tools (OpenMM, RDKit, OpenFF, Vina, PyRosetta, MDAnalysis) stay in
 # environment-conda.yml; GROMACS is brew/apt. All are gated by feature flags in config.py.
 #

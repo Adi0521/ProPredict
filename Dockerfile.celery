@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # ProteinMPNN clone (MIT, ~26MB incl. weights) for the structural mutation scorer
 # (orchestrator/mutation_scan.py, exposed to the agent as scan_mutations). torch is
-# installed via requirements.txt below, so the subprocess scorer runs in-place.
+# installed via pyproject.toml [ml] below, so the subprocess scorer runs in-place.
 #
 # PINNED to 8907e66 (2023-06-27) — keep in lockstep with modal_app.py. The model WEIGHTS
 # ship inside this repo, so an unpinned clone could change mutation SCORES, not just code.
@@ -45,8 +45,13 @@ RUN micromamba install -y -n base -c conda-forge \
 
 ENV PATH="/opt/conda/bin:$PATH"
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Dependencies come from pyproject.toml (single source of truth). Only pyproject.toml and the
+# stdlib-only extractor are copied first, so this heavy layer caches until dependencies change,
+# not on every source edit. Leaf extras only — see scripts/pyproject_deps.py for why `[all]`
+# can't be passed. The project itself isn't pip-installed: commands run from /app.
+COPY pyproject.toml scripts/pyproject_deps.py /tmp/deps/
+RUN python /tmp/deps/pyproject_deps.py /tmp/deps/pyproject.toml ml modal tracking dev > /tmp/deps/requirements.txt \
+    && pip install --no-cache-dir -r /tmp/deps/requirements.txt
 
 COPY . .
 
