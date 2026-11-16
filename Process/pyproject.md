@@ -596,3 +596,89 @@ Manifest parity: the only entries in `pyproject.toml` and not `requirements.txt`
 The `project.license` TOML-table deprecation (still open) now prints a `BuildBackendWarning`
 with a `!!` banner on **every** editable install, pointing at 2027-Feb-18. Cosmetic, but it is
 noise on a command run often — worth folding into the next cleanup.
+
+---
+
+# Follow-up: three cleanups — SPDX license, `requires-python` upper bound, blame-ignore
+
+**Date:** 2026-11-15
+
+## 1. `license` → PEP 639
+
+`license = { file = "LICENSE" }` is deprecated; setuptools emitted a `BuildBackendWarning` with
+a `!!` banner on **every** editable install, with a 2027-02-18 removal date. Replaced with the
+SPDX form, which also required bumping the build requirement:
+
+```toml
+requires = ["setuptools>=77"]   # was >=68; PEP 639 fields need 77+
+license = "MIT"
+license-files = ["LICENSE"]
+```
+
+Verified: the license deprecation is gone, and the metadata is now `Metadata-Version: 2.4`,
+`License-Expression: MIT`, `License-File: LICENSE`. A wheel still contains all five packages +
+`config.py`, with the licence at `propredict-0.1.0.dist-info/licenses/LICENSE`.
+
+One `BuildBackendWarning` remains on editable installs — an advisory about working-directory
+folders shadowing same-named packages (`api/`, `models/`, …). Informational, no removal date,
+inherent to editable installs of top-level packages. Nothing to fix.
+
+## 2. `requires-python = ">=3.10,<3.13"`
+
+I had flagged this as "doesn't reflect Boltz's `<3.13`", and was going to argue against capping
+the whole project for an *optional* extra's constraint. Measuring it first changed the answer:
+**the cap is a property of our own core pins, not of Boltz.**
+
+Installing on 3.13 did not fail at Boltz — it failed building `biopython==1.84`:
+
+```
+Bio/cpairwise2module.c:60:22: error: call to undeclared function 'PyEval_CallObject'
+```
+
+`PyEval_CallObject` was removed in Python 3.13. And wheel availability for `biopython==1.84`,
+checked per interpreter: **cp310 YES, cp311 YES, cp312 YES, cp313 NO** — so 3.13 has no wheel
+and cannot build from source. The biopython pin is itself forced by Boltz's `==1.84`
+(see the `[gpu]` fix above), and Boltz independently declares the same `>=3.10,<3.13`.
+
+So the bound is accurate rather than defensive, and it converts a confusing C-compiler error
+into an immediate, legible refusal:
+
+```
+ERROR: Package 'propredict' requires a different Python: 3.13.7 not in '<3.13,>=3.10'
+```
+
+Same for 3.14.0. Everything we actually run on is inside the bound: local conda 3.10.19,
+Docker and Modal 3.11. The comment in `pyproject.toml` records the real reason and says to
+revisit when the biopython pin moves.
+
+## 3. `.git-blame-ignore-revs` (new)
+
+Holds `f38301a` ("ruff format"). Confirmed layout-only before adding it, rather than trusting
+the message: re-parsed all 41 changed `.py` files before and after and compared ASTs —
+**zero differences**.
+
+Effect, measured as lines still attributed to the reformat:
+
+| File | Before | After |
+|---|---|---|
+| `orchestrator/simulation.py` | 115 | 8 |
+| `orchestrator/agent.py` | 95 | 0 |
+| `orchestrator/ligands.py` | 51 | 5 |
+
+e.g. `orchestrator/agent.py:210` now attributes to `1f440cd1` (Aug 2026), the commit that
+actually wrote the line. The stragglers are lines the reformat genuinely restructured, which
+git cannot remap — expected behaviour, not a misconfiguration.
+
+Two caveats recorded in the file itself:
+
+- The setting is **per clone** and cannot be committed. Enabled here with
+  `git config blame.ignoreRevsFile .git-blame-ignore-revs`; anyone else cloning must run it.
+- `f38301a` also touched 5 Markdown files whose edits were real content, and blame skips an
+  ignored commit wholesale — so those lose attribution too. Accepted: worth it to keep blame
+  clean across 41 source files.
+
+## Verification
+
+`ruff check .` → all checks passed; `ruff format --check .` → 95 files formatted; mocked suite
+→ 208 passed, 4 skipped; `scripts/check_boltz_updates.py` → up to date, exit 0; wheel builds
+with all packages and the licence file present.

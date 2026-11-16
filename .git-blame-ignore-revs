@@ -1,0 +1,12 @@
+# Commits to skip when running `git blame` — bulk reformats that touch many lines without
+# changing behaviour. Opt in per clone (it is not a tracked setting):
+#
+#     git config blame.ignoreRevsFile .git-blame-ignore-revs
+#
+# Only add a commit here if it is genuinely layout-only. Verified by re-parsing every changed
+# .py file before and after and comparing the AST.
+
+# ruff format: 41 .py files reformatted at line-length 120, zero AST changes.
+# (It also touched 5 Markdown files, whose real edits get skipped too — an acceptable trade
+# for keeping blame clean across 41 source files. See Process/pyproject.md.)
+f38301a382de10c4c1d216dc067f2f596115d657
