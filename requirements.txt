@@ -14,6 +14,10 @@ pytest==7.4.3
 pytest-asyncio==0.21.1
 httpx==0.25.2
 biopython==1.84
+# Imported at module level by orchestrator/mutation_scan.py and mutation_search.py; it used
+# to arrive only as a transitive dep of biopython. A range, never `==`: Boltz caps numpy
+# `>=1.26,<2.0`, so an exact pin would make requirements-gpu.txt unresolvable.
+numpy>=1.26
 propka==3.5.0
 anthropic>=0.40.0
 modal>=0.73.0
@@ -22,3 +26,6 @@ torch>=2.1.0
 pyyaml>=6.0
 meeko
 wandb>=0.16.0
+# Benchmark-harness deps (pandas, scipy, pyarrow) are deliberately NOT here — the API and
+# worker images don't run benchmarks. They live in pyproject.toml's `[bench]` extra:
+#   pip install -e ".[bench]"

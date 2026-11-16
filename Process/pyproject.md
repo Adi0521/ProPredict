@@ -518,3 +518,81 @@ No unit-test file for the script (user's call — the helpers are pure and would
 with tmp files and a canned Boltz pyproject string, so `tests/test_boltz_version_check.py`
 stays available as a cheap follow-up). The verification above was run ad hoc instead, so it is
 not locked against regression.
+
+---
+
+# Follow-up: declare the dependencies we actually import (`numpy`, new `[bench]` extra)
+
+**Date:** 2026-11-15
+
+## Problem
+
+`pyproject.toml` under-declared four packages that the code imports at module level. All four
+happened to be present in the author's conda env, so nothing failed locally — but a fresh
+install from the manifests could not run the ProteinGym benchmarks at all.
+
+| Package | Imported by | Was declared? | Actually arrived via |
+|---|---|---|---|
+| `numpy` | `orchestrator/mutation_scan.py`, `mutation_search.py` — **core** | no | `biopython`'s own `numpy` dep |
+| `pandas` | `benchmarks/benchmark_proteinmpnn_checkpoints.py:45` | no | only `boltz`, i.e. `[gpu]` |
+| `scipy` | same `:46`, and `benchmark_pipeline_modal.py:292` | no | only `boltz` |
+| `pyarrow` | needed by `pd.read_parquet` (`..._checkpoints.py:120`, `..._epistasis.py:94`) | no | **nothing** |
+
+`wandb`, `torch` and `transformers` declare none of the three (checked via their metadata), and
+pandas ships `pyarrow` only as an *extra* (`pandas[parquet]`), so `read_parquet` had no engine
+on any fresh install — including `[gpu]`.
+
+## Change
+
+- **`numpy>=1.26` promoted to a core dependency** in `pyproject.toml` and `requirements.txt`.
+  Core modules import it directly; relying on biopython to supply it was accidental.
+- **New `[bench]` extra**: `pandas>=2.2.2`, `scipy>=1.11`, `pyarrow>=14`.
+- `[all]` now includes `bench`, so a local dev install can run the benchmarks.
+- **`[bench]` deliberately NOT added to `requirements.txt`.** That file is what the API and
+  worker images install, and they don't run benchmarks — adding ~100 MB of pandas/scipy/pyarrow
+  to every image for nothing. A comment at the bottom of `requirements.txt` and on `[all]`
+  records the intentional divergence, since `[all]` is no longer byte-equivalent to it.
+
+**Every new entry is a RANGE, never `==`** — the one real design constraint here. Boltz pins
+`scipy==1.13.1` exactly and caps `numpy>=1.26,<2.0`, so an exact pin of ours on either would
+have made `[gpu]` unresolvable: precisely the bug fixed two steps ago. The ranges are chosen to
+contain Boltz's values.
+
+## Verification
+
+Fresh venvs built **only** from the manifests (never the conda env, which masks the whole bug):
+
+- Before: `pip install -e ".[dev]"` → `import pandas` fails. After: `numpy 2.2.6` present and
+  `config` + both `orchestrator.mutation_*` modules import.
+- `pip install -e ".[bench]"` → `to_parquet` and both harnesses' exact `read_parquet(columns=…)`
+  calls succeed, `scipy.stats.spearmanr`/`wilcoxon` resolve, and
+  `benchmarks.benchmark_proteinmpnn_checkpoints` imports. pyarrow 25.0.1.
+- **`pyarrow` proved load-bearing:** a venv with `pandas>=2.2.2` + `scipy>=1.11` and nothing
+  else does **not** receive pyarrow, and parquet fails with *"Missing optional dependency
+  'pyarrow'… Missing optional dependency 'fastparquet'"*. So nothing in the graph covers it.
+
+Resolution, all dry-run:
+
+| Target | numpy | pandas | scipy | pyarrow | boltz |
+|---|---|---|---|---|---|
+| `.[bench]` | 2.2.6 | 2.3.3 | 1.15.3 | 25.0.1 | — |
+| `.[gpu,bench]` | **1.26.4** | 2.3.3 | **1.13.1** | 25.0.1 | 2.2.1 |
+| `.[all]` | 2.2.6 | 2.3.3 | 1.15.3 | 25.0.1 | — |
+| `-r requirements.txt` | 2.2.6 | — | — | — | — |
+| `-r requirements-gpu.txt` | 1.26.4 | 2.3.3 | 1.13.1 | — | 2.2.1 |
+
+`[gpu,bench]` backing numpy down to 1.26.4 and scipy to Boltz's exact 1.13.1 is the ranges
+doing their job; an exact pin on either would have failed here.
+
+Manifest parity: the only entries in `pyproject.toml` and not `requirements.txt` are the three
+`[bench]` packages plus `ruff` — i.e. nothing diverged by accident.
+
+`scripts/check_boltz_updates.py` → 15 exact pins checked, no conflict, up to date, exit 0
+(numpy/scipy are ranges, so correctly not flagged). `ruff check .` → all checks passed;
+`ruff format --check .` → 95 files formatted; mocked suite → 208 passed, 4 skipped, unchanged.
+
+## Noted along the way
+
+The `project.license` TOML-table deprecation (still open) now prints a `BuildBackendWarning`
+with a `!!` banner on **every** editable install, pointing at 2027-Feb-18. Cosmetic, but it is
+noise on a command run often — worth folding into the next cleanup.

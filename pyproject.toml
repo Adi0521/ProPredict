@@ -34,6 +34,11 @@ dependencies = [
     "propka==3.5.0",
     "anthropic>=0.40.0",
     "pyyaml>=6.0",
+    # Core: orchestrator/mutation_scan.py and mutation_search.py import it at module level.
+    # It used to arrive only as a transitive dep of biopython, which is accidental.
+    # A RANGE on purpose, never `==`: Boltz caps numpy `>=1.26,<2.0`, so an exact pin here
+    # would make `[gpu]` unresolvable — the same trap requests/biopython fell into above.
+    "numpy>=1.26",
 ]
 
 [project.optional-dependencies]
@@ -44,6 +49,19 @@ ml = [
 ]
 modal = ["modal>=0.73.0"]
 tracking = ["wandb>=0.16.0"]
+# Benchmark harnesses only (benchmarks/, benchmark_*_modal.py) — not imported by the API or
+# the worker, which is why these stay out of requirements.txt and the Docker images.
+# Ranges, not `==`: Boltz pins `scipy==1.13.1` and `pandas>=2.2.2`, and an exact pin of ours
+# that differed would make `[gpu,bench]` unresolvable.
+bench = [
+    "pandas>=2.2.2",
+    "scipy>=1.11",
+    # `pd.read_parquet` needs an engine, and pandas ships pyarrow only as an *extra*
+    # (`pandas[parquet]`), so nothing else in this project pulls it in. Without it
+    # benchmark_proteinmpnn_checkpoints.py and benchmark_score_only_epistasis.py fail at
+    # their first read_parquet with "Unable to find a usable engine".
+    "pyarrow>=14",
+]
 # Boltz-2, PINNED to an exact commit — keep in lockstep with modal_app.py and
 # requirements-gpu.txt. b1ebfc46 reports version "2.2.1" but is 6 commits AHEAD of the
 # v2.2.1 tag (two numerics fixes); `boltz==2.2.1` from PyPI is a DIFFERENT build and would
@@ -58,8 +76,10 @@ dev = [
     "httpx==0.25.2",
     "ruff>=0.16,<0.17",
 ]
-# Everything requirements.txt installs today (no Boltz).
-all = ["propredict[ml,modal,tracking,dev]"]
+# Local dev: everything requirements.txt installs, plus ruff and the benchmark harness deps.
+# No longer byte-equivalent to requirements.txt — `bench` is deliberately absent there, since
+# the API and worker images don't run benchmarks. See Process/pyproject.md.
+all = ["propredict[ml,modal,tracking,dev,bench]"]
 
 [tool.setuptools]
 packages = ["api", "models", "orchestrator", "orchestrator.backends", "benchmarks"]
