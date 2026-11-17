@@ -1,6 +1,6 @@
 # Adopting pyproject.toml as the install source
 
-**Status:** Steps 1–2 of 4 complete (Docker, Modal). Follows Process/pyproject.md, which created
+**Status:** Steps 1–3 of 4 complete (Docker, Modal, `requirements-gpu.txt` removed). Follows Process/pyproject.md, which created
 `pyproject.toml` but left every build installing from `requirements*.txt`.
 
 ## Plan
@@ -9,7 +9,7 @@
 |---|---|---|---|
 | 1 | `Dockerfile.api`, `Dockerfile.celery` | install from pyproject via `scripts/pyproject_deps.py` | **done** |
 | 2 | `modal_app.py` main image | `pip_install_from_pyproject(..., ["ml","modal","tracking","dev"])`; keep cu126 torch + Boltz SHA steps in order; pin cuEquivariance (step 2a) | **done** |
-| 3 | `requirements-gpu.txt` | delete; `pip install -e ".[gpu]"` replaces it; `check_boltz_updates.py` + workflow go from 3 pin sites to 2 | pending |
+| 3 | `requirements-gpu.txt` | delete; `pip install -e ".[gpu]"` replaces it; `check_boltz_updates.py` + workflow go from 3 pin sites to 2 | **done** |
 | 4 | `requirements.txt` | delete; update README, CLAUDE.md, pyproject comments | pending |
 
 Later, deliberately separate (each changes what gets installed, so none can be verified as
@@ -155,3 +155,46 @@ one successful build.
 - PyPI JSON API, release dates + `requires_dist`: https://pypi.org/pypi/cuequivariance-ops-torch-cu12/json
 - PEP 440 local version matching: https://peps.python.org/pep-0440/#version-matching
 - OpenMM bundled force fields: http://docs.openmm.org/latest/userguide/application/02_running_sims.html#force-fields
+
+## Step 3 — remove `requirements-gpu.txt`
+
+**Date:** 2026-11-17
+
+It only served local GPU installs (`-r requirements.txt` + the Boltz git pin), which
+`pip install -e ".[gpu]"` already covers. No image read it. Two code paths did read it as a
+**Boltz pin site**:
+
+| File | Change |
+|---|---|
+| `scripts/check_boltz_updates.py` | `PIN_SITES` 3 → 2 (`modal_app.py`, `pyproject.toml`); docstring and all printed guidance updated ("BOTH", not "ALL THREE") |
+| `.github/workflows/boltz-version-check.yml` | header and issue-body text: two pin sites; `[gpu]` is the only resolvability concern |
+| `benchmarks/log_benchmark.py` | `_declared_boltz_pin()` fallback reads `modal_app.py` then **`pyproject.toml`** (was `requirements-gpu.txt`); not in the original plan, found by grep |
+| `requirements-gpu.txt` | deleted (`git rm`) |
+| `pyproject.toml`, `requirements.txt`, CLAUDE.md | comments: drop requirements-gpu.txt; CLAUDE.md now names `pip install -e ".[gpu]"` for local GPU installs and the 2 pin sites |
+
+The workflow's dep-conflict fix text still says "pyproject.toml **and** requirements.txt" —
+correct until step 4 deletes requirements.txt.
+
+### Verification
+
+- Live `check_boltz_updates.py`: pin `b1ebfc46` up to date, 15 exact pins checked, no
+  conflict, exit 0.
+- **Forced branches**, against a throwaway copy of the files (real repo untouched):
+
+| Mutation | Expected | Got |
+|---|---|---|
+| `pyproject.toml` SHA drifts alone | exit 2, both sites listed | exit 2, both listed |
+| stale `requirements-gpu.txt` with a different SHA present | ignored, exit 0 | exit 0 |
+| both sites pinned to `ac1c8582` (v2.2.0) | behind, exit 1, "BOTH" guidance | behind by 48, exit 1 |
+| `modal_app.py` absent | `log_benchmark` falls back to pyproject | `declared:ac1c8582d61a` |
+
+- Workflow: YAML parses; the `github-script` body passes `node --check` (with `${{ }}`
+  substituted). Only message strings changed, so the branch logic is the same one exercised
+  in Process/pyproject.md.
+- **`.[gpu]` still resolves** (its only remaining install path): fresh venv,
+  `pip install --dry-run --report ".[gpu,dev]"` → exit 0, 135 packages, boltz from
+  `github.com/jwohlwend/boltz@b1ebfc46…`, `requests 2.32.3` / `biopython 1.84` (= Boltz's pins),
+  numpy 1.26.4, scipy 1.13.1. (Host resolution: macOS arm64 picks torch 2.14.1 — the Modal
+  image pins 2.6.0+cu126 separately, unchanged.)
+- `ruff check` / `ruff format --check` clean; suite (excl. `test_api.py` and the 9-minute
+  ESMFold integration test) 217 passed, 4 skipped.

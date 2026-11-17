@@ -78,7 +78,7 @@ def _environment_info() -> dict:
     return env
 
 
-# Matches the pinned commit in modal_app.py / requirements-gpu.txt. Deliberately duplicated
+# Matches the pinned commit in modal_app.py / pyproject.toml. Deliberately duplicated
 # from scripts/check_boltz_updates.py rather than imported: benchmarks/ importing from
 # scripts/ would couple two unrelated entry points for one regex.
 _BOLTZ_PIN_RE = re.compile(r"jwohlwend/boltz(?:\.git)?@([0-9a-f]{40})\b")
@@ -93,7 +93,7 @@ def _declared_boltz_pin() -> str | None:
     it says what the source pins, not what actually ran.
     """
     root = Path(__file__).parent.parent
-    for name in ("modal_app.py", "requirements-gpu.txt"):
+    for name in ("modal_app.py", "pyproject.toml"):
         try:
             found = set(_BOLTZ_PIN_RE.findall((root / name).read_text()))
         except OSError:

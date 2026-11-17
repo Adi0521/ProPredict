@@ -1,7 +1,6 @@
 # Weekly check for Boltz-2 upstream commits past our pinned build.
 #
-# Boltz-2 is pinned to an exact commit in modal_app.py, requirements-gpu.txt AND
-# pyproject.toml so the benchmark record stays reproducible (Process/boltz-version-pin.md).
+# Boltz-2 is pinned to an exact commit in modal_app.py AND pyproject.toml's `[gpu]` extra so the benchmark record stays reproducible (Process/boltz-version-pin.md).
 # The cost of pinning is that upstream fixes are invisible until someone looks — this is the
 # automated look. It also cross-checks that our exact dependency pins still agree with
 # Boltz's own, since a disagreement makes `[gpu]` installs unresolvable (Process/pyproject.md).
@@ -100,13 +99,12 @@ jobs:
                 '## `[gpu]` installs cannot resolve',
                 '',
                 'We pin these packages to versions that differ from the **pinned Boltz commit\'s own**',
-                'hard `==` pins, so `pip install ".[gpu]"` and `pip install -r requirements-gpu.txt`',
-                'both fail with `ResolutionImpossible`:',
+                'hard `==` pins, so `pip install ".[gpu]"` fails with `ResolutionImpossible`:',
                 '',
                 depTable(conflicts),
                 '',
-                'Fix: move ours to Boltz\'s versions in **`pyproject.toml` and `requirements.txt`**',
-                '(`requirements-gpu.txt` inherits via `-r`). See `Process/pyproject.md`.',
+                'Fix: move ours to Boltz\'s versions in **`pyproject.toml` and `requirements.txt`**.',
+                'See `Process/pyproject.md`.',
                 '',
                 `_Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}_`,
                 // Dedupe on the conflict itself, so a *different* conflict still reports.
@@ -124,9 +122,8 @@ jobs:
                 '',
                 'Exit code `2`. Causes, in order of seriousness:',
                 '',
-                '1. **The three pin sites disagree** (`modal_app.py`, `requirements-gpu.txt`,',
-                '   `pyproject.toml`) — Modal runs, local GPU installs and `pip install -e ".[gpu]"`',
-                '   would use *different* Boltz builds.',
+                '1. **The two pin sites disagree** (`modal_app.py`, `pyproject.toml`) — Modal runs and',
+                '   `pip install -e ".[gpu]"` would use *different* Boltz builds.',
                 '2. GitHub API unreachable or rate-limited.',
                 '',
                 'See the workflow run log for the exact message.',
@@ -162,15 +159,15 @@ jobs:
                   ? [
                       '### ⚠️ This bump also moves dependency pins',
                       'Boltz changed its own hard `==` pins. Bumping the SHA **without** moving these',
-                      'makes `[gpu]` and `requirements-gpu.txt` unresolvable:',
+                      'makes `[gpu]` unresolvable:',
                       '',
                       depTable(data.dep_conflicts_if_bumped),
                     ].join('\n')
                   : '_This bump needs no dependency-pin changes._',
                 '',
                 '### Adopting this bump',
-                '1. Update the SHA in **all three** of `modal_app.py`, `requirements-gpu.txt` and',
-                '   `pyproject.toml` — they must stay in lockstep.',
+                '1. Update the SHA in **both** `modal_app.py` and `pyproject.toml` — they must stay in',
+                '   lockstep.',
                 '2. Move any dependency pins listed above in `pyproject.toml` **and** `requirements.txt`.',
                 '3. Re-run the CASP15 baseline and log it as a **new run** in `benchmarks/BENCHMARKS.md`.',
                 '4. Do **not** compare results across the version boundary.',

@@ -5,7 +5,7 @@ celery==5.3.4
 redis==5.0.1
 psycopg2-binary==2.9.9
 # requests + biopython are held at the exact versions Boltz pins (hard `==`), so that
-# requirements-gpu.txt resolves. Re-check both when bumping the Boltz commit.
+# pyproject.toml's `[gpu]` extra resolves. Re-check both when bumping the Boltz commit.
 requests==2.32.3
 python-dotenv==1.0.0
 flower==2.0.1
@@ -16,7 +16,7 @@ httpx==0.25.2
 biopython==1.84
 # Imported at module level by orchestrator/mutation_scan.py and mutation_search.py; it used
 # to arrive only as a transitive dep of biopython. A range, never `==`: Boltz caps numpy
-# `>=1.26,<2.0`, so an exact pin would make requirements-gpu.txt unresolvable.
+# `>=1.26,<2.0`, so an exact pin would make `[gpu]` unresolvable.
 numpy>=1.26
 propka==3.5.0
 anthropic>=0.40.0

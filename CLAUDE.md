@@ -64,7 +64,7 @@ See @ROADMAP.md for completed stages and remaining work.
 - **Boltz-2 runs via CLI subprocess** (`boltz predict` with YAML input), not Python API.
 - **ESMFold model lazy-loads** once per worker (~8 GB `facebook/esmfold_v1` download on first run, into the HF cache). Don't import at module level.
 - Docker images use `mambaorg/micromamba` base for ARM64 conda compat. Currently optimized for Apple M3.
-- **Dependencies are declared twice** — `pyproject.toml` and `requirements*.txt` (Docker installs from pyproject via `scripts/pyproject_deps.py`, Modal via `pip_install_from_pyproject` with `MODAL_IMAGE_EXTRAS`; `requirements*.txt` remain only for local GPU installs until removed). Change both together; Boltz's exact-commit pin must match in `pyproject.toml`, `requirements-gpu.txt`, and `modal_app.py`.
+- **Dependencies are declared twice** — `pyproject.toml` and `requirements*.txt` (Docker installs from pyproject via `scripts/pyproject_deps.py`, Modal via `pip_install_from_pyproject` with `MODAL_IMAGE_EXTRAS`; `requirements.txt` is read by nothing and is pending removal — keep it in sync until then). Local GPU installs: `pip install -e ".[gpu]"`. Boltz's exact-commit pin must match in `pyproject.toml` and `modal_app.py`.
 
 ## Anti-Patterns (things that have caused bugs)
 

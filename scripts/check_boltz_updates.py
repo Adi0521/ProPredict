@@ -2,21 +2,21 @@
 """
 Report whether the pinned Boltz-2 build has fallen behind upstream.
 
-Boltz-2 is pinned to an exact commit in three places (modal_app.py, requirements-gpu.txt and
-pyproject.toml) so the benchmark record stays reproducible — see
+Boltz-2 is pinned to an exact commit in two places (modal_app.py and pyproject.toml's `[gpu]`
+extra) so the benchmark record stays reproducible — see
 Process/boltz-version-pin.md for why `boltz==2.2.1` is NOT a safe substitute. The cost of
 pinning is that upstream fixes are invisible until someone looks. This script is the look.
 
 Two independent things are checked:
 
-1. **Is the pin behind upstream?** All three sites must agree on one SHA, and that SHA is
+1. **Is the pin behind upstream?** Both sites must agree on one SHA, and that SHA is
    compared against upstream `main`.
 2. **Do our exact dependency pins still agree with Boltz's own?** Boltz pins several shared
    packages with hard `==`, so if we pin the same package to a different exact version, the
-   `[gpu]` extra and requirements-gpu.txt become *unresolvable* — `pip` fails outright. That
+   `[gpu]` extra becomes *unresolvable* — `pip` fails outright. That
    is a live failure mode, not a theoretical one (Process/pyproject.md: requests 2.31.0 vs
    2.32.3, biopython 1.83 vs 1.84). A bump that moves Boltz's pins re-breaks it even with all
-   three SHAs in perfect agreement, which is exactly why this is checked here.
+   pinned SHAs in perfect agreement, which is exactly why this is checked here.
 
 It is deliberately read-only: it never edits the pin. Bumping is a decision that should be
 paired with a benchmark re-run, not something a script does behind your back.
@@ -49,12 +49,11 @@ API = f"https://api.github.com/repos/{REPO}"
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# Where the pin lives. All three must agree — a silent disagreement between them means the
-# Modal image, a local GPU install and an editable `.[gpu]` install would run different
-# Boltz builds. pyproject.toml joined this list in Process/pyproject.md.
+# Where the pin lives. Both must agree — a silent disagreement means the Modal image and a
+# local `.[gpu]` install would run different Boltz builds. requirements-gpu.txt was a third
+# site until Process/pyproject-adoption.md step 3 removed it.
 PIN_SITES = {
     "modal_app.py": os.path.join(_ROOT, "modal_app.py"),
-    "requirements-gpu.txt": os.path.join(_ROOT, "requirements-gpu.txt"),
     "pyproject.toml": os.path.join(_ROOT, "pyproject.toml"),
 }
 
@@ -284,7 +283,7 @@ def main() -> int:
 
     if conflicts_now:
         print("\nERROR: our exact pins disagree with Boltz's own at the PINNED commit.")
-        print('       `pip install ".[gpu]"` and `pip install -r requirements-gpu.txt` cannot resolve:')
+        print('       `pip install ".[gpu]"` cannot resolve:')
         for name, (mine, theirs) in sorted(conflicts_now.items()):
             print(f"         {name:12} ours =={mine}   boltz =={theirs}")
         print("       Fix: move ours to Boltz's version in pyproject.toml AND requirements.txt.")
@@ -308,10 +307,10 @@ def main() -> int:
         print("\nAdopting this bump would ALSO require moving these pins (Boltz changed them):")
         for name, (mine, theirs) in sorted(conflicts_if_bumped.items()):
             print(f"  {name:12} ours =={mine}   boltz(latest) =={theirs}")
-        print("  Leaving them as-is makes `[gpu]` and requirements-gpu.txt unresolvable.")
+        print("  Leaving them as-is makes `[gpu]` unresolvable.")
 
-    print("\nTo adopt: update the SHA in ALL THREE of modal_app.py, requirements-gpu.txt and")
-    print("pyproject.toml, then re-run the CASP15 baseline and log it as a new run in")
+    print("\nTo adopt: update the SHA in BOTH modal_app.py and pyproject.toml,")
+    print("then re-run the CASP15 baseline and log it as a new run in")
     print("benchmarks/BENCHMARKS.md.")
     return 2 if conflicts_now else 1
 

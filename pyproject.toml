@@ -20,13 +20,13 @@ license-files = ["LICENSE"]
 requires-python = ">=3.10,<3.13"
 
 # Docker (scripts/pyproject_deps.py) and Modal (pip_install_from_pyproject) install from THIS
-# file. requirements.txt only survives via requirements-gpu.txt's `-r` and is removed in
-# Process/pyproject-adoption.md steps 3-4 — keep it in sync until then.
+# file. requirements.txt is no longer read by any build and is removed in
+# Process/pyproject-adoption.md step 4 — keep it in sync until then.
 # Conda-only tools (OpenMM, RDKit, OpenFF, Vina, PyRosetta, MDAnalysis) stay in
 # environment-conda.yml; GROMACS is brew/apt. All are gated by feature flags in config.py.
 #
 # `requests` and `biopython` are held at the exact versions Boltz pins. Boltz uses hard `==`
-# pins, so any other value makes `[gpu]` (and requirements-gpu.txt) unresolvable — re-check
+# pins, so any other value makes `[gpu]` unresolvable — re-check
 # both when bumping the Boltz commit below.
 dependencies = [
     "fastapi==0.104.1",
@@ -71,8 +71,7 @@ bench = [
     # their first read_parquet with "Unable to find a usable engine".
     "pyarrow>=14",
 ]
-# Boltz-2, PINNED to an exact commit — keep in lockstep with modal_app.py and
-# requirements-gpu.txt. b1ebfc46 reports version "2.2.1" but is 6 commits AHEAD of the
+# Boltz-2, PINNED to an exact commit — keep in lockstep with modal_app.py. b1ebfc46 reports version "2.2.1" but is 6 commits AHEAD of the
 # v2.2.1 tag (two numerics fixes); `boltz==2.2.1` from PyPI is a DIFFERENT build and would
 # silently change results. See Process/boltz-version-pin.md.
 gpu = [
