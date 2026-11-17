@@ -18,8 +18,11 @@ Started 2026-10-02 from the documentation pass over `d60def0..bbef345`.
 
 ## P0 — Data loss (committed; recover first)
 
-Two documented results artifacts were overwritten by lower-effort re-runs at default flags in
-`bbef345`. Both are recoverable from git history. **Do I-3 or these will recur.**
+One documented results artifact is still overwritten by a lower-effort re-run at default flags
+in `bbef345`, and is recoverable from git history. The harnesses can no longer silently clobber
+results (parameter-stamped paths + `--force` refusal, `benchmarks/_artifacts.py`), so this
+cannot recur; the 300-pair epistasis artifact is restored. See
+`Process/rowB-score-only-epistasis.md`.
 
 - [ ] **I-1 — Restore the 3-seed ProteinMPNN checkpoint benchmark.**
       `bbef345` replaced `benchmarks/proteinmpnn_checkpoint_results.json` (`seeds: [37,38,39]`,
@@ -31,26 +34,6 @@ Two documented results artifacts were overwritten by lower-effort re-runs at def
       git show 999ef3e:benchmarks/proteinmpnn_checkpoint_results.json \
         > benchmarks/proteinmpnn_checkpoint_results.json
       ```
-- [ ] **I-2 — Restore (or supersede) the 300-pair epistasis artifact.**
-      `bbef345` replaced `benchmarks/score_only_epistasis.jsonl` (300 pairs, `588ca3a`) with a
-      150-pair run, so the artifact no longer matches the run documented in
-      `research_plan/rowB-score-only-epistasis.md`.
-      ```bash
-      git show 588ca3a:benchmarks/score_only_epistasis.jsonl \
-        > benchmarks/score_only_epistasis.jsonl
-      ```
-      *Keep the 150-pair data somewhere* — it is a near-independent replicate (only 24/150
-      pairs overlap the 300 draw) and is what established that the headline result replicates.
-      See `Process/rowB-score-only-epistasis.md`.
-- [ ] **I-3 — Stop harnesses silently overwriting documented results.**
-      `benchmarks/benchmark_score_only_epistasis.py:201` writes mode `"w"` to a fixed default
-      path, and `--n-doubles` defaults to 150 (`:156`), so a plain re-run destroys a
-      documented 300-pair artifact with no warning.
-      `benchmarks/benchmark_proteinmpnn_checkpoints.py` has the same shape.
-      Fix: parameter-stamp the output filename (e.g. `..._n300_k8.jsonl`), **or** refuse to
-      overwrite an existing file without `--force`. Prefer the stamp — it makes the
-      provenance self-describing.
-
 ## P1 — Code defects (small, independent)
 
 - [ ] **I-4 — `QMMM_*` config bypasses `config.py`.** Six vars read by module-level
@@ -92,20 +75,6 @@ Two documented results artifacts were overwritten by lower-effort re-runs at def
       `genion` step (copy from `run_gromacs_md`, `:~655`) if a standalone EM entry point is
       wanted. Do not paper over it with `-maxwarn` — a non-neutral Ewald system gives
       artifactual energies.
-
-## P1 — Doc corrections (small)
-
-- [ ] **I-9 — Correct Row B's contact-dependence claim.**
-      `research_plan/rowB-score-only-epistasis.md` states distal pairs (CA > 8 Å) show larger
-      median `|eps|` (0.029) than contacting (0.022). The 300-pair run reproduces that, but
-      the near-independent 150-pair draw **inverts it** (contacting 0.0219 > distal 0.0188).
-      The difference is small against an `eps` spread of ~0.029 and the distal bin is the
-      smaller one, so it was never well-powered. Change to **"no resolvable contact
-      dependence in either direction."** The sequence-context-not-contacts inference may still
-      be right, but this data does not establish it.
-- [ ] **I-10 — Add the two missing caveats to Row B's noise table.** It runs on
-      `doubles[:60]` (`benchmark_score_only_epistasis.py:225`), so **n=60, not 300**; and the
-      K=32 row required a second invocation at `--decoding-orders 32`. Neither is stated.
 
 ## P1 — Config change (backed by two independent measurements)
 

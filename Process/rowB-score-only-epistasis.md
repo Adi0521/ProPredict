@@ -116,7 +116,7 @@ route (1.15e-02 mean per-residue std) and reached the same ≥32 recommendation.
 - **Sub-question A only.** It shows the oracle *has* epistasis, not that it matches
   *experimental* epistasis. Sub-question B is the next step.
 
-## Defect found
+## Defect found (fixed 2026-11-17 — see resolution at the end)
 
 **The committed results artifact no longer matches the documented run.** `research_plan/rowB`
 reports its reproduce line as `--n-doubles 300` and its results table is the 300-pair run, but
@@ -157,5 +157,35 @@ proposes is validated against real predicted structure before it is trusted.
   batched `score_only` → epistasis stats + `--noise-check`).
 - `benchmarks/epistasis_structures/4G3O.raw.pdb` — cached RCSB structure (also the default
   input for `benchmarks/check_determinism.py`).
-- `benchmarks/score_only_epistasis.jsonl` — per-pair `eps_model`, single deltas, CA distance.
-  **Currently the 150-pair run;** 300-pair run at `588ca3a`.
+- `benchmarks/score_only_epistasis_n300_k8.jsonl` — per-pair `eps_model`, single deltas, CA
+  distance for the documented 300-pair run (restored from `588ca3a`).
+- `benchmarks/score_only_epistasis_n150_k8.jsonl` — the near-independent 150-pair replicate.
+- `benchmarks/_artifacts.py` — `stamped_path` / `guard_overwrite`, the two guards below.
+
+## Resolution of the defect and the doc follow-ups (2026-11-17)
+
+Done before starting sub-question B, so the new arms land on a convention that cannot repeat
+the overwrite:
+
+- **Both draws are now committed under parameter-stamped names** —
+  `benchmarks/score_only_epistasis_n300_k8.jsonl` (restored from `588ca3a`) and
+  `benchmarks/score_only_epistasis_n150_k8.jsonl` (the replicate, renamed from the clobbered
+  fixed path). Nothing is now reachable only through `git show`.
+- **The overwrite is structurally prevented**, two ways, in new `benchmarks/_artifacts.py`:
+  `stamped_path` makes `--out` default to `score_only_epistasis_n<N>_k<K>.jsonl`, so a run at
+  different parameters *cannot* land on another run's filename and provenance is readable off
+  the name; `guard_overwrite` exits non-zero on an existing path unless `--force` is passed.
+  The stamp is the primary guard and the refusal is the backstop — it also catches a re-run at
+  *identical* parameters, which the stamp alone would silently overwrite. Verified: a plain
+  `--n-doubles 150` re-run now refuses rather than clobbering.
+  `benchmark_proteinmpnn_checkpoints.py` got the `--force` guard too (it has the same shape);
+  its path is left unstamped on purpose, because the documented
+  `proteinmpnn_checkpoint_results.json` is still the restore target of the open I-1.
+- **`research_plan/rowB` corrected.** The contact-dependence claim is now "no resolvable
+  contact dependence, in either direction," with the inverting replicate and the
+  power argument stated, and the sequence-context inference demoted to plausible-but-not-shown.
+  The noise table now carries both missing caveats (n=60 from `doubles[:60]`; K=32 is a second
+  invocation).
+
+Closes ISSUES I-2, I-3, I-9, I-10. I-1 (the three-seed checkpoint artifact) is untouched and
+still open — only its re-clobbering is now blocked.

@@ -43,7 +43,9 @@ the search can fuse that naive stacking cannot.
 - **Scoring:** one batched `score_only` call over WT + all involved singles + 300 sampled
   doubles. ~82 s on CPU at 8 decoding orders.
 - **Reproduce:** `python -m benchmarks.benchmark_score_only_epistasis --n-doubles 300 --noise-check`
-  (harness + cached structure + results committed under `benchmarks/`).
+  (harness + cached structure + results committed under `benchmarks/`). The harness
+  parameter-stamps its output — `score_only_epistasis_n300_k8.jsonl` — and refuses to
+  overwrite an existing artifact without `--force`.
 
 ## Results
 
@@ -68,10 +70,19 @@ The signal magnitude is stable across K while noise falls as ~1/√K — so `eps
 coupling, and quadrupling decoding orders (8→32) roughly halves the noise and lifts per-pair
 SNR from ~1.7 to ~3.0.
 
-**No strong spatial-contact dependence.** Distal pairs (CA–CA > 8 Å) show *slightly larger*
-median `|eps|` (0.029) than contacting pairs (0.022). `score_only` epistasis is an
-autoregressive **sequence-context** phenomenon, not primarily physical contacts — consistent
-with how ProteinMPNN decodes.
+Two caveats on that table: `--noise-check` scores `doubles[:60]`, so it is **n=60**, not 300;
+and the K=32 row is a **second invocation** at `--decoding-orders 32`, not part of the default
+run.
+
+**No resolvable contact dependence, in either direction.** In the 300-pair draw distal pairs
+(CA–CA > 8 Å) show slightly larger median `|eps|` (0.029) than contacting pairs (0.022) — but
+an independent 150-pair draw (`score_only_epistasis_n150_k8.jsonl`, only 24/150 pairs shared)
+**inverts** it (contacting 0.0219 > distal 0.0188). Both gaps are small against the `eps`
+spread (~0.029) and the distal bin is the smaller one (n=102, then n=50), so the comparison was
+never well-powered. The defensible statement is that this data resolves **no** contact
+dependence. That `score_only` epistasis is a sequence-context rather than physical-contact
+phenomenon remains plausible from how ProteinMPNN decodes autoregressively, but **this data
+does not establish it**; a larger distal bin would be needed.
 
 ## Conclusions
 1. **The search is not vacuous on real proteins.** `score_only` has real epistatic structure
@@ -108,5 +119,8 @@ structure before it is trusted.
 - `benchmarks/benchmark_score_only_epistasis.py` — harness (extract → trim PDB → batched
   `score_only` → epistasis stats + `--noise-check`).
 - `benchmarks/epistasis_structures/4G3O.raw.pdb` — cached RCSB structure.
-- `benchmarks/score_only_epistasis.jsonl` — per-pair `eps_model`, single deltas, CA distance
-  (the committed 300-pair run).
+- `benchmarks/score_only_epistasis_n300_k8.jsonl` — per-pair `eps_model`, single deltas, CA
+  distance for the 300-pair run reported above.
+- `benchmarks/score_only_epistasis_n150_k8.jsonl` — a near-independent 150-pair draw
+  (24/150 pairs shared with the 300 draw) that replicates the headline ratio (0.385 vs 0.409)
+  and is what the contact-dependence correction above rests on.

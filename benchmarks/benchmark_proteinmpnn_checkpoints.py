@@ -45,6 +45,7 @@ import numpy as np
 import pandas as pd
 from scipy.stats import spearmanr
 
+from benchmarks._artifacts import guard_overwrite
 from config import (
     PROTEINMPNN_NUM_DECODING_ORDERS,
     PROTEINMPNN_PATH,
@@ -207,7 +208,11 @@ def main() -> None:
         f"PROTEINMPNN_NUM_DECODING_ORDERS={PROTEINMPNN_NUM_DECODING_ORDERS})",
     )
     ap.add_argument("--out", default=os.path.join(os.path.dirname(__file__), "proteinmpnn_checkpoint_results.json"))
+    ap.add_argument("--force", action="store_true", help="allow overwriting an existing results artifact")
     args = ap.parse_args()
+
+    # Never silently replace a documented result (ISSUES I-1/I-3).
+    guard_overwrite(args.out, args.force)
 
     if not PROTEINMPNN_PATH:
         sys.exit("ERROR: PROTEINMPNN_PATH not set — point it at your ProteinMPNN clone in .env")

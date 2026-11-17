@@ -31,6 +31,7 @@ import sys
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from benchmarks._artifacts import guard_overwrite, stamped_path
 from config import PROTEINMPNN_MODEL_NAME, PROTEINMPNN_PATH, PROTEINMPNN_SEED
 from orchestrator.mutation_search import score_only_oracle
 
@@ -172,8 +173,19 @@ def main() -> None:
     ap.add_argument(
         "--noise-check", action="store_true", help="also score at two decoding seeds and report signal-vs-noise"
     )
-    ap.add_argument("--out", default=os.path.join(_HERE, "score_only_epistasis.jsonl"))
+    ap.add_argument(
+        "--out",
+        default=None,
+        help="output path; default is parameter-stamped score_only_epistasis_n<N>_k<K>.jsonl",
+    )
+    ap.add_argument("--force", action="store_true", help="allow overwriting an existing results artifact")
     args = ap.parse_args()
+
+    # Parameter-stamped by default, and never silently overwritten (ISSUES I-3).
+    out_path = args.out or stamped_path(
+        _HERE, "score_only_epistasis", "jsonl", n=args.n_doubles, k=args.decoding_orders
+    )
+    guard_overwrite(out_path, args.force)
 
     if not PROTEINMPNN_PATH:
         sys.exit("PROTEINMPNN_PATH not set (see .env)")
@@ -224,7 +236,7 @@ def main() -> None:
             }
         )
 
-    with open(args.out, "w") as fh:
+    with open(out_path, "w") as fh:
         for r in rows:
             fh.write(json.dumps(r) + "\n")
 
@@ -247,7 +259,7 @@ def main() -> None:
     if near and far:
         print(f"|eps| median  contacting (CA<=8A, n={len(near)}): {statistics.median([abs(x) for x in near]):.4f}")
         print(f"|eps| median  distal    (CA>8A,  n={len(far)}): {statistics.median([abs(x) for x in far]):.4f}")
-    print(f"\nwrote {args.out}")
+    print(f"\nwrote {out_path}")
 
     if args.noise_check:
         noise_check(pdb, wt_seq, singles, doubles[: min(60, len(doubles))], args.decoding_orders)
