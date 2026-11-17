@@ -813,7 +813,9 @@ def run_openmm_simulation(
 
     if membrane_context:
         try:
-            ff = ForceField("charmm36.xml", "charmm36/water.xml", "charmm36/lipids.xml")
+            from orchestrator.membrane import CHARMM36_MEMBRANE_FORCEFIELDS
+
+            ff = ForceField(*CHARMM36_MEMBRANE_FORCEFIELDS)
         except Exception:
             logger.warning("CHARMM36m XML not found — falling back to AMBER14")
             ff = ForceField("amber14-all.xml", "amber14/tip3pfb.xml")

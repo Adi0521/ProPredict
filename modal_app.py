@@ -253,10 +253,12 @@ def test_membrane_modal() -> dict:
 
     # 2. CHARMM36m force field with lipids
     try:
-        ff = ForceField("charmm36.xml", "charmm36/water.xml", "charmm36/lipids.xml")
+        # Lipids are in charmm36.xml; there is no "charmm36/lipids.xml" (Process/charmm36-lipids-fix.md).
+        ff = ForceField("charmm36.xml", "charmm36/water.xml")
         results["charmm36_ff_ok"] = True
     except Exception as e:  # noqa: BLE001
         results["charmm36_ff_error"] = repr(e)
+        print(results)  # `modal run` shows only prints — without this the failure was invisible
         return results
 
     # 3. Modeller + hydrogens + real addMembrane

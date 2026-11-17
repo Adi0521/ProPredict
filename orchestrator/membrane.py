@@ -24,6 +24,12 @@ from typing import Any, Dict, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
+# OpenMM force-field files for CHARMM36m membrane systems. The lipid parameters (POPC, POPE,
+# DPPC, DMPC, ...) are defined inside charmm36.xml — OpenMM ships no separate lipids file.
+# A nonexistent "charmm36/lipids.xml" used to be listed here, so loading always raised and
+# simulation.py silently fell back to AMBER14 (Process/charmm36-lipids-fix.md).
+CHARMM36_MEMBRANE_FORCEFIELDS: Tuple[str, ...] = ("charmm36.xml", "charmm36/water.xml")
+
 # ---------------------------------------------------------------------------
 # Supported lipid types and their insane.py / CHARMM36m names
 # ---------------------------------------------------------------------------
@@ -221,11 +227,8 @@ def embed_in_membrane_openmm(
         The ForceField object — must include CHARMM36m lipid XML.
         Load with:
             from openmmforcefields.generators import SystemGenerator
-            ff = ForceField(
-                "charmm36.xml",
-                "charmm36/water.xml",
-                "charmm36/lipids.xml",
-            )
+            ff = ForceField("charmm36.xml", "charmm36/water.xml")
+        (lipids are defined in charmm36.xml; OpenMM has no separate lipids file)
     membrane_context : dict
         Should contain {"type": "POPC"} (used to select the lipid residue name).
 

@@ -7,7 +7,7 @@ injecting fake `openmm` / `openmm.app` / `openmmforcefields` modules into sys.mo
 The pure helpers (_resolve_insane, _lipid_name) are tested directly.
 
 The real-binary counterpart is modal_app.py::test_membrane_modal, which runs an actual
-PDBFixer -> ForceField(charmm36 lipids) -> addMembrane build in the Modal image (run:
+PDBFixer -> ForceField(charmm36) -> addMembrane build in the Modal image (run:
 modal run modal_app.py::test_membrane_modal). insane.py is NOT in that image, so
 embed_in_membrane_gromacs is covered here (mocked) only.
 """
@@ -224,3 +224,23 @@ def test_openmm_success_returns_modeller():
     # lipid name normalised and passed through to addMembrane
     _, kwargs = modeller.addMembrane.call_args
     assert kwargs["lipidType"] == "POPE"
+
+
+# ---------------------------------------------------------------------------
+# Real OpenMM force-field files (skips unless OpenMM is installed, e.g. the worker image)
+# ---------------------------------------------------------------------------
+
+
+def test_charmm36_membrane_forcefields_load_with_lipid_templates():
+    """The files simulation.py loads for membrane runs must exist and carry lipid templates.
+
+    Regression: a nonexistent "charmm36/lipids.xml" made ForceField() always raise, and
+    simulation.py's fallback silently ran every membrane system on AMBER14 instead.
+    """
+    openmm_app = pytest.importorskip("openmm.app")
+
+    from orchestrator.membrane import CHARMM36_MEMBRANE_FORCEFIELDS
+
+    ff = openmm_app.ForceField(*CHARMM36_MEMBRANE_FORCEFIELDS)
+    for lipid in ("POPC", "POPE", "DPPC", "DMPC"):
+        assert lipid in ff._templates, f"{lipid} template missing from {CHARMM36_MEMBRANE_FORCEFIELDS}"
