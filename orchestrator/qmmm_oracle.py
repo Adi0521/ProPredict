@@ -54,6 +54,7 @@ they require. None of the xtb/ORCA specifics below are live-verified yet — tre
 design intent to confirm against the tools, not validated behavior. Build tier-3 behind this
 seam once the invariance result says you need it.
 """
+
 from __future__ import annotations
 
 import os
@@ -70,11 +71,11 @@ except Exception:  # pragma: no cover - allows standalone import while scaffoldi
 
 # --- config (mirrors the os.getenv convention in config.py) -----------------------------
 QMMM_ENABLED = os.getenv("QMMM_ENABLED", "False") == "True"
-QMMM_ENGINE = os.getenv("QMMM_ENGINE", "xtb")          # "xtb" (GFN2 rung) | "orca" (DFT rung)
-QMMM_QM_RADIUS = float(os.getenv("QMMM_QM_RADIUS", "5.0"))   # Å shell around ligand + mut sites
+QMMM_ENGINE = os.getenv("QMMM_ENGINE", "xtb")  # "xtb" (GFN2 rung) | "orca" (DFT rung)
+QMMM_QM_RADIUS = float(os.getenv("QMMM_QM_RADIUS", "5.0"))  # Å shell around ligand + mut sites
 QMMM_MAX_CANDIDATES = int(os.getenv("QMMM_MAX_CANDIDATES", "5"))  # tier-3 budget cap
-QMMM_ORCA_METHOD = os.getenv("QMMM_ORCA_METHOD", "r2SCAN-3c")     # DFT rung; dispersion built in
-QMMM_XTB_GFN = os.getenv("QMMM_XTB_GFN", "2")                     # GFN2-xTB screening rung
+QMMM_ORCA_METHOD = os.getenv("QMMM_ORCA_METHOD", "r2SCAN-3c")  # DFT rung; dispersion built in
+QMMM_XTB_GFN = os.getenv("QMMM_XTB_GFN", "2")  # GFN2-xTB screening rung
 
 
 # A fold function turns (sequence, ligand_smiles, protein_copies, seed) -> complex PDB
@@ -85,8 +86,7 @@ QMMM_XTB_GFN = os.getenv("QMMM_XTB_GFN", "2")                     # GFN2-xTB scr
 FoldFn = Callable[[str, str, int, int], str]
 
 
-def _default_fold_fn(sequence: str, ligand_smiles: str,
-                     protein_copies: int = 1, seed: int = 0) -> str:
+def _default_fold_fn(sequence: str, ligand_smiles: str, protein_copies: int = 1, seed: int = 0) -> str:
     """Fold the holo complex via the existing Boltz backend and return the complex PDB.
 
     Wires to call_boltz(sequence, context={"ligands": [...], "protein_copies": N}, seed,
@@ -142,8 +142,7 @@ def _engine_energy(region: dict, engine: str) -> float:
     )
 
 
-def _interaction_energy(complex_pdb: str, mutated_positions: List[int],
-                        engine: str, radius: float) -> float:
+def _interaction_energy(complex_pdb: str, mutated_positions: List[int], engine: str, radius: float) -> float:
     """E_int = E(complex) - E(protein) - E(ligand), all under one QM/MM setup."""
     region = _carve_qm_region(complex_pdb, mutated_positions, radius)
     e_complex = _engine_energy(region, engine)
@@ -210,7 +209,7 @@ def make_qmmm_oracle(
             positions = [i for i in range(len(seq)) if seq[i] != wild_type[i]]
             mut_complex = fold(seq, ligand_smiles, protein_copies, seed)  # thread + re-fold
             e_int = _interaction_energy(mut_complex, positions, engine, radius)
-            fitness = -e_int                            # higher = stronger binding = better
+            fitness = -e_int  # higher = stronger binding = better
             cache[seq] = fitness
             out.append(fitness)
         return out

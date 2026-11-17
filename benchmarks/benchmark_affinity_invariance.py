@@ -23,6 +23,7 @@ Fix those in the backend (see the plan doc), then this script can be folded back
 Usage:
     python benchmark_affinity_invariance.py hiv_pr_resistance_dataset.json results.jsonl [--limit N]
 """
+
 import argparse
 import glob
 import json
@@ -50,8 +51,7 @@ def build_yaml(sequence: str, smiles: str, use_msa: bool) -> dict:
     }
 
 
-def run_boltz(sequence, smiles, seed, use_msa, diffusion_samples, sampling_steps,
-              msa_server_url, timeout=3600):
+def run_boltz(sequence, smiles, seed, use_msa, diffusion_samples, sampling_steps, msa_server_url, timeout=3600):
     with tempfile.TemporaryDirectory() as tmp:
         ypath = os.path.join(tmp, "input.yaml")
         out_dir = os.path.join(tmp, "out")
@@ -59,10 +59,19 @@ def run_boltz(sequence, smiles, seed, use_msa, diffusion_samples, sampling_steps
         with open(ypath, "w") as fh:
             yaml.dump(build_yaml(sequence, smiles, use_msa), fh, default_flow_style=False)
 
-        cmd = ["boltz", "predict", ypath, "--out_dir", out_dir,
-               "--diffusion_samples", str(diffusion_samples),
-               "--sampling_steps", str(sampling_steps),
-               "--seed", str(seed)]
+        cmd = [
+            "boltz",
+            "predict",
+            ypath,
+            "--out_dir",
+            out_dir,
+            "--diffusion_samples",
+            str(diffusion_samples),
+            "--sampling_steps",
+            str(sampling_steps),
+            "--seed",
+            str(seed),
+        ]
         if use_msa:
             cmd += ["--use_msa_server", "--msa_server_url", msa_server_url]
 
@@ -93,10 +102,13 @@ def main():
     ap.add_argument("dataset")
     ap.add_argument("out", help="results .jsonl (appended; reruns skip completed rows)")
     ap.add_argument("--seed", type=int, default=37)
-    ap.add_argument("--no-msa", action="store_true",
-                    help="MSA-off arm. Worth running as an ablation: AF-class models lean "
-                         "hard on the MSA, and an HIV-protease MSA contains both WT and "
-                         "resistant variants, which is a plausible mechanism for invariance.")
+    ap.add_argument(
+        "--no-msa",
+        action="store_true",
+        help="MSA-off arm. Worth running as an ablation: AF-class models lean "
+        "hard on the MSA, and an HIV-protease MSA contains both WT and "
+        "resistant variants, which is a plausible mechanism for invariance.",
+    )
     ap.add_argument("--diffusion-samples", type=int, default=1)
     ap.add_argument("--sampling-steps", type=int, default=200)
     ap.add_argument("--msa-server-url", default="https://api.colabfold.com")
@@ -104,7 +116,7 @@ def main():
     args = ap.parse_args()
 
     data = json.load(open(args.dataset))
-    jobs = data["reference_runs"] + data["records"]   # WT first: needed as the Delta baseline
+    jobs = data["reference_runs"] + data["records"]  # WT first: needed as the Delta baseline
     if args.limit:
         jobs = jobs[: args.limit]
 
@@ -124,17 +136,37 @@ def main():
             if key in done:
                 print(f"[{i}/{len(jobs)}] skip {key}")
                 continue
-            rec = {k: job[k] for k in
-                   ("seq_id", "drug", "drug_name", "mutations", "n_mutations",
-                    "fold_change", "log10_fold_change", "censored")}
+            rec = {
+                k: job[k]
+                for k in (
+                    "seq_id",
+                    "drug",
+                    "drug_name",
+                    "mutations",
+                    "n_mutations",
+                    "fold_change",
+                    "log10_fold_change",
+                    "censored",
+                )
+            }
             rec.update({"msa": use_msa, "seed": args.seed})
             try:
-                rec.update(run_boltz(job["sequence"], job["smiles"], args.seed, use_msa,
-                                     args.diffusion_samples, args.sampling_steps,
-                                     args.msa_server_url))
+                rec.update(
+                    run_boltz(
+                        job["sequence"],
+                        job["smiles"],
+                        args.seed,
+                        use_msa,
+                        args.diffusion_samples,
+                        args.sampling_steps,
+                        args.msa_server_url,
+                    )
+                )
                 rec["ok"] = True
-                print(f"[{i}/{len(jobs)}] {job['seq_id']:>16} {job['drug']} "
-                      f"aff={rec['affinity_pred_value']:+.3f} ({rec['wall_seconds']}s)")
+                print(
+                    f"[{i}/{len(jobs)}] {job['seq_id']:>16} {job['drug']} "
+                    f"aff={rec['affinity_pred_value']:+.3f} ({rec['wall_seconds']}s)"
+                )
             except Exception as e:
                 rec["ok"] = False
                 rec["error"] = str(e)[:500]

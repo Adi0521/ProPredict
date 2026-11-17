@@ -95,5 +95,5 @@ adaptive agent loop, with support for multi-model ensemble prediction.
 | Ligand prep | RDKit + ACPYPE | `conda install -c conda-forge rdkit && pip install acpype` |
 | Ligand docking | GNINA / Vina | download from gnina releases / `pip install vina` |
 | Membrane builder | insane.py | download from Tieleman lab |
-| Structure prediction | Boltz-2 | `pip install git+https://github.com/jwohlwend/boltz` |
+| Structure prediction | Boltz-2 | `pip install -e ".[gpu]"` (pinned commit) |
 | Multi-model (stubs) | RoseTTAFold2, OpenFold | see respective GitHub repos |

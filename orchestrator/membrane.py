@@ -20,23 +20,28 @@ import logging
 import os
 import shutil
 import subprocess
-import tempfile
 from typing import Any, Dict, Optional, Tuple
 
 logger = logging.getLogger(__name__)
+
+# OpenMM force-field files for CHARMM36m membrane systems. The lipid parameters (POPC, POPE,
+# DPPC, DMPC, ...) are defined inside charmm36.xml — OpenMM ships no separate lipids file.
+# A nonexistent "charmm36/lipids.xml" used to be listed here, so loading always raised and
+# simulation.py silently fell back to AMBER14 (Process/charmm36-lipids-fix.md).
+CHARMM36_MEMBRANE_FORCEFIELDS: Tuple[str, ...] = ("charmm36.xml", "charmm36/water.xml")
 
 # ---------------------------------------------------------------------------
 # Supported lipid types and their insane.py / CHARMM36m names
 # ---------------------------------------------------------------------------
 
 _INSANE_LIPID_MAP: Dict[str, str] = {
-    "POPC":  "POPC",
-    "POPE":  "POPE",
-    "DPPC":  "DPPC",
-    "DMPC":  "DMPC",
-    "POPG":  "POPG",
-    "POPS":  "POPS",
-    "CHOL":  "CHOL",
+    "POPC": "POPC",
+    "POPE": "POPE",
+    "DPPC": "DPPC",
+    "DMPC": "DMPC",
+    "POPG": "POPG",
+    "POPS": "POPS",
+    "CHOL": "CHOL",
 }
 
 _DEFAULT_LIPID = "POPC"
@@ -144,14 +149,22 @@ def embed_in_membrane_gromacs(
     # -d  slab distance (bilayer) = 0 means auto
     # -z  box z-dimension (nm); set large enough
     insane_cmd = [
-        "python", script,
-        "-f", pdb_path,
-        "-o", gro_out,
-        "-p", top_out,
-        "-pbc", "square",
-        "-l", f"{lipid}:1",
-        "-d", "0",
-        "-z", "10",
+        "python",
+        script,
+        "-f",
+        pdb_path,
+        "-o",
+        gro_out,
+        "-p",
+        top_out,
+        "-pbc",
+        "square",
+        "-l",
+        f"{lipid}:1",
+        "-d",
+        "0",
+        "-z",
+        "10",
     ]
 
     # TM protein positioning: centre the protein at z=0 (membrane midplane)
@@ -177,10 +190,7 @@ def embed_in_membrane_gromacs(
         )
 
     if not os.path.isfile(gro_out) or not os.path.isfile(top_out):
-        raise RuntimeError(
-            "insane.py completed but output files are missing. "
-            f"Expected: {gro_out}, {top_out}"
-        )
+        raise RuntimeError(f"insane.py completed but output files are missing. Expected: {gro_out}, {top_out}")
 
     logger.info(f"insane.py: membrane system written to {gro_out}")
     return gro_out, top_out
@@ -217,11 +227,8 @@ def embed_in_membrane_openmm(
         The ForceField object — must include CHARMM36m lipid XML.
         Load with:
             from openmmforcefields.generators import SystemGenerator
-            ff = ForceField(
-                "charmm36.xml",
-                "charmm36/water.xml",
-                "charmm36/lipids.xml",
-            )
+            ff = ForceField("charmm36.xml", "charmm36/water.xml")
+        (lipids are defined in charmm36.xml; OpenMM has no separate lipids file)
     membrane_context : dict
         Should contain {"type": "POPC"} (used to select the lipid residue name).
 
@@ -239,22 +246,19 @@ def embed_in_membrane_openmm(
     """
     try:
         from openmm import unit
-        from openmm.app import Modeller
-    except ImportError:
-        raise RuntimeError(
-            "OpenMM is not installed. "
-            "Install: conda install -c conda-forge openmm"
-        )
+        from openmm.app import Modeller  # noqa: F401 — availability probe: fail early if OpenMM is broken
+    except ImportError as err:
+        raise RuntimeError("OpenMM is not installed. Install: conda install -c conda-forge openmm") from err
 
     try:
         # openmmforcefields provides CHARMM36m lipids
         import openmmforcefields  # noqa: F401
-    except ImportError:
+    except ImportError as err:
         raise RuntimeError(
             "openmmforcefields is not installed. "
             "Install: conda install -c conda-forge openmmforcefields\n"
             "This package is required for CHARMM36m lipid parameters."
-        )
+        ) from err
 
     lipid = _lipid_name(membrane_context.get("type"))
     logger.info(f"OpenMM: embedding protein in {lipid} bilayer using CHARMM36m...")
@@ -276,7 +280,7 @@ def embed_in_membrane_openmm(
             f"OpenMM addMembrane failed for lipid '{lipid}': {e}\n"
             "Check that the lipid type is supported by CHARMM36m "
             "and that openmmforcefields is installed."
-        )
+        ) from e
 
     n_atoms = modeller.topology.getNumAtoms()
     logger.info(f"OpenMM: membrane system has {n_atoms} atoms")

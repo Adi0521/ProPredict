@@ -22,6 +22,7 @@ Add the MSA-on arm as an ablation:
 Smoke test on a handful of isolates first:
     modal run benchmark_affinity_invariance_modal.py --limit 6
 """
+
 import json
 import os
 
@@ -29,22 +30,24 @@ from modal_app import app, image
 
 # Mount the existing standalone harness (its build_yaml/run_boltz are reused verbatim) and
 # the dataset, so the GPU function imports the SAME code the CLI runs — no logic fork.
-image = (
-    image
-    .add_local_file(
-        "benchmarks/benchmark_affinity_invariance.py",
-        remote_path="/root/benchmark_affinity_invariance.py",
-    )
-    .add_local_file(
-        "benchmarks/hiv_pr_resistance_dataset.json",
-        remote_path="/root/hiv_pr_resistance_dataset.json",
-    )
+image = image.add_local_file(
+    "benchmarks/benchmark_affinity_invariance.py",
+    remote_path="/root/benchmark_affinity_invariance.py",
+).add_local_file(
+    "benchmarks/hiv_pr_resistance_dataset.json",
+    remote_path="/root/hiv_pr_resistance_dataset.json",
 )
 
 # Columns copied straight from each dataset job onto its result row (same set the CLI uses).
 _PASSTHROUGH = (
-    "seq_id", "drug", "drug_name", "mutations", "n_mutations",
-    "fold_change", "log10_fold_change", "censored",
+    "seq_id",
+    "drug",
+    "drug_name",
+    "mutations",
+    "n_mutations",
+    "fold_change",
+    "log10_fold_change",
+    "censored",
 )
 
 
@@ -63,16 +66,24 @@ def affinity_one(
     shim: identical YAML, identical affinity-key parsing, identical timing.
     """
     import sys
+
     sys.path.insert(0, "/root")
     from benchmark_affinity_invariance import run_boltz
 
     rec = {k: job.get(k) for k in _PASSTHROUGH}
     rec.update({"msa": use_msa, "seed": seed})
     try:
-        rec.update(run_boltz(
-            job["sequence"], job["smiles"], seed, use_msa,
-            diffusion_samples, sampling_steps, msa_server_url,
-        ))
+        rec.update(
+            run_boltz(
+                job["sequence"],
+                job["smiles"],
+                seed,
+                use_msa,
+                diffusion_samples,
+                sampling_steps,
+                msa_server_url,
+            )
+        )
         rec["ok"] = True
     except Exception as e:  # noqa: BLE001 — record the failure, don't kill the sweep
         rec["ok"] = False
@@ -102,7 +113,7 @@ def _spearman(x, y):
     rx, ry = rank(x), rank(y)
     n = len(x)
     mx, my = sum(rx) / n, sum(ry) / n
-    num = sum((a - mx) * (b - my) for a, b in zip(rx, ry))
+    num = sum((a - mx) * (b - my) for a, b in zip(rx, ry, strict=True))
     dx = sum((a - mx) ** 2 for a in rx) ** 0.5
     dy = sum((b - my) ** 2 for b in ry) ** 0.5
     return None if dx == 0 or dy == 0 else num / (dx * dy)
@@ -116,7 +127,7 @@ def _slope(x, y):
         return None
     mx, my = sum(x) / n, sum(y) / n
     den = sum((a - mx) ** 2 for a in x)
-    return None if den == 0 else sum((a - mx) * (b - my) for a, b in zip(x, y)) / den
+    return None if den == 0 else sum((a - mx) * (b - my) for a, b in zip(x, y, strict=True)) / den
 
 
 def _summarize(rows):
@@ -130,8 +141,7 @@ def _summarize(rows):
     for arm in sorted({r["msa"] for r in rows}):
         arm_rows = [r for r in rows if r["msa"] == arm and r.get("ok")]
         # WT baseline per drug (seq_id starting WT_), then Δ for each isolate of that drug.
-        wt = {r["drug"]: r["affinity_pred_value"]
-              for r in arm_rows if str(r["seq_id"]).startswith("WT")}
+        wt = {r["drug"]: r["affinity_pred_value"] for r in arm_rows if str(r["seq_id"]).startswith("WT")}
         pred_delta, exp_delta = [], []
         for r in arm_rows:
             if str(r["seq_id"]).startswith("WT") or r["drug"] not in wt:
@@ -151,12 +161,16 @@ def _summarize(rows):
         print(f"  Spearman(exp, pred) = {rho:+.3f}" if rho is not None else "  Spearman = n/a")
         print(f"  slope(pred~exp)     = {slope:+.4f}" if slope is not None else "  slope = n/a")
         print(f"  pred Δ spread       = {spread:.3f}  (log10 units)")
-        verdict = ("H_invariant (affinity ~blind to mutations)"
-                   if (rho is None or abs(rho) < 0.2 or (slope is not None and abs(slope) < 0.05))
-                   else "H_responsive (affinity tracks resistance)")
+        verdict = (
+            "H_invariant (affinity ~blind to mutations)"
+            if (rho is None or abs(rho) < 0.2 or (slope is not None and abs(slope) < 0.05))
+            else "H_responsive (affinity tracks resistance)"
+        )
         print(f"  --> {verdict}")
-    print("\n(Definitive call: run benchmarks/analyze_affinity_invariance.py on the jsonl — "
-          "it handles PhenoSense censoring at 100 properly.)")
+    print(
+        "\n(Definitive call: run benchmarks/analyze_affinity_invariance.py on the jsonl — "
+        "it handles PhenoSense censoring at 100 properly.)"
+    )
 
 
 @app.local_entrypoint()
@@ -200,12 +214,11 @@ def affinity_invariance(
         for job in jobs
         if (job["seq_id"], job["drug"], use_msa) not in done
     ]
-    print(f"{len(tasks)} jobs to run "
-          f"({len(jobs)} isolates x {len(arms)} MSA arm(s)), {len(done)} already done.")
+    print(f"{len(tasks)} jobs to run ({len(jobs)} isolates x {len(arms)} MSA arm(s)), {len(done)} already done.")
 
     all_rows = []
     if os.path.exists(out):
-        all_rows = [json.loads(l) for l in open(out) if l.strip()]
+        all_rows = [json.loads(line) for line in open(out) if line.strip()]
 
     with open(out, "a") as fh:
         for rec in affinity_one.starmap(tasks, return_exceptions=True):
@@ -215,8 +228,7 @@ def affinity_invariance(
             fh.write(json.dumps(rec) + "\n")
             fh.flush()
             all_rows.append(rec)
-            tag = (f"aff={rec['affinity_pred_value']:+.3f}"
-                   if rec.get("ok") else f"FAILED: {rec.get('error', '')[:60]}")
+            tag = f"aff={rec['affinity_pred_value']:+.3f}" if rec.get("ok") else f"FAILED: {rec.get('error', '')[:60]}"
             print(f"  {rec['seq_id']:>16} {rec['drug']} msa={rec['msa']} {tag}")
 
     _summarize(all_rows)

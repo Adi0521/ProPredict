@@ -23,8 +23,13 @@ RUN micromamba install -y -n base -c conda-forge \
 
 ENV PATH="/opt/conda/bin:$PATH"
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Dependencies come from pyproject.toml (single source of truth). Only pyproject.toml and the
+# stdlib-only extractor are copied first, so this heavy layer caches until dependencies change,
+# not on every source edit. Leaf extras only — see scripts/pyproject_deps.py for why `[all]`
+# can't be passed. The project itself isn't pip-installed: commands run from /app.
+COPY pyproject.toml scripts/pyproject_deps.py /tmp/deps/
+RUN python /tmp/deps/pyproject_deps.py /tmp/deps/pyproject.toml ml modal tracking dev > /tmp/deps/requirements.txt \
+    && pip install --no-cache-dir -r /tmp/deps/requirements.txt
 
 COPY . .
 

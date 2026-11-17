@@ -94,6 +94,9 @@ services:
         condition: service_healthy
     volumes:
       - .:/app
+      # Persist the Hugging Face cache (facebook/esmfold_v1 is ~8 GB) across container
+      # recreation and image rebuilds, so the weights download once per machine, not per container.
+      - hf_cache:/root/.cache/huggingface
     networks:
       - propredict-network
 
@@ -115,6 +118,7 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  hf_cache:
 
 networks:
   propredict-network:

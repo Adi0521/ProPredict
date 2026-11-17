@@ -1,5 +1,6 @@
 from datetime import datetime
-from sqlalchemy import Column, String, Integer, Text, DateTime, create_engine, inspect, text
+
+from sqlalchemy import Column, DateTime, Integer, String, Text, create_engine, inspect, text
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 from config import DATABASE_URL

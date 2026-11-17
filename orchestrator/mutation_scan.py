@@ -25,6 +25,7 @@ Standalone module: takes proteinmpnn_dir / model_name as parameters, not wired t
 agent loop or config.py. Run manually via:
     python -m orchestrator.mutation_scan --pdb myprotein.pdb --sequence MKT...
 """
+
 import logging
 import os
 import subprocess
@@ -46,8 +47,8 @@ def _run_proteinmpnn_conditional_probs(
     tmpdir: str,
     proteinmpnn_dir: str,
     model_name: str = "v_48_020",
-    seed: int = 37,                 # MUST be non-zero — ProteinMPNN's `if args.seed:`
-                                    # check treats 0 as unset and randomizes the seed.
+    seed: int = 37,  # MUST be non-zero — ProteinMPNN's `if args.seed:`
+    # check treats 0 as unset and randomizes the seed.
     num_decoding_orders: int = 8,
 ) -> np.ndarray:
     """
@@ -81,15 +82,24 @@ def _run_proteinmpnn_conditional_probs(
         )
 
     cmd = [
-        sys.executable, run_script,
-        "--pdb_path", pdb_path,
-        "--out_folder", out_dir,
-        "--path_to_model_weights", weights_dir,
-        "--model_name", model_name,
-        "--conditional_probs_only", "1",
-        "--num_seq_per_target", str(num_decoding_orders),
-        "--seed", str(seed),
-        "--batch_size", "1",
+        sys.executable,
+        run_script,
+        "--pdb_path",
+        pdb_path,
+        "--out_folder",
+        out_dir,
+        "--path_to_model_weights",
+        weights_dir,
+        "--model_name",
+        model_name,
+        "--conditional_probs_only",
+        "1",
+        "--num_seq_per_target",
+        str(num_decoding_orders),
+        "--seed",
+        str(seed),
+        "--batch_size",
+        "1",
     ]
     result = subprocess.run(cmd, capture_output=True, text=True, cwd=proteinmpnn_dir)
     if result.returncode != 0:
@@ -151,8 +161,12 @@ def score_candidate_mutations(
 
     with tempfile.TemporaryDirectory() as tmpdir:
         log_p = _run_proteinmpnn_conditional_probs(
-            pdb_string, tmpdir, proteinmpnn_dir, model_name,
-            seed=seed, num_decoding_orders=num_decoding_orders,
+            pdb_string,
+            tmpdir,
+            proteinmpnn_dir,
+            model_name,
+            seed=seed,
+            num_decoding_orders=num_decoding_orders,
         )
 
     candidates: List[Dict[str, Any]] = []
@@ -164,7 +178,9 @@ def score_candidate_mutations(
             # skip rather than crash, but surface it so the mismatch isn't silent.
             logger.warning(
                 "skipping position %d: out of range for sequence length %d / log_p length %d",
-                pos, len(sequence), log_p.shape[0],
+                pos,
+                len(sequence),
+                log_p.shape[0],
             )
             continue
         wt_aa = sequence[idx]
@@ -175,10 +191,14 @@ def score_candidate_mutations(
             if mut_aa == wt_aa:
                 continue
             score = float(log_p[idx, mut_idx] - log_p[idx, wt_idx])
-            candidates.append({
-                "position": pos, "from_aa": wt_aa, "to_aa": mut_aa,
-                "score": round(score, 4),
-            })
+            candidates.append(
+                {
+                    "position": pos,
+                    "from_aa": wt_aa,
+                    "to_aa": mut_aa,
+                    "score": round(score, 4),
+                }
+            )
 
     candidates.sort(key=lambda c: c["score"], reverse=True)
     return candidates[:top_k]
@@ -186,6 +206,7 @@ def score_candidate_mutations(
 
 if __name__ == "__main__":
     import argparse
+
     ap = argparse.ArgumentParser()
     ap.add_argument("--pdb", required=True, help="Path to a PDB file")
     ap.add_argument("--sequence", required=True)
@@ -194,8 +215,6 @@ if __name__ == "__main__":
     args = ap.parse_args()
     with open(args.pdb) as fh:
         pdb_str = fh.read()
-    results = score_candidate_mutations(
-        pdb_str, args.sequence, top_k=args.top_k, proteinmpnn_dir=args.proteinmpnn_dir
-    )
+    results = score_candidate_mutations(pdb_str, args.sequence, top_k=args.top_k, proteinmpnn_dir=args.proteinmpnn_dir)
     for r in results:
         print(f"{r['from_aa']}{r['position']}{r['to_aa']}: {r['score']:+.4f}")

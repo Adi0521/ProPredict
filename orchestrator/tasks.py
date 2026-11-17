@@ -4,52 +4,52 @@ import logging
 import random
 import time
 import uuid
-from typing import Optional, Dict, Any, List, Callable
-from celery import Celery, Task
 from datetime import datetime
+from typing import Any, Callable, Dict, List, Optional
+
+import redis as redis_lib
 import requests
+from celery import Celery, Task
 
 from config import (
+    AGENT_ENABLED,
+    BOLTZ_ENABLED,
+    CACHE_TTL,
     CELERY_BROKER_URL,
     CELERY_RESULT_BACKEND,
-    ROSETTA_ENABLED,
-    GROMACS_ENABLED,
-    OPENMM_ENABLED,
-    ROSETTAFOLD_ENABLED,
-    OPENFOLD_ENABLED,
-    BOLTZ_ENABLED,
-    MD_PRODUCTION_NS,
-    AGENT_ENABLED,
     ENSEMBLE_NUM_SEEDS,
+    GROMACS_ENABLED,
+    MD_PRODUCTION_NS,
+    OPENFOLD_ENABLED,
+    OPENMM_ENABLED,
+    REDIS_CACHE_PREFIX,
+    REDIS_URL,
     REFINEMENT_MAX_ITERATIONS,
     REFINEMENT_PLDDT_PLATEAU_DELTA,
-    REDIS_URL,
-    CACHE_TTL,
-    REDIS_CACHE_PREFIX,
+    ROSETTA_ENABLED,
+    ROSETTAFOLD_ENABLED,
 )
-from models.schemas import StructurePrediction, PostProcessingResult
-
-from orchestrator.backends.esmfold import (
-    call_esmfold_api,
-    _parse_plddt_from_pdb,
-)
+from models.schemas import StructurePrediction
+from orchestrator.agent import run_agent_refinement
 from orchestrator.backends.boltz import call_boltz
-from orchestrator.backends.stubs import call_rosettafold2, call_openfold
-from orchestrator.ensemble import align_and_compare_structures
-from orchestrator.simulation import (
-    run_rosetta_relax,
-    run_gromacs_em,
-    run_gromacs_md,
-    run_openmm_simulation,
+from orchestrator.backends.esmfold import (
+    _parse_plddt_from_pdb,
+    call_esmfold_api,
 )
-from orchestrator.scoring import count_clashes, compute_post_processing, validate_simulation_metrics
+from orchestrator.backends.stubs import call_openfold, call_rosettafold2
+from orchestrator.ensemble import align_and_compare_structures
 from orchestrator.progress import (
+    STAGE_FINALIZING,
     STAGE_FOLDING,
     STAGE_POST_PROCESSING,
     STAGE_SIMULATION,
-    STAGE_FINALIZING,
 )
-from orchestrator.agent import run_agent_refinement
+from orchestrator.scoring import compute_post_processing, validate_simulation_metrics
+from orchestrator.simulation import (
+    run_gromacs_md,
+    run_openmm_simulation,
+    run_rosetta_relax,
+)
 
 # Configure Celery app
 app = Celery(
@@ -68,7 +68,6 @@ app.conf.update(
 
 logger = logging.getLogger(__name__)
 
-import redis as redis_lib
 
 _redis_client: Optional[redis_lib.Redis] = None
 
@@ -84,6 +83,7 @@ def _get_redis() -> redis_lib.Redis:
 # ---------------------------------------------------------------------------
 # Celery task base with webhook callbacks
 # ---------------------------------------------------------------------------
+
 
 class CallbackTask(Task):
     """Task that sends webhook callbacks on completion."""
@@ -103,6 +103,7 @@ class CallbackTask(Task):
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def generate_cache_key(sequence: str, context: Dict[str, Any], pipeline: str = "esm_base") -> str:
     """Generate a deterministic cache key from sequence and context."""
     context_str = json.dumps(context, sort_keys=True)
@@ -120,7 +121,7 @@ def send_webhook(webhook_url: str, payload: Dict[str, Any]) -> None:
         except requests.exceptions.RequestException as e:
             logger.warning(f"Webhook send failed (attempt {attempt + 1}): {e}")
             if attempt < 2:
-                time.sleep(2 ** attempt)
+                time.sleep(2**attempt)
             else:
                 logger.error("Webhook failed after 3 attempts")
 
@@ -128,6 +129,7 @@ def send_webhook(webhook_url: str, payload: Dict[str, Any]) -> None:
 # ---------------------------------------------------------------------------
 # Main pipeline
 # ---------------------------------------------------------------------------
+
 
 def _run_prediction_core(
     request_data: Dict[str, Any],
@@ -216,8 +218,11 @@ def _run_prediction_core(
                     predictions.append(boltz_pred)
                     logger.info(
                         f"[boltz2] seed={seed}: mean pLDDT={boltz_pred.mean_plddt:.2f}"
-                        + (f", affinity={boltz_pred.affinity_score:.3f} log10(IC50 uM)"
-                           if boltz_pred.affinity_score is not None else "")
+                        + (
+                            f", affinity={boltz_pred.affinity_score:.3f} log10(IC50 uM)"
+                            if boltz_pred.affinity_score is not None
+                            else ""
+                        )
                     )
                 except (RuntimeError, FileNotFoundError, ValueError) as e:
                     logger.warning(f"Boltz-2 seed={seed} skipped: {e}")
@@ -242,9 +247,7 @@ def _run_prediction_core(
 
             logger.info(f"Computing inter-model disagreement across {len(best_per_model)} models...")
             try:
-                inter_model_data = align_and_compare_structures(
-                    [p.structure_pdb for p in best_per_model.values()]
-                )
+                inter_model_data = align_and_compare_structures([p.structure_pdb for p in best_per_model.values()])
             except Exception as e:
                 logger.warning(f"Inter-model comparison failed: {e}")
 
@@ -257,7 +260,9 @@ def _run_prediction_core(
         if AGENT_ENABLED:
             logger.info("Running Claude agent refinement loop...")
             post_proc, updated_pdb = run_agent_refinement(
-                best_prediction, context, sequence,
+                best_prediction,
+                context,
+                sequence,
                 inter_model_data=inter_model_data or None,
             )
             if updated_pdb:
@@ -265,12 +270,8 @@ def _run_prediction_core(
                 # silently dropped everything not listed (affinity_score, affinity_probability,
                 # backend_version), so the relaxed structure lost its provenance and its
                 # affinity. Only the coordinates changed here — carry the rest forward.
-                best_prediction = best_prediction.model_copy(
-                    update={"structure_pdb": updated_pdb}
-                )
-            logger.info(
-                f"Agent decision: {post_proc.decision} — {post_proc.agent_reasoning or '(no reasoning)'}"
-            )
+                best_prediction = best_prediction.model_copy(update={"structure_pdb": updated_pdb})
+            logger.info(f"Agent decision: {post_proc.decision} — {post_proc.agent_reasoning or '(no reasoning)'}")
         else:
             post_proc = compute_post_processing(best_prediction)
             logger.info(
@@ -282,10 +283,7 @@ def _run_prediction_core(
             prev_best_plddt = best_prediction.mean_plddt
             refinement_iterations = 0
 
-            while (
-                post_proc.decision in ("refine", "escalate")
-                and refinement_iterations < REFINEMENT_MAX_ITERATIONS
-            ):
+            while post_proc.decision in ("refine", "escalate") and refinement_iterations < REFINEMENT_MAX_ITERATIONS:
                 refinement_iterations += 1
                 logger.info(
                     f"Refinement iteration {refinement_iterations}/{REFINEMENT_MAX_ITERATIONS} "
@@ -300,10 +298,7 @@ def _run_prediction_core(
                     try:
                         new_pred = call_boltz(sequence, context=context, seed=rand_seed)
                         predictions.append(new_pred)
-                        logger.info(
-                            f"[boltz2] refinement seed={rand_seed}: "
-                            f"mean pLDDT={new_pred.mean_plddt:.2f}"
-                        )
+                        logger.info(f"[boltz2] refinement seed={rand_seed}: mean pLDDT={new_pred.mean_plddt:.2f}")
                         if new_pred.mean_plddt > best_prediction.mean_plddt:
                             best_prediction = new_pred
                             improved = True
@@ -323,11 +318,13 @@ def _run_prediction_core(
                             # See the note on the agent branch above: model_copy preserves
                             # affinity and backend_version, which the old field-by-field
                             # rebuild dropped on every relax.
-                            best_prediction = best_prediction.model_copy(update={
-                                "structure_pdb": relaxed_pdb,
-                                "plddt_scores": relaxed_plddt or best_prediction.plddt_scores,
-                                "mean_plddt": relaxed_mean,
-                            })
+                            best_prediction = best_prediction.model_copy(
+                                update={
+                                    "structure_pdb": relaxed_pdb,
+                                    "plddt_scores": relaxed_plddt or best_prediction.plddt_scores,
+                                    "mean_plddt": relaxed_mean,
+                                }
+                            )
                             improved = True
                         post_proc.rosetta_energy = rosetta_score
                         logger.info(f"Rosetta relax: score={rosetta_score:.1f}, pLDDT={relaxed_mean:.2f}")
@@ -367,11 +364,13 @@ def _run_prediction_core(
                             f"Running OpenMM simulation at pH {pH:.1f}, "
                             f"{temperature_c:.1f} °C, {MD_PRODUCTION_NS} ns"
                             + (f", membrane={membrane_ctx.get('type')}" if membrane_ctx else "")
-                            + (f", ligands={[l.get('name') for l in ligand_ctx]}" if ligand_ctx else "")
+                            + (f", ligands={[lig.get('name') for lig in ligand_ctx]}" if ligand_ctx else "")
                         )
                         sim_result = run_openmm_simulation(
                             best_prediction.structure_pdb,
-                            pH=pH, temperature_c=temperature_c, production_ns=MD_PRODUCTION_NS,
+                            pH=pH,
+                            temperature_c=temperature_c,
+                            production_ns=MD_PRODUCTION_NS,
                             membrane_context=membrane_ctx,
                             ligand_contexts=ligand_ctx if ligand_ctx else None,
                         )
@@ -380,11 +379,13 @@ def _run_prediction_core(
                             f"Running GROMACS MD at pH {pH:.1f}, "
                             f"{temperature_c:.1f} °C, {MD_PRODUCTION_NS} ns"
                             + (f", membrane={membrane_ctx.get('type')}" if membrane_ctx else "")
-                            + (f", ligands={[l.get('name') for l in ligand_ctx]}" if ligand_ctx else "")
+                            + (f", ligands={[lig.get('name') for lig in ligand_ctx]}" if ligand_ctx else "")
                         )
                         sim_result = run_gromacs_md(
                             best_prediction.structure_pdb,
-                            pH=pH, temperature_c=temperature_c, production_ns=MD_PRODUCTION_NS,
+                            pH=pH,
+                            temperature_c=temperature_c,
+                            production_ns=MD_PRODUCTION_NS,
                             membrane_context=membrane_ctx,
                             ligand_contexts=ligand_ctx if ligand_ctx else None,
                         )

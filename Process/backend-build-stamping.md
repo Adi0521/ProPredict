@@ -15,6 +15,7 @@ this:
 ```python
 try:
     import boltz
+
     env["boltz_version"] = getattr(boltz, "__version__", "installed (unknown version)")
 except ImportError:
     pass
@@ -71,8 +72,11 @@ relax). Both rebuilt it field-by-field:
 ```python
 best_prediction = StructurePrediction(
     structure_pdb=relaxed_pdb,
-    plddt_scores=..., mean_plddt=..., seed=..., model_name=...,
-)   # affinity_score, affinity_probability, backend_version -> silently GONE
+    plddt_scores=...,
+    mean_plddt=...,
+    seed=...,
+    model_name=...,
+)  # affinity_score, affinity_probability, backend_version -> silently GONE
 ```
 
 So after any relax, the stored `ensemble_result` lost its Boltz affinity. **This was a live

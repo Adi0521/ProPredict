@@ -127,6 +127,6 @@ not usable for ranking. The strongest drug in the panel does not reach practical
 - `benchmarks/benchmark_affinity_invariance.py` — standalone harness (YAML build, affinity-key
   parsing, timing).
 - `benchmarks/analyze_affinity_invariance.py` — the definitive analysis (censoring-aware).
-- `benchmarks/affinity_invariance_results.jsonl` — **the 164-row result set. Commit this.**
+- `benchmarks/affinity_invariance_results.jsonl` — the 164-row result set (committed in `bbef345`).
 - `benchmarks/hiv_pr_resistance_dataset.json` / `build_hiv_pr_dataset.py` — the stratified
   dataset and its builder.

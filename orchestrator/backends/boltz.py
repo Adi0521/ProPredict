@@ -5,7 +5,7 @@ import logging
 import os
 import subprocess
 import tempfile
-from typing import Optional, Dict, Any, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from config import (
     BOLTZ_DIFFUSION_SAMPLES,
@@ -21,7 +21,8 @@ logger = logging.getLogger(__name__)
 
 def _cif_to_pdb(cif_path: str) -> str:
     """Convert a Boltz-2 CIF output file to a PDB string via BioPython."""
-    from Bio.PDB import MMCIFParser, PDBIO  # type: ignore
+    from Bio.PDB import PDBIO, MMCIFParser  # type: ignore
+
     parser = MMCIFParser(QUIET=True)
     structure = parser.get_structure("boltz", cif_path)
     pdbio = PDBIO()
@@ -145,10 +146,10 @@ def call_boltz(
     BioPython, reads pLDDT from the confidence JSON, and optionally reads
     binding affinity when ligands are present.
 
-    Install: pip install git+https://github.com/jwohlwend/boltz
+    Install: pip install -e ".[gpu]"  (pinned commit — see pyproject.toml)
     Then set BOLTZ_ENABLED=True.
     """
-    import yaml  # pyyaml — guaranteed by requirements.txt
+    import yaml  # pyyaml — a core dependency in pyproject.toml
 
     ctx = context or {}
     ligands = ctx.get("ligands") or []
@@ -169,9 +170,7 @@ def call_boltz(
     if protein_copies is None:
         protein_copies = int(ctx.get("protein_copies", 1) or 1)
 
-    boltz_input, affinity_binder = _build_boltz_input(
-        sequence, context=ctx, protein_copies=protein_copies
-    )
+    boltz_input, affinity_binder = _build_boltz_input(sequence, context=ctx, protein_copies=protein_copies)
     if protein_copies > 1:
         logger.info(f"Boltz-2 homo-oligomer: {protein_copies} protein copies")
 
@@ -184,11 +183,17 @@ def call_boltz(
             yaml.dump(boltz_input, fh, default_flow_style=False)
 
         cmd = [
-            "boltz", "predict", yaml_path,
-            "--out_dir", out_dir,
-            "--diffusion_samples", str(BOLTZ_DIFFUSION_SAMPLES),
-            "--sampling_steps", str(BOLTZ_SAMPLING_STEPS),
-            "--seed", str(seed),
+            "boltz",
+            "predict",
+            yaml_path,
+            "--out_dir",
+            out_dir,
+            "--diffusion_samples",
+            str(BOLTZ_DIFFUSION_SAMPLES),
+            "--sampling_steps",
+            str(BOLTZ_SAMPLING_STEPS),
+            "--seed",
+            str(seed),
         ]
         if BOLTZ_USE_MSA:
             cmd += ["--use_msa_server", "--msa_server_url", BOLTZ_MSA_SERVER_URL]
@@ -200,15 +205,12 @@ def call_boltz(
         cif_hits = sorted(glob.glob(os.path.join(out_dir, "**", "*model_0.cif"), recursive=True))
         logger.info(f"Boltz-2 output tree: {glob.glob(os.path.join(out_dir, '**', '*'), recursive=True)}")
         if not cif_hits:
-            raise FileNotFoundError(
-                f"Boltz-2 produced no *model_0.cif under {out_dir}. "
-                f"stderr: {proc.stderr[-1000:]}"
-            )
+            raise FileNotFoundError(f"Boltz-2 produced no *model_0.cif under {out_dir}. stderr: {proc.stderr[-1000:]}")
         cif_path = cif_hits[0]
-        results_dir = os.path.dirname(cif_path)
         pdb_string = _cif_to_pdb(cif_path)
 
         import importlib.metadata
+
         try:
             _boltz_major = int(importlib.metadata.version("boltz").split(".")[0])
         except importlib.metadata.PackageNotFoundError:
@@ -255,10 +257,8 @@ def call_boltz(
 
         logger.info(
             f"Boltz-2 succeeded. Mean pLDDT: {mean_plddt:.2f}"
-            + (f", affinity: {affinity_score:.3f} log10(IC50 uM)"
-               if affinity_score is not None else "")
-            + (f", binder probability: {affinity_probability:.3f}"
-               if affinity_probability is not None else "")
+            + (f", affinity: {affinity_score:.3f} log10(IC50 uM)" if affinity_score is not None else "")
+            + (f", binder probability: {affinity_probability:.3f}" if affinity_probability is not None else "")
         )
 
         return StructurePrediction(

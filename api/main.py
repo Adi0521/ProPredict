@@ -4,25 +4,28 @@ import os
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Optional
+from typing import Annotated, Optional
 
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import JSONResponse, PlainTextResponse
 from sqlalchemy.orm import Session
 
 from config import API_DEBUG, LOG_LEVEL
-from models.database import Job, SessionLocal, get_db, init_db
-from models.schemas import PredictionRequest, PredictionResponse, JobStatus, StructurePrediction
+from models.database import Job, get_db, init_db
+from models.schemas import JobStatus, PredictionRequest, PredictionResponse
+from orchestrator.progress import PROGRESS_DICT_NAME, celery_state_to_status
+
+# FastAPI's recommended dependency style (Annotated) — keeps the DI call out of argument defaults.
+SessionDep = Annotated[Session, Depends(get_db)]
 
 MODAL_ENABLED = os.getenv("MODAL_ENABLED", "False") == "True"
 
 if MODAL_ENABLED:
     import modal
+
     _modal_predict = modal.Function.from_name("propredict", "run_prediction")
 else:
     from orchestrator.tasks import predict_protein_structure
-
-from orchestrator.progress import PROGRESS_DICT_NAME, celery_state_to_status
 
 
 def _read_modal_progress(run_id: str) -> Optional[dict]:
@@ -32,6 +35,7 @@ def _read_modal_progress(run_id: str) -> Optional[dict]:
         return d.get(run_id)
     except Exception:
         return None
+
 
 # Configure logging
 logging.basicConfig(level=LOG_LEVEL)
@@ -62,7 +66,7 @@ async def health_check():
 
 
 @app.post("/predict", response_model=JobStatus)
-async def predict(request: PredictionRequest, db: Session = Depends(get_db)):
+async def predict(request: PredictionRequest, db: SessionDep):
     """
     Submit a protein structure prediction job.
 
@@ -113,11 +117,11 @@ async def predict(request: PredictionRequest, db: Session = Depends(get_db)):
         raise
     except Exception as e:
         logger.error(f"Error submitting prediction request: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to submit prediction")
+        raise HTTPException(status_code=500, detail="Failed to submit prediction") from e
 
 
 @app.get("/predict/{run_id}", response_model=PredictionResponse)
-async def get_prediction(run_id: str, db: Session = Depends(get_db)):
+async def get_prediction(run_id: str, db: SessionDep):
     """Retrieve full prediction results by job ID."""
     try:
         logger.info(f"Fetching results for run ID: {run_id}")
@@ -196,11 +200,11 @@ async def get_prediction(run_id: str, db: Session = Depends(get_db)):
         raise
     except Exception as e:
         logger.error(f"Error retrieving results for {run_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to retrieve results")
+        raise HTTPException(status_code=500, detail="Failed to retrieve results") from e
 
 
 @app.get("/predict/{run_id}/status", response_model=JobStatus)
-async def get_job_status(run_id: str, db: Session = Depends(get_db)):
+async def get_job_status(run_id: str, db: SessionDep):
     """Get job status without full results."""
     try:
         job = db.get(Job, run_id)
@@ -241,7 +245,7 @@ async def get_job_status(run_id: str, db: Session = Depends(get_db)):
         raise
     except Exception as e:
         logger.error(f"Error getting status for {run_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to get job status")
+        raise HTTPException(status_code=500, detail="Failed to get job status") from e
 
 
 def _get_completed_result(run_id: str, db: Session) -> dict:
@@ -255,10 +259,10 @@ def _get_completed_result(run_id: str, db: Session) -> dict:
         fc = modal.functions.FunctionCall.from_id(job.modal_call_id)
         try:
             return fc.get(timeout=0)
-        except TimeoutError:
-            raise HTTPException(status_code=404, detail=f"PDB not available — job is still running")
+        except TimeoutError as err:
+            raise HTTPException(status_code=404, detail="PDB not available — job is still running") from err
         except Exception as exc:
-            raise HTTPException(status_code=400, detail=f"PDB not available — job failed: {exc}")
+            raise HTTPException(status_code=400, detail=f"PDB not available — job failed: {exc}") from exc
     else:
         task = predict_protein_structure.AsyncResult(run_id)
         if task.state != "SUCCESS" or not task.result:
@@ -271,7 +275,7 @@ def _get_completed_result(run_id: str, db: Session) -> dict:
 
 
 @app.get("/predict/{run_id}/pdb")
-async def get_pdb(run_id: str, db: Session = Depends(get_db)):
+async def get_pdb(run_id: str, db: SessionDep):
     """
     Download the predicted PDB structure file directly.
     Returns a .pdb file attachment ready to open in PyMOL, ChimeraX, etc.
@@ -291,7 +295,7 @@ async def get_pdb(run_id: str, db: Session = Depends(get_db)):
 
 
 @app.get("/predict/{run_id}/simulation-pdb")
-async def get_simulation_pdb(run_id: str, db: Session = Depends(get_db)):
+async def get_simulation_pdb(run_id: str, db: SessionDep):
     """
     Download the full simulation-ready PDB (post-solvation / post-docking).
 
@@ -330,4 +334,5 @@ async def http_exception_handler(request, exc):
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000, debug=API_DEBUG)

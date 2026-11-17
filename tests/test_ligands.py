@@ -14,6 +14,7 @@ parameterize_ligand_acpype has real coverage there. GNINA is still absent (CUDA-
 binary — deferred, see ROADMAP), so dock_gnina is covered here (mocked) only; the real
 docking path is exercised end-to-end via the Vina fallback in test_ligands_modal.
 """
+
 import os
 import sys
 from unittest.mock import MagicMock, patch
@@ -21,20 +22,20 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from orchestrator.ligands import (
-    smiles_to_3d,
+    _all_ca_coords,
+    _ca_centroid,
     dock_gnina,
     dock_vina,
     parameterize_ligand_acpype,
     parameterize_ligand_openff,
     prepare_ligands,
-    _ca_centroid,
-    _all_ca_coords,
+    smiles_to_3d,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _fake_rdkit(mol_from_smiles="__mol__", embed_result=0):
     """
@@ -83,6 +84,7 @@ def _write(tmp_path, name, text):
 # smiles_to_3d
 # ---------------------------------------------------------------------------
 
+
 def test_smiles_to_3d_rdkit_missing_raises(tmp_path):
     # rdkit genuinely isn't installed -> the internal import raises ImportError.
     with patch.dict(sys.modules, {"rdkit": None}):
@@ -116,6 +118,7 @@ def test_smiles_to_3d_success_returns_path(tmp_path):
 # _ca_centroid / _all_ca_coords (pure Python)
 # ---------------------------------------------------------------------------
 
+
 def test_all_ca_coords_parses_only_ca_atoms(tmp_path):
     pdb = _write(tmp_path, "p.pdb", _PDB)
     coords = _all_ca_coords(pdb)
@@ -145,6 +148,7 @@ def test_ca_helpers_on_missing_file():
 # ---------------------------------------------------------------------------
 # dock_gnina
 # ---------------------------------------------------------------------------
+
 
 def test_dock_gnina_binary_missing_raises(tmp_path):
     with patch("orchestrator.ligands.shutil.which", return_value=None):
@@ -183,7 +187,7 @@ def test_dock_gnina_blind_command(mock_run, tmp_path):
 
     mock_run.side_effect = _side
     with patch("orchestrator.ligands.shutil.which", return_value="/usr/bin/gnina"):
-        out = dock_gnina("lig.sdf", receptor, None, out_dir)
+        dock_gnina("lig.sdf", receptor, None, out_dir)
 
     cmd = mock_run.call_args.args[0]
     assert "--autobox_ligand" in cmd
@@ -213,6 +217,7 @@ def test_dock_gnina_missing_output_raises(mock_run, tmp_path):
 # dock_vina — import guards only (real happy path lives in test_ligands_modal)
 # ---------------------------------------------------------------------------
 
+
 def test_dock_vina_missing_vina_raises(tmp_path):
     with patch.dict(sys.modules, {"vina": None}):
         with pytest.raises(RuntimeError, match="vina is not installed"):
@@ -230,6 +235,7 @@ def test_dock_vina_missing_rdkit_raises(tmp_path):
 # ---------------------------------------------------------------------------
 # parameterize_ligand_acpype
 # ---------------------------------------------------------------------------
+
 
 def test_acpype_missing_raises(tmp_path):
     with patch("orchestrator.ligands.shutil.which", return_value=None):
@@ -284,6 +290,7 @@ def test_acpype_success_but_outputs_missing(mock_run, tmp_path):
 # parameterize_ligand_openff — import guard
 # ---------------------------------------------------------------------------
 
+
 def test_openff_missing_toolkit_raises(tmp_path):
     with patch.dict(sys.modules, {"openff.toolkit": None}):
         with pytest.raises(RuntimeError, match="openff-toolkit is not installed"):
@@ -293,6 +300,7 @@ def test_openff_missing_toolkit_raises(tmp_path):
 # ---------------------------------------------------------------------------
 # prepare_ligands — the GNINA -> Vina -> undocked fallback chain
 # ---------------------------------------------------------------------------
+
 
 def test_prepare_ligands_skips_ligand_without_smiles(tmp_path):
     out = prepare_ligands([{"name": "NOSMI"}], _PDB, str(tmp_path))
@@ -305,8 +313,10 @@ def test_prepare_ligands_skips_when_conformer_fails(mock_s2d, tmp_path):
     assert out == []
 
 
-@patch("orchestrator.ligands.parameterize_ligand_acpype",
-       return_value={"itp": "/x/LIG.itp", "gro": "/x/LIG.gro", "mol2": "/x/LIG.mol2"})
+@patch(
+    "orchestrator.ligands.parameterize_ligand_acpype",
+    return_value={"itp": "/x/LIG.itp", "gro": "/x/LIG.gro", "mol2": "/x/LIG.mol2"},
+)
 @patch("orchestrator.ligands.dock_gnina", return_value="/x/docked.sdf")
 @patch("orchestrator.ligands.smiles_to_3d", return_value="/x/LIG.sdf")
 def test_prepare_ligands_gnina_success_acpype(mock_s2d, mock_gnina, mock_acpype, tmp_path):
@@ -343,9 +353,7 @@ def test_prepare_ligands_falls_back_to_undocked(mock_s2d, mock_gnina, mock_vina,
 @patch("orchestrator.ligands.dock_gnina", return_value="/x/docked.sdf")
 @patch("orchestrator.ligands.smiles_to_3d", return_value="/x/LIG.sdf")
 def test_prepare_ligands_use_openff(mock_s2d, mock_gnina, mock_openff, tmp_path):
-    out = prepare_ligands(
-        [{"name": "LIG", "smiles": "CCO"}], _PDB, str(tmp_path), use_openff=True
-    )
+    out = prepare_ligands([{"name": "LIG", "smiles": "CCO"}], _PDB, str(tmp_path), use_openff=True)
     assert out[0]["parameterizer"] == "openff"
     assert out[0]["xml"] == "/x/LIG.xml"
     mock_openff.assert_called_once()

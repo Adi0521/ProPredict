@@ -6,6 +6,7 @@ patched subprocess.run) — no real weights or binary required. The integration 
 at the bottom shells out to a real ProteinMPNN clone and is skipped unless
 PROTEINMPNN_PATH (+ a test PDB/sequence) are provided. Mirrors tests/test_boltz.py.
 """
+
 import logging
 import os
 from unittest.mock import MagicMock, patch
@@ -31,15 +32,16 @@ def _synthetic_log_p() -> np.ndarray:
       pos2 (wt C, idx1): G=-0.5 -> score +2.5
     """
     lp = np.full((2, 21), -3.0)
-    lp[0, 2] = -1.0   # A1D -> +2.0
-    lp[0, 3] = -2.0   # A1E -> +1.0
-    lp[1, 5] = -0.5   # C2G -> +2.5
+    lp[0, 2] = -1.0  # A1D -> +2.0
+    lp[0, 3] = -2.0  # A1E -> +1.0
+    lp[1, 5] = -0.5  # C2G -> +2.5
     return lp
 
 
 # ---------------------------------------------------------------------------
 # score_candidate_mutations — formula, sort, truncation, filtering
 # ---------------------------------------------------------------------------
+
 
 @patch(_PATCH_TARGET)
 def test_scores_formula_and_sort_order(mock_run):
@@ -62,9 +64,7 @@ def test_top_k_truncation(mock_run):
 @patch(_PATCH_TARGET)
 def test_positions_filter_restricts_scan(mock_run):
     mock_run.return_value = _synthetic_log_p()
-    res = score_candidate_mutations(
-        "PDBSTR", "AC", positions=[2], top_k=50, proteinmpnn_dir="/fake"
-    )
+    res = score_candidate_mutations("PDBSTR", "AC", positions=[2], top_k=50, proteinmpnn_dir="/fake")
     assert all(c["position"] == 2 and c["from_aa"] == "C" for c in res)
     assert res[0] == {"position": 2, "from_aa": "C", "to_aa": "G", "score": 2.5}
     assert len(res) == 19  # 20 standard AA minus the wild-type C
@@ -74,9 +74,7 @@ def test_positions_filter_restricts_scan(mock_run):
 def test_out_of_range_position_skipped_with_warning(mock_run, caplog):
     mock_run.return_value = _synthetic_log_p()
     with caplog.at_level(logging.WARNING):
-        res = score_candidate_mutations(
-            "PDBSTR", "AC", positions=[5], proteinmpnn_dir="/fake"
-        )
+        res = score_candidate_mutations("PDBSTR", "AC", positions=[5], proteinmpnn_dir="/fake")
     assert res == []
     assert "out of range" in caplog.text
 
@@ -90,6 +88,7 @@ def test_missing_proteinmpnn_dir_raises_before_subprocess():
 # ---------------------------------------------------------------------------
 # _run_proteinmpnn_conditional_probs — subprocess / filesystem error paths
 # ---------------------------------------------------------------------------
+
 
 def test_missing_run_script_raises(tmp_path):
     # tmp_path has no protein_mpnn_run.py -> isfile() is False.
@@ -122,6 +121,7 @@ def test_missing_npz_output_raises(mock_srun, tmp_path):
 # (see mutation-plans/Process-plan-determinism-fix.md)
 # ---------------------------------------------------------------------------
 
+
 def test_seed_zero_raises():
     # ProteinMPNN's `if args.seed:` treats 0 as unset -> random seed. Must fail fast,
     # before any filesystem work, so no run_script stub is needed.
@@ -138,9 +138,7 @@ def test_cmd_passes_nonzero_seed_and_decoding_orders(mock_srun, tmp_path):
     np.savez(npz_dir / "out.npz", log_p=np.zeros((3, 2, 21)))
     mock_srun.return_value = MagicMock(returncode=0, stdout="", stderr="")
 
-    _run_proteinmpnn_conditional_probs(
-        "PDBSTR", str(tmp_path), str(tmp_path), seed=37, num_decoding_orders=3
-    )
+    _run_proteinmpnn_conditional_probs("PDBSTR", str(tmp_path), str(tmp_path), seed=37, num_decoding_orders=3)
 
     cmd = mock_srun.call_args[0][0]
     assert cmd[cmd.index("--seed") + 1] == "37"
@@ -157,9 +155,7 @@ def test_averages_over_decoding_orders(mock_srun, tmp_path):
     np.savez(npz_dir / "out.npz", log_p=log_p)
     mock_srun.return_value = MagicMock(returncode=0, stdout="", stderr="")
 
-    out = _run_proteinmpnn_conditional_probs(
-        "PDBSTR", str(tmp_path), str(tmp_path), seed=37, num_decoding_orders=3
-    )
+    out = _run_proteinmpnn_conditional_probs("PDBSTR", str(tmp_path), str(tmp_path), seed=37, num_decoding_orders=3)
     assert out.shape == (2, 21)
     np.testing.assert_allclose(out, log_p.mean(axis=0))
     # Guard against a regression to the old `log_p[0]` single-sample behavior.
@@ -169,6 +165,7 @@ def test_averages_over_decoding_orders(mock_srun, tmp_path):
 # ---------------------------------------------------------------------------
 # Integration — real ProteinMPNN clone (skipped unless explicitly configured)
 # ---------------------------------------------------------------------------
+
 
 def test_score_candidate_mutations_integration():
     """
@@ -203,5 +200,4 @@ def test_score_candidate_mutations_integration():
     # scorer randomized the decoding order every call. Use a small num_decoding_orders
     # to keep the second real ProteinMPNN pass fast.
     kw = dict(top_k=5, proteinmpnn_dir=mpnn_dir, seed=37, num_decoding_orders=2)
-    assert score_candidate_mutations(pdb_str, seq, **kw) == \
-        score_candidate_mutations(pdb_str, seq, **kw)
+    assert score_candidate_mutations(pdb_str, seq, **kw) == score_candidate_mutations(pdb_str, seq, **kw)

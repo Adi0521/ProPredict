@@ -1,0 +1,123 @@
+[build-system]
+# >=77 for PEP 639 `license` / `license-files` below; older setuptools rejects the SPDX string.
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "propredict"
+version = "0.1.0"
+description = "Agentic protein structure prediction with environmental context (pH, ligands, membrane, ions)."
+readme = "README.md"
+# PEP 639: SPDX expression + the file. The old `{ file = ... }` table is deprecated and
+# emitted a BuildBackendWarning on every install (setuptools drops it after 2027-02-18).
+license = "MIT"
+license-files = ["LICENSE"]
+# Local dev env is 3.10; Docker and Modal images run 3.11.
+# Upper bound is real, not inherited caution: `biopython==1.84` (pinned to match Boltz) ships
+# no cp313 wheel, and its C extension fails to compile on 3.13 — `Bio/cpairwise2module.c`
+# calls `PyEval_CallObject`, removed in 3.13. Verified: wheels exist for cp310/311/312 only.
+# Boltz independently declares the same `>=3.10,<3.13`. Revisit when the biopython pin moves.
+requires-python = ">=3.10,<3.13"
+
+# The single source of truth for Python dependencies: Docker (scripts/pyproject_deps.py),
+# Modal (pip_install_from_pyproject) and local installs all read THIS file. The old
+# requirements*.txt files were removed — see Process/pyproject-adoption.md.
+# Conda-only tools (OpenMM, RDKit, OpenFF, Vina, PyRosetta, MDAnalysis) stay in
+# environment-conda.yml; GROMACS is brew/apt. All are gated by feature flags in config.py.
+#
+# `requests` and `biopython` are held at the exact versions Boltz pins. Boltz uses hard `==`
+# pins, so any other value makes `[gpu]` unresolvable — re-check both when bumping the Boltz
+# commit below.
+dependencies = [
+    "fastapi==0.104.1",
+    "uvicorn[standard]==0.24.0",
+    "pydantic==2.13.4",
+    "celery==5.3.4",
+    "redis==5.0.1",
+    "psycopg2-binary==2.9.9",
+    "requests==2.32.3",  # == Boltz's pin
+    "python-dotenv==1.0.0",
+    "flower==2.0.1",
+    "sqlalchemy==2.0.23",
+    "biopython==1.84",  # == Boltz's pin
+    "propka==3.5.0",
+    "anthropic>=0.40.0",
+    "pyyaml>=6.0",
+    # Core: orchestrator/mutation_scan.py and mutation_search.py import it at module level.
+    # It used to arrive only as a transitive dep of biopython, which is accidental.
+    # A RANGE on purpose, never `==`: Boltz caps numpy `>=1.26,<2.0`, so an exact pin here
+    # would make `[gpu]` unresolvable — the same trap requests/biopython fell into above.
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+ml = [
+    "torch>=2.1.0",
+    "transformers>=4.36.0",
+    "meeko",
+]
+modal = ["modal>=0.73.0"]
+tracking = ["wandb>=0.16.0"]
+# Benchmark harnesses only (benchmarks/, benchmark_*_modal.py) — not imported by the API or
+# the worker, which is why these stay out of MODAL_IMAGE_EXTRAS and the Docker images.
+# Ranges, not `==`: Boltz pins `scipy==1.13.1` and `pandas>=2.2.2`, and an exact pin of ours
+# that differed would make `[gpu,bench]` unresolvable.
+bench = [
+    "pandas>=2.2.2",
+    "scipy>=1.11",
+    # `pd.read_parquet` needs an engine, and pandas ships pyarrow only as an *extra*
+    # (`pandas[parquet]`), so nothing else in this project pulls it in. Without it
+    # benchmark_proteinmpnn_checkpoints.py and benchmark_score_only_epistasis.py fail at
+    # their first read_parquet with "Unable to find a usable engine".
+    "pyarrow>=14",
+]
+# Boltz-2, PINNED to an exact commit — keep in lockstep with modal_app.py. b1ebfc46 reports version "2.2.1" but is 6 commits AHEAD of the
+# v2.2.1 tag (two numerics fixes); `boltz==2.2.1` from PyPI is a DIFFERENT build and would
+# silently change results. See Process/boltz-version-pin.md.
+gpu = [
+    "propredict[ml]",
+    "boltz @ git+https://github.com/jwohlwend/boltz@b1ebfc46ecf57f5414e0d1a6f9027bbb122c53bc",
+]
+dev = [
+    "pytest==7.4.3",
+    "pytest-asyncio==0.21.1",
+    "httpx==0.25.2",
+    "ruff>=0.16,<0.17",
+]
+# Local dev: everything the Docker/Modal images install (ml, modal, tracking, dev) plus the
+# benchmark harness deps (`bench`), which the images deliberately omit. Not `gpu` — Boltz is a
+# heavy CUDA install; add it explicitly: `pip install -e ".[all,gpu]"`.
+all = ["propredict[ml,modal,tracking,dev,bench]"]
+
+[tool.setuptools]
+packages = ["api", "models", "orchestrator", "orchestrator.backends", "benchmarks"]
+py-modules = ["config"]
+
+[tool.pytest.ini_options]
+# A single unimportable module (e.g. a missing optional dep) must not abort the
+# entire suite during collection — report the error and keep running the rest.
+addopts = "--continue-on-collection-errors"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+# .gitignore'd paths (wandb/, caches, etc.) are skipped by default; these are tracked
+# data/output dirs with no source worth linting.
+extend-exclude = [
+    "results",
+    "research_plan",
+    "mutation-plans",
+    "benchmarks/proteingym_cache",
+    # Upstream ColabFold notebook kept as a reference prototype — not our code.
+    "tests/Colab-Prototypes",
+]
+
+[tool.ruff.lint]
+# Classic core set (E4, E7, E9, F) + import sorting + bugbear. Listed explicitly via `select`
+# rather than `extend-select`: ruff 0.16 widened its built-in default set, so relying on the
+# defaults makes the rule set drift with the ruff version. Deliberately conservative so the
+# first pass is reviewable; widen once the existing findings are cleaned up.
+select = ["E4", "E7", "E9", "F", "I", "B"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["api", "models", "orchestrator", "benchmarks", "config"]

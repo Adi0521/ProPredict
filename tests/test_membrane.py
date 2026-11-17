@@ -7,10 +7,11 @@ injecting fake `openmm` / `openmm.app` / `openmmforcefields` modules into sys.mo
 The pure helpers (_resolve_insane, _lipid_name) are tested directly.
 
 The real-binary counterpart is modal_app.py::test_membrane_modal, which runs an actual
-PDBFixer -> ForceField(charmm36 lipids) -> addMembrane build in the Modal image (run:
+PDBFixer -> ForceField(charmm36) -> addMembrane build in the Modal image (run:
 modal run modal_app.py::test_membrane_modal). insane.py is NOT in that image, so
 embed_in_membrane_gromacs is covered here (mocked) only.
 """
+
 import os
 import sys
 from unittest.mock import MagicMock, patch
@@ -18,20 +19,22 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from orchestrator.membrane import (
-    _resolve_insane,
     _lipid_name,
+    _resolve_insane,
     embed_in_membrane_gromacs,
     embed_in_membrane_openmm,
 )
-
 
 # ---------------------------------------------------------------------------
 # _resolve_insane
 # ---------------------------------------------------------------------------
 
+
 def test_resolve_insane_uses_config_path_when_file():
-    with patch("orchestrator.membrane.os.path.isfile", return_value=True), \
-         patch("orchestrator.membrane.shutil.which") as mock_which:
+    with (
+        patch("orchestrator.membrane.os.path.isfile", return_value=True),
+        patch("orchestrator.membrane.shutil.which") as mock_which,
+    ):
         assert _resolve_insane("/opt/insane.py") == "/opt/insane.py"
         mock_which.assert_not_called()  # PATH not consulted when config file exists
 
@@ -39,22 +42,30 @@ def test_resolve_insane_uses_config_path_when_file():
 def test_resolve_insane_finds_insane_py_on_path():
     def _which(name):
         return "/usr/bin/insane.py" if name == "insane.py" else None
-    with patch("orchestrator.membrane.os.path.isfile", return_value=False), \
-         patch("orchestrator.membrane.shutil.which", side_effect=_which):
+
+    with (
+        patch("orchestrator.membrane.os.path.isfile", return_value=False),
+        patch("orchestrator.membrane.shutil.which", side_effect=_which),
+    ):
         assert _resolve_insane("") == "/usr/bin/insane.py"
 
 
 def test_resolve_insane_falls_back_to_compiled_insane():
     def _which(name):
         return "/usr/bin/insane" if name == "insane" else None
-    with patch("orchestrator.membrane.os.path.isfile", return_value=False), \
-         patch("orchestrator.membrane.shutil.which", side_effect=_which):
+
+    with (
+        patch("orchestrator.membrane.os.path.isfile", return_value=False),
+        patch("orchestrator.membrane.shutil.which", side_effect=_which),
+    ):
         assert _resolve_insane("") == "/usr/bin/insane"
 
 
 def test_resolve_insane_returns_none_when_absent():
-    with patch("orchestrator.membrane.os.path.isfile", return_value=False), \
-         patch("orchestrator.membrane.shutil.which", return_value=None):
+    with (
+        patch("orchestrator.membrane.os.path.isfile", return_value=False),
+        patch("orchestrator.membrane.shutil.which", return_value=None),
+    ):
         assert _resolve_insane("/nope/insane.py") is None
 
 
@@ -62,14 +73,18 @@ def test_resolve_insane_returns_none_when_absent():
 # _lipid_name
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("inp,expected", [
-    (None, "POPC"),
-    ("", "POPC"),
-    ("popc", "POPC"),
-    ("POPE", "POPE"),
-    ("chol", "CHOL"),
-    ("XYZ", "XYZ"),   # unknown -> uppercased passthrough
-])
+
+@pytest.mark.parametrize(
+    "inp,expected",
+    [
+        (None, "POPC"),
+        ("", "POPC"),
+        ("popc", "POPC"),
+        ("POPE", "POPE"),
+        ("chol", "CHOL"),
+        ("XYZ", "XYZ"),  # unknown -> uppercased passthrough
+    ],
+)
 def test_lipid_name(inp, expected):
     assert _lipid_name(inp) == expected
 
@@ -77,6 +92,7 @@ def test_lipid_name(inp, expected):
 # ---------------------------------------------------------------------------
 # embed_in_membrane_gromacs
 # ---------------------------------------------------------------------------
+
 
 def test_gromacs_insane_not_found_raises(tmp_path):
     with patch("orchestrator.membrane._resolve_insane", return_value=None):
@@ -160,6 +176,7 @@ def test_gromacs_missing_output_raises(mock_run, tmp_path):
 # embed_in_membrane_openmm — fake openmm / openmmforcefields
 # ---------------------------------------------------------------------------
 
+
 def _fake_openmm_modules():
     openmm_mod = MagicMock(name="openmm")
     openmm_mod.unit = MagicMock(name="unit")
@@ -207,3 +224,23 @@ def test_openmm_success_returns_modeller():
     # lipid name normalised and passed through to addMembrane
     _, kwargs = modeller.addMembrane.call_args
     assert kwargs["lipidType"] == "POPE"
+
+
+# ---------------------------------------------------------------------------
+# Real OpenMM force-field files (skips unless OpenMM is installed, e.g. the worker image)
+# ---------------------------------------------------------------------------
+
+
+def test_charmm36_membrane_forcefields_load_with_lipid_templates():
+    """The files simulation.py loads for membrane runs must exist and carry lipid templates.
+
+    Regression: a nonexistent "charmm36/lipids.xml" made ForceField() always raise, and
+    simulation.py's fallback silently ran every membrane system on AMBER14 instead.
+    """
+    openmm_app = pytest.importorskip("openmm.app")
+
+    from orchestrator.membrane import CHARMM36_MEMBRANE_FORCEFIELDS
+
+    ff = openmm_app.ForceField(*CHARMM36_MEMBRANE_FORCEFIELDS)
+    for lipid in ("POPC", "POPE", "DPPC", "DMPC"):
+        assert lipid in ff._templates, f"{lipid} template missing from {CHARMM36_MEMBRANE_FORCEFIELDS}"

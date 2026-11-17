@@ -5,6 +5,7 @@ Kept deliberately import-light (no Celery, Postgres, or heavy deps) so the
 Celery worker, the Modal worker, and the API read-path can all import it, and so
 the pure `celery_state_to_status` mapping is unit-testable without services.
 """
+
 from typing import Any, Optional, Tuple
 
 # Named Modal Dict used to relay per-stage progress from the Modal worker (which

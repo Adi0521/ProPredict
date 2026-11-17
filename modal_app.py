@@ -1,6 +1,13 @@
 import modal
 from modal import App, Image, Secret
 
+# pyproject.toml extras installed into the main image — the same set the Docker images use.
+# LEAF extras only: Modal pastes each extra's strings straight into `pip install`, so `gpu` /
+# `all` (which contain `propredict[...]`) would make pip look `propredict` up on PyPI. Modal
+# also SILENTLY skips an unknown name, so a typo here would drop packages without an error —
+# tests/test_pyproject_deps.py checks this list against pyproject.toml.
+MODAL_IMAGE_EXTRAS = ["ml", "modal", "tracking", "dev"]
+
 # x86_64 Linux — ambertools, openff-*, and all other conda packages build cleanly here
 image = (
     Image.micromamba()
@@ -25,19 +32,25 @@ image = (
         channels=["conda-forge"],
     )
     .apt_install("gromacs", "curl", "git", "build-essential")
-    .pip_install_from_requirements("requirements.txt")
-
+    # Dependencies come from pyproject.toml (single source of truth). Boltz is NOT taken from
+    # the `[gpu]` extra: it must install after the cu126 torch below, so it keeps its own step.
+    .pip_install_from_pyproject("pyproject.toml", optional_dependencies=MODAL_IMAGE_EXTRAS)
     .pip_install(
-    "torch==2.6.0",
-    "torchvision==0.21.0",
-    "torchaudio==2.6.0",
-    extra_index_url="https://download.pytorch.org/whl/cu126",
+        "torch==2.6.0",
+        "torchvision==0.21.0",
+        "torchaudio==2.6.0",
+        extra_index_url="https://download.pytorch.org/whl/cu126",
     )
-
-    .pip_install("cuequivariance-ops-torch-cu12")
-
-    .pip_install("cuequivariance-torch")
-
+    # cuEquivariance, PINNED to 0.10.0. Unpinned, `cuequivariance-ops-torch-cu12` resolved to
+    # 0.13.0 (2026-11), which requires torch>=2.11: pip silently replaced the cu126 torch above
+    # with torch 2.15 + a CUDA 13 stack, torchvision 0.21 broke (`torchvision::nms does not
+    # exist`) and the weight-bake step below failed. 0.10.0 is the last release without that
+    # requirement, and the newest of all three packages on 2026-07-21 — the Run 011 rebuild
+    # behind the current benchmark record. `torch==2.6.0` rides along in each call so pip can
+    # never swap torch out again (`==2.6.0` matches the installed `2.6.0+cu126`, so it's a no-op).
+    # See Process/pyproject-adoption.md.
+    .pip_install("cuequivariance-ops-torch-cu12==0.10.0", "torch==2.6.0")
+    .pip_install("cuequivariance-torch==0.10.0", "cuequivariance==0.10.0", "torch==2.6.0")
     # Boltz-2, PINNED to an exact commit. Do not relax this to a bare git URL or to
     # `boltz==2.2.1` without reading the note below.
     #
@@ -51,11 +64,7 @@ image = (
     # Previously this was unpinned git HEAD; Modal cached the layer, so the version behind
     # the benchmark record was whatever HEAD happened to be at first build and was recorded
     # nowhere. Bump deliberately, and re-run the CASP15 baseline when you do.
-    .pip_install(
-        "git+https://github.com/jwohlwend/boltz.git"
-        "@b1ebfc46ecf57f5414e0d1a6f9027bbb122c53bc"
-    )
-
+    .pip_install("git+https://github.com/jwohlwend/boltz.git@b1ebfc46ecf57f5414e0d1a6f9027bbb122c53bc")
     # ProteinMPNN clone (MIT, ~26MB incl. weights) for the structural mutation scorer
     # (orchestrator/mutation_scan.py, exposed to the agent as scan_mutations). torch is
     # already in this image, so the subprocess scorer runs in-place. No .env is copied
@@ -77,7 +86,6 @@ image = (
     # get_cache_path() (src/boltz/main.py) before falling back to ~/.boltz; call_boltz
     # passes no --cache, so this env var is the only thing steering it.
     .env({"PROTEINMPNN_PATH": "/opt/ProteinMPNN", "BOLTZ_CACHE": "/opt/boltz-cache"})
-
     # Bake the Boltz-2 weights into the image so cold containers don't each re-download a
     # few GB on first predict. There is NO `boltz download` CLI command (the CLI is a click
     # group with a single `predict` command) — weights are fetched lazily inside predict via
@@ -91,7 +99,7 @@ image = (
     .run_commands(
         "mkdir -p /opt/boltz-cache",
         "python -c 'from pathlib import Path; from boltz.main import download_boltz2; "
-        "download_boltz2(Path(\"/opt/boltz-cache\"))'",
+        'download_boltz2(Path("/opt/boltz-cache"))\'',
     )
     # Ship local source packages into the image
     .add_local_dir("orchestrator", remote_path="/root/orchestrator")
@@ -111,9 +119,7 @@ image = (
 # does NOT pull in torch/boltz/openff.
 GNINA_RELEASE = "https://github.com/gnina/gnina/releases/download/v1.3/gnina"
 gnina_image = (
-    Image.from_registry(
-        "nvidia/cuda:12.2.2-runtime-ubuntu22.04", add_python="3.11"
-    )
+    Image.from_registry("nvidia/cuda:12.2.2-runtime-ubuntu22.04", add_python="3.11")
     .apt_install("wget", "openbabel", "libopenbabel-dev", "libgomp1")
     .run_commands(
         f"wget -q {GNINA_RELEASE} -O /usr/local/bin/gnina",
@@ -153,8 +159,8 @@ secrets = [Secret.from_name("propredict-secrets")]
 )
 def run_prediction(request_data: dict) -> dict:
     """Worker function — replaces the Celery worker in production."""
-    from orchestrator.tasks import _run_prediction_core
     from orchestrator.progress import PROGRESS_DICT_NAME
+    from orchestrator.tasks import _run_prediction_core
 
     run_id = request_data.get("run_id")
 
@@ -186,6 +192,7 @@ def run_prediction(request_data: dict) -> dict:
 def fastapi_endpoint():
     """Serves the FastAPI app. MODAL_ENABLED must be set in propredict-secrets."""
     from api.main import app as fastapi_app
+
     return fastapi_app
 
 
@@ -224,11 +231,12 @@ def test_membrane_modal() -> dict:
     )
     results: dict = {"insane_in_image": False}
 
-    from openmm.app import PDBFile, ForceField, Modeller
+    from openmm.app import ForceField, Modeller, PDBFile
 
     # 1. PDBFixer -> clean structure
     try:
         from pdbfixer import PDBFixer
+
         fixer = PDBFixer(pdbfile=io.StringIO(protein_pdb))
         fixer.findMissingResidues()
         fixer.findMissingAtoms()
@@ -245,10 +253,12 @@ def test_membrane_modal() -> dict:
 
     # 2. CHARMM36m force field with lipids
     try:
-        ff = ForceField("charmm36.xml", "charmm36/water.xml", "charmm36/lipids.xml")
+        # Lipids are in charmm36.xml; there is no "charmm36/lipids.xml" (Process/charmm36-lipids-fix.md).
+        ff = ForceField("charmm36.xml", "charmm36/water.xml")
         results["charmm36_ff_ok"] = True
     except Exception as e:  # noqa: BLE001
         results["charmm36_ff_error"] = repr(e)
+        print(results)  # `modal run` shows only prints — without this the failure was invisible
         return results
 
     # 3. Modeller + hydrogens + real addMembrane
@@ -286,11 +296,11 @@ def test_ligands_modal() -> dict:
     import tempfile
 
     from orchestrator.ligands import (
-        smiles_to_3d,
         dock_vina,
-        parameterize_ligand_openff,
         parameterize_ligand_acpype,
+        parameterize_ligand_openff,
         prepare_ligands,
+        smiles_to_3d,
     )
 
     # A minimal but valid multi-residue receptor (real CA coords) — enough for Vina's
@@ -382,7 +392,7 @@ def test_gnina_modal() -> dict:
     import shutil
     import tempfile
 
-    from orchestrator.ligands import smiles_to_3d, dock_gnina
+    from orchestrator.ligands import dock_gnina, smiles_to_3d
 
     # Same minimal multi-residue receptor as test_ligands_modal (real CA coords).
     receptor_pdb = (
@@ -502,10 +512,10 @@ def report_boltz_version() -> dict:
             out[f"{pkg}_version"] = None
 
     try:
-        out["pip_freeze_boltz"] = subprocess.run(
-            ["pip", "freeze"], capture_output=True, text=True, timeout=120
-        ).stdout.strip().splitlines()
-        out["pip_freeze_boltz"] = [l for l in out["pip_freeze_boltz"] if "boltz" in l.lower()]
+        out["pip_freeze_boltz"] = (
+            subprocess.run(["pip", "freeze"], capture_output=True, text=True, timeout=120).stdout.strip().splitlines()
+        )
+        out["pip_freeze_boltz"] = [pkg for pkg in out["pip_freeze_boltz"] if "boltz" in pkg.lower()]
     except Exception as e:  # noqa: BLE001
         out["pip_freeze_error"] = repr(e)
 
@@ -535,9 +545,7 @@ def report_proteinmpnn_version() -> dict:
     out: dict = {"proteinmpnn_path": path, "expected_commit": PINNED}
 
     def _git(*args) -> str:
-        return subprocess.run(
-            ["git", "-C", path, *args], capture_output=True, text=True, timeout=60
-        ).stdout.strip()
+        return subprocess.run(["git", "-C", path, *args], capture_output=True, text=True, timeout=60).stdout.strip()
 
     out["path_exists"] = os.path.isdir(path)
     if out["path_exists"]:
@@ -550,8 +558,7 @@ def report_proteinmpnn_version() -> dict:
         out["weight_files"] = sorted(os.listdir(weights))[:8] if out["weights_present"] else []
         out["run_script_present"] = os.path.isfile(os.path.join(path, "protein_mpnn_run.py"))
 
-    out["PASS"] = bool(out.get("matches_pin") and out.get("weights_present")
-                       and out.get("run_script_present"))
+    out["PASS"] = bool(out.get("matches_pin") and out.get("weights_present") and out.get("run_script_present"))
     print(json.dumps(out, indent=2, default=str))
     return out
 
@@ -569,6 +576,7 @@ def test_boltz_gpu(sequence: str = "MKTAYIAKQRQISFVKSHFSRQDILDLWQYVQG") -> dict:
         modal run modal_app.py::test_boltz_gpu --sequence MKTAYIAK
     """
     import os
+
     os.environ["BOLTZ_ENABLED"] = "True"
     os.environ["BOLTZ_DIFFUSION_SAMPLES"] = "1"
     os.environ["BOLTZ_SAMPLING_STEPS"] = "200"
@@ -660,13 +668,21 @@ def test_boltz_affinity_gpu(
 
         proc = subprocess.run(
             [
-                "boltz", "predict", yaml_path,
-                "--out_dir", out_dir,
-                "--diffusion_samples", "1",
-                "--sampling_steps", "50",   # layout only — no need for a good structure
-                "--seed", "0",
+                "boltz",
+                "predict",
+                yaml_path,
+                "--out_dir",
+                out_dir,
+                "--diffusion_samples",
+                "1",
+                "--sampling_steps",
+                "50",  # layout only — no need for a good structure
+                "--seed",
+                "0",
             ],
-            capture_output=True, text=True, timeout=1500,
+            capture_output=True,
+            text=True,
+            timeout=1500,
         )
         results["groundtruth_returncode"] = proc.returncode
         if proc.returncode != 0:
@@ -678,12 +694,9 @@ def test_boltz_affinity_gpu(
             aff_files = [p for p in all_json if "affinity" in os.path.basename(p).lower()]
             results["affinity_file_basenames"] = [os.path.basename(p) for p in aff_files]
             # THE question this whole function exists to answer.
-            results["affinity_json_keys"] = {
-                os.path.basename(p): sorted(json.load(open(p)).keys()) for p in aff_files
-            }
+            results["affinity_json_keys"] = {os.path.basename(p): sorted(json.load(open(p)).keys()) for p in aff_files}
             results["keys_match_our_parser"] = any(
-                "affinity_pred_value" in keys
-                for keys in results["affinity_json_keys"].values()
+                "affinity_pred_value" in keys for keys in results["affinity_json_keys"].values()
             )
 
     # ------------------------------------------------------------------
