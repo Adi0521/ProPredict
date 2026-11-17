@@ -146,10 +146,10 @@ def call_boltz(
     BioPython, reads pLDDT from the confidence JSON, and optionally reads
     binding affinity when ligands are present.
 
-    Install: pip install git+https://github.com/jwohlwend/boltz
+    Install: pip install -e ".[gpu]"  (pinned commit — see pyproject.toml)
     Then set BOLTZ_ENABLED=True.
     """
-    import yaml  # pyyaml — guaranteed by requirements.txt
+    import yaml  # pyyaml — a core dependency in pyproject.toml
 
     ctx = context or {}
     ligands = ctx.get("ligands") or []

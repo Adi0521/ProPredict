@@ -19,15 +19,15 @@ license-files = ["LICENSE"]
 # Boltz independently declares the same `>=3.10,<3.13`. Revisit when the biopython pin moves.
 requires-python = ">=3.10,<3.13"
 
-# Docker (scripts/pyproject_deps.py) and Modal (pip_install_from_pyproject) install from THIS
-# file. requirements.txt is no longer read by any build and is removed in
-# Process/pyproject-adoption.md step 4 — keep it in sync until then.
+# The single source of truth for Python dependencies: Docker (scripts/pyproject_deps.py),
+# Modal (pip_install_from_pyproject) and local installs all read THIS file. The old
+# requirements*.txt files were removed — see Process/pyproject-adoption.md.
 # Conda-only tools (OpenMM, RDKit, OpenFF, Vina, PyRosetta, MDAnalysis) stay in
 # environment-conda.yml; GROMACS is brew/apt. All are gated by feature flags in config.py.
 #
 # `requests` and `biopython` are held at the exact versions Boltz pins. Boltz uses hard `==`
-# pins, so any other value makes `[gpu]` unresolvable — re-check
-# both when bumping the Boltz commit below.
+# pins, so any other value makes `[gpu]` unresolvable — re-check both when bumping the Boltz
+# commit below.
 dependencies = [
     "fastapi==0.104.1",
     "uvicorn[standard]==0.24.0",
@@ -59,7 +59,7 @@ ml = [
 modal = ["modal>=0.73.0"]
 tracking = ["wandb>=0.16.0"]
 # Benchmark harnesses only (benchmarks/, benchmark_*_modal.py) — not imported by the API or
-# the worker, which is why these stay out of requirements.txt and the Docker images.
+# the worker, which is why these stay out of MODAL_IMAGE_EXTRAS and the Docker images.
 # Ranges, not `==`: Boltz pins `scipy==1.13.1` and `pandas>=2.2.2`, and an exact pin of ours
 # that differed would make `[gpu,bench]` unresolvable.
 bench = [
@@ -84,9 +84,9 @@ dev = [
     "httpx==0.25.2",
     "ruff>=0.16,<0.17",
 ]
-# Local dev: everything requirements.txt installs, plus ruff and the benchmark harness deps.
-# No longer byte-equivalent to requirements.txt — `bench` is deliberately absent there, since
-# the API and worker images don't run benchmarks. See Process/pyproject.md.
+# Local dev: everything the Docker/Modal images install (ml, modal, tracking, dev) plus the
+# benchmark harness deps (`bench`), which the images deliberately omit. Not `gpu` — Boltz is a
+# heavy CUDA install; add it explicitly: `pip install -e ".[all,gpu]"`.
 all = ["propredict[ml,modal,tracking,dev,bench]"]
 
 [tool.setuptools]

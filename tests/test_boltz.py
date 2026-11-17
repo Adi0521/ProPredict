@@ -546,7 +546,7 @@ def test_call_boltz_integration():
 
         sp.run(["boltz", "--help"], capture_output=True, check=True)
     except Exception:
-        pytest.skip("boltz CLI not found — install with: pip install git+https://github.com/jwohlwend/boltz")
+        pytest.skip('boltz CLI not found — install with: pip install -e ".[gpu]"')
 
     from orchestrator.backends.boltz import call_boltz
 

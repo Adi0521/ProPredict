@@ -1,6 +1,6 @@
 # Adopting pyproject.toml as the install source
 
-**Status:** Steps 1–3 of 4 complete (Docker, Modal, `requirements-gpu.txt` removed). Follows Process/pyproject.md, which created
+**Status:** Complete — all 4 steps. `pyproject.toml` is the only dependency manifest. Follows Process/pyproject.md, which created
 `pyproject.toml` but left every build installing from `requirements*.txt`.
 
 ## Plan
@@ -10,7 +10,7 @@
 | 1 | `Dockerfile.api`, `Dockerfile.celery` | install from pyproject via `scripts/pyproject_deps.py` | **done** |
 | 2 | `modal_app.py` main image | `pip_install_from_pyproject(..., ["ml","modal","tracking","dev"])`; keep cu126 torch + Boltz SHA steps in order; pin cuEquivariance (step 2a) | **done** |
 | 3 | `requirements-gpu.txt` | delete; `pip install -e ".[gpu]"` replaces it; `check_boltz_updates.py` + workflow go from 3 pin sites to 2 | **done** |
-| 4 | `requirements.txt` | delete; update README, CLAUDE.md, pyproject comments | pending |
+| 4 | `requirements.txt` | delete; update README, CLAUDE.md, pyproject comments | **done** |
 
 Later, deliberately separate (each changes what gets installed, so none can be verified as
 "freeze unchanged"): drop `[dev]` from runtime images, move `[dev]` to PEP 735
@@ -198,3 +198,48 @@ correct until step 4 deletes requirements.txt.
   image pins 2.6.0+cu126 separately, unchanged.)
 - `ruff check` / `ruff format --check` clean; suite (excl. `test_api.py` and the 9-minute
   ESMFold integration test) 217 passed, 4 skipped.
+
+## Step 4 — remove `requirements.txt`
+
+**Date:** 2026-11-17
+
+Nothing read it after steps 1–3. Deleted (`git rm`), and every live reference updated:
+
+| File | Change |
+|---|---|
+| `README.md` | local install `pip install -r requirements.txt` → `pip install -e ".[all]"`; both Boltz-2 install rows → `pip install -e ".[gpu]"` (pinned commit) |
+| `CLAUDE.md` | "declared twice" rule → "Dependencies live only in `pyproject.toml`", incl. the leaf-extras-only rule for Docker/Modal |
+| `pyproject.toml` | header: single source of truth; `[bench]` and `[all]` comments no longer reference requirements.txt; `[all]` comment says `gpu` must be added explicitly |
+| `.github/workflows/boltz-version-check.yml`, `scripts/check_boltz_updates.py` | dep-conflict fix guidance: `pyproject.toml` only |
+| `orchestrator/backends/boltz.py`, `config.py`, `ROADMAP.md`, `tests/test_boltz.py` skip message | Boltz install hint `pip install git+…/boltz` → `pip install -e ".[gpu]"` |
+
+**Beyond the plan, deliberately:** the four Boltz install hints pointed at **unpinned git HEAD**,
+which contradicts the exact-commit pin (Process/boltz-version-pin.md) — following them would
+install a different build from the one the benchmarks used. Now they all go through `[gpu]`.
+
+Intentionally unchanged: the Dockerfiles' `/tmp/deps/requirements.txt` (the extractor's generated
+output; renaming it would only bust the Docker cache), and historical mentions in `Process/`,
+`benchmarks/BENCHMARKS.md`, `nextsteps.md`.
+
+### Verification
+
+- **Docker**: both images rebuilt with the pip layer genuinely re-run (editing pyproject.toml
+  comments invalidates it: 0 cached, 1 install each); neither image contains a requirements
+  file; both import `api.main`, `orchestrator.tasks`, `torch`.
+- **Modal**: `report_boltz_version` with **0 image builds** — pyproject comment edits don't
+  change the generated pip command, so the cache holds. `b1ebfc46…`, weights baked, torch
+  `2.6.0+cu126`.
+- **README install path**: fresh venv, `pip install --dry-run -e ".[all]"` → exit 0.
+- `validate-pyproject` → valid; `check_boltz_updates.py` → up to date; workflow `github-script`
+  passes `node --check`.
+- `ruff check` / `ruff format --check` clean; suite (excl. `test_api.py` and the ESMFold
+  integration test) 217 passed, 4 skipped. (First run caught a quoting error I introduced in
+  the `test_boltz.py` skip message; fixed.)
+
+## Follow-ups (not done)
+
+- Drop `[dev]` from the runtime images; consider PEP 735 `[dependency-groups]` for it.
+- Transitive lock file (`uv pip compile`) — `torch>=2.1.0`, `meeko`, `anthropic>=…` still float.
+- Still unpinned in the Modal image: the micromamba layer (openmm, rdkit, openff-*, …).
+- Boltz's `protobuf`/`click` pins conflict with googleapis-common-protos / huggingface-hub
+  (pre-existing, see step 2).

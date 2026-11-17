@@ -286,7 +286,7 @@ def main() -> int:
         print('       `pip install ".[gpu]"` cannot resolve:')
         for name, (mine, theirs) in sorted(conflicts_now.items()):
             print(f"         {name:12} ours =={mine}   boltz =={theirs}")
-        print("       Fix: move ours to Boltz's version in pyproject.toml AND requirements.txt.")
+        print("       Fix: move ours to Boltz's version in pyproject.toml.")
     elif dep_check == "ok":
         print(f"deps:    {len(ours)} exact pin(s) checked, none conflict with Boltz's own")
 

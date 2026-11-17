@@ -135,7 +135,7 @@ via conda-forge, and a ProteinMPNN clone at `/opt/ProteinMPNN`.
 ```bash
 conda env create -f environment-conda.yml   # optional MD / ligand / Rosetta tools
 conda activate propredict
-pip install -r requirements.txt
+pip install -e ".[all]"        # deps live in pyproject.toml; add `gpu` for Boltz-2
 
 # needs Postgres + Redis reachable
 uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
@@ -216,7 +216,7 @@ Presence of `membrane` or `ligands` is what triggers the MD stage at all.
 |---|---|---|---|
 | **ESMFold** (local) | good, single-sequence | CPU / MPS / CUDA | default; `ESMFOLD_LOCAL=True` |
 | **ESMFold** (remote) | same, via esmatlas API | none | `ESMFOLD_LOCAL=False` |
-| **Boltz-2** | AlphaFold3-class | GPU (A10G+) | `BOLTZ_ENABLED=True` + `pip install git+https://github.com/jwohlwend/boltz` |
+| **Boltz-2** | AlphaFold3-class | GPU (A10G+) | `BOLTZ_ENABLED=True` + `pip install -e ".[gpu]"` (pinned commit) |
 | RoseTTAFold2 | stub — raises | GPU | `ROSETTAFOLD_ENABLED` |
 | OpenFold | stub — raises | GPU | `OPENFOLD_ENABLED` |
 
@@ -348,7 +348,7 @@ must always check the flag before assuming availability.
 | PyRosetta | `ROSETTA_ENABLED` | `conda install -c rosettacommons pyrosetta` |
 | GROMACS | `GROMACS_ENABLED` / `GROMACS_BIN` | `brew install gromacs` · `apt-get install gromacs` |
 | OpenMM | `OPENMM_ENABLED` | `conda install -c conda-forge openmm` |
-| Boltz-2 | `BOLTZ_ENABLED` | `pip install git+https://github.com/jwohlwend/boltz` (GPU) |
+| Boltz-2 | `BOLTZ_ENABLED` | `pip install -e ".[gpu]"` (GPU; pinned commit) |
 | GNINA | `GNINA_BIN` | [gnina releases](https://github.com/gnina/gnina/releases) |
 | Vina / RDKit / OpenFF | — | `environment-conda.yml` |
 | insane.py | `INSANE_PATH` | [cgmartini.nl](http://cgmartini.nl) |

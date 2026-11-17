@@ -71,7 +71,7 @@ OPENMM_ENABLED = os.getenv("OPENMM_ENABLED", "False") == "True"  # conda install
 ROSETTAFOLD_ENABLED = os.getenv("ROSETTAFOLD_ENABLED", "False") == "True"  # see github.com/baker-lab/RoseTTAFold2
 OPENFOLD_ENABLED = os.getenv("OPENFOLD_ENABLED", "False") == "True"  # see github.com/aqlaboratory/openfold
 
-# Boltz-2: high-accuracy GPU backend (install from source: pip install git+https://github.com/jwohlwend/boltz)
+# Boltz-2: high-accuracy GPU backend (install: pip install -e ".[gpu]" — pinned Boltz commit)
 BOLTZ_ENABLED = os.getenv("BOLTZ_ENABLED", "False") == "True"
 BOLTZ_DIFFUSION_SAMPLES = int(os.getenv("BOLTZ_DIFFUSION_SAMPLES", 1))  # --diffusion_samples
 BOLTZ_SAMPLING_STEPS = int(os.getenv("BOLTZ_SAMPLING_STEPS", 200))  # --sampling_steps
