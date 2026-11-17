@@ -72,3 +72,38 @@ def test_real_pyproject_image_extras_are_leaf_and_complete():
         assert needed in names
     # Benchmark-only and GPU deps deliberately stay out of the Docker images.
     assert not names & {"pandas", "scipy", "pyarrow", "boltz"}
+
+
+def _modal_image_extras():
+    """MODAL_IMAGE_EXTRAS from modal_app.py, read via ast so the test doesn't need `modal` installed."""
+    import ast
+
+    with open(os.path.join(_ROOT, "modal_app.py")) as fh:
+        tree = ast.parse(fh.read())
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(getattr(t, "id", None) == "MODAL_IMAGE_EXTRAS" for t in node.targets):
+            return ast.literal_eval(node.value)
+    raise AssertionError("MODAL_IMAGE_EXTRAS not found in modal_app.py")
+
+
+def _dockerfile_extras(name):
+    """The extras a Dockerfile passes to pyproject_deps.py."""
+    import re
+
+    with open(os.path.join(_ROOT, name)) as fh:
+        match = re.search(r"pyproject_deps\.py\s+\S*pyproject\.toml\s+([\w ]+?)\s*>", fh.read())
+    assert match, f"{name} no longer installs via pyproject_deps.py"
+    return match.group(1).split()
+
+
+@pytest.mark.parametrize("dockerfile", ["Dockerfile.api", "Dockerfile.celery"])
+def test_dockerfiles_use_image_extras(dockerfile):
+    assert _dockerfile_extras(dockerfile) == IMAGE_EXTRAS
+
+
+def test_modal_image_extras_match_and_are_valid_leaf_extras():
+    """Modal silently skips unknown extras and passes self-references to pip — so check here."""
+    extras = _modal_image_extras()
+    assert extras == IMAGE_EXTRAS
+    # Raises on an unknown name (typo) or a `propredict[...]` self-reference.
+    pyproject_deps.requirements(os.path.join(_ROOT, "pyproject.toml"), extras)

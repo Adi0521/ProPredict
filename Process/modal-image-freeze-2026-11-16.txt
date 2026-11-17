@@ -1,0 +1,232 @@
+# pip freeze --all of modal_app.image, 2026-11-16 (step 2 of Process/pyproject-adoption.md).
+# First recorded full freeze of the Modal image. Boltz b1ebfc46, torch 2.6.0+cu126, cuequivariance 0.10.0.
+acpype @ file:///home/conda/feedstock_root/build_artifacts/acpype_1698417204075/work
+aiohappyeyeballs==2.7.1
+aiohttp==3.14.5
+aiosignal==1.4.0
+AmberUtils==21.0
+amqp==5.4.2
+annotated-doc==0.0.6
+annotated-types @ file:///home/conda/feedstock_root/build_artifacts/annotated-types_1733247046149/work
+anthropic==1.5.0
+antlr4-python3-runtime==4.9.3
+anyio==3.7.1
+attrs==26.1.0
+billiard==4.3.2
+biopython==1.84
+boltz @ git+https://github.com/jwohlwend/boltz.git@b1ebfc46ecf57f5414e0d1a6f9027bbb122c53bc
+bson @ file:///home/conda/feedstock_root/build_artifacts/bson_1736456155729/work
+cachetools @ file:///home/conda/feedstock_root/build_artifacts/cachetools_1779411518554/work
+cbor2==6.3.0
+celery==5.3.4
+certifi==2026.10.23
+charset-normalizer @ file:///home/conda/feedstock_root/build_artifacts/charset-normalizer_1783505251992/work
+chembl-structure-pipeline==1.2.2
+click==8.1.7
+click-didyoumean==0.3.1
+click-option-group @ file:///home/conda/feedstock_root/build_artifacts/click-option-group_1686394190925/work
+click-plugins==1.1.1.2
+click-repl==0.4.1
+contourpy @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_contourpy_1769155975/work
+cuequivariance==0.10.0
+cuequivariance-ops-cu12==0.10.0
+cuequivariance-ops-torch-cu12==0.10.0
+cuequivariance-torch==0.10.0
+cwevals==0.0.1b1
+cycler @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_cycler_1764466758/work
+distro==1.9.0
+dm-tree==0.1.8
+docker-pycreds==0.4.0
+docstring_parser==0.18.0
+edgembar==3.0
+einops==0.8.0
+einx==0.3.0
+fairscale==0.4.13
+fastapi==0.104.1
+filelock @ file:///home/conda/feedstock_root/build_artifacts/filelock_1783504975351/work
+flexcache @ file:///home/conda/feedstock_root/build_artifacts/flexcache_1733663531877/work
+flexparser @ file:///home/conda/feedstock_root/build_artifacts/flexparser_1733663506167/work
+flower==2.0.1
+fonttools @ file:///home/conda/feedstock_root/build_artifacts/fonttools_1778770237442/work
+freetype-py @ file:///home/conda/feedstock_root/build_artifacts/freetype-py_1650983368720/work
+frozendict==2.5.1
+frozenlist==1.8.0
+fsspec @ file:///home/conda/feedstock_root/build_artifacts/fsspec_1781615776425/work
+gemmi==0.6.5
+gitdb==4.0.12
+GitPython==3.2.1
+gmpy2 @ file:///home/conda/feedstock_root/build_artifacts/gmpy2_1773244933613/work
+googleapis-common-protos==1.76.0
+greenlet @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_greenlet_1782524631/work
+grpclib==0.4.9
+h11==0.16.0
+h2==4.4.1
+hf-xet==1.8.0
+hpack==4.2.0
+httpcore==1.0.9
+httpcore2==2.6.0
+httptools==0.9.0
+httpx==0.25.2
+httpx2==2.6.0
+huggingface_hub==2.4.0
+humanize==4.17.0
+hydra-core==1.3.2
+hyperframe==6.1.0
+idna==3.20
+ihm==2.13
+importlib_resources @ file:///home/conda/feedstock_root/build_artifacts/importlib_resources_1776068706467/work
+iniconfig==2.3.1
+Jinja2 @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_jinja2_1764517220/work
+jiter==0.19.0
+joblib @ file:///home/conda/feedstock_root/build_artifacts/joblib_1765794027227/work
+kiwisolver @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_kiwisolver_1773067041/work
+kombu==5.7.0
+legacy-cgi @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_legacy-cgi_1761574469/work
+lightning-utilities @ file:///home/conda/feedstock_root/build_artifacts/lightning-utilities_1772138211823/work
+llvmlite==0.44.0
+lxml @ file:///home/conda/feedstock_root/build_artifacts/lxml_1758535170671/work
+markdown-it-py @ file:///home/conda/feedstock_root/build_artifacts/markdown-it-py_1778169583724/work
+MarkupSafe @ file:///home/conda/feedstock_root/build_artifacts/markupsafe_1772444934960/work
+mashumaro==3.14
+matplotlib==3.10.9
+mda_xdrlib @ file:///home/conda/feedstock_root/build_artifacts/mda-xdrlib_1734100752631/work
+mdurl @ file:///home/conda/feedstock_root/build_artifacts/mdurl_1733255585584/work
+meeko==0.8.0
+MMPBSA.py==16.0
+modal==1.6.4
+modelcif==1.2
+mpmath==1.3.0
+msgpack==1.2.4
+multidict==7.2.1
+munkres==1.1.4
+ndfes==3.0
+networkx @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_networkx_1765215107/work
+numba==0.61.0
+numpy @ file:///home/conda/feedstock_root/build_artifacts/numpy_1707225376651/work/dist/numpy-1.26.4-cp311-cp311-linux_x86_64.whl#sha256=d08e1c9e5833ae7780563812aa73e2497db1ee3bd5510d3becb8aa18aa2d0c7c
+nvidia-cublas-cu12==12.6.4.1
+nvidia-cuda-cupti-cu12==12.6.80
+nvidia-cuda-nvrtc-cu12==12.6.77
+nvidia-cuda-runtime-cu12==12.6.77
+nvidia-cudnn-cu12==9.5.1.17
+nvidia-cufft-cu12==11.3.0.4
+nvidia-curand-cu12==10.3.7.77
+nvidia-cusolver-cu12==11.7.1.2
+nvidia-cusparse-cu12==12.5.4.2
+nvidia-cusparselt-cu12==0.6.3
+nvidia-ml-py==13.615.71
+nvidia-nccl-cu12==2.21.5
+nvidia-nvjitlink-cu12==12.6.85
+nvidia-nvtx-cu12==12.6.77
+omegaconf==2.3.1
+openff-amber-ff-ports @ file:///home/conda/feedstock_root/build_artifacts/openff-amber-ff-ports_1758297385445/work
+openff-interchange @ file:///home/conda/feedstock_root/build_artifacts/openff-interchange-split_1773426375561/work
+openff-nagl @ file:///home/conda/feedstock_root/build_artifacts/openff-nagl-split_1775174773252/work
+openff-nagl-models @ file:///home/conda/feedstock_root/build_artifacts/openff-nagl-models_1781575175908/work
+openff-toolkit @ file:///home/conda/feedstock_root/build_artifacts/openff-toolkit-split_1780942098869/work
+openff-units @ file:///home/conda/feedstock_root/build_artifacts/openff-units_1767915126130/work
+openff-utilities @ file:///home/conda/feedstock_root/build_artifacts/openff-utilities_1765557103233/work
+openforcefields @ file:///home/conda/feedstock_root/build_artifacts/openff-forcefields_1768284295536/work
+OpenMM==8.5.2
+openmmforcefields @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_openmmforcefields_1777329122/work
+opentelemetry-api==1.45.2
+opentelemetry-exporter-http-transport==0.66b2
+opentelemetry-exporter-otlp-common==0.66b2
+opentelemetry-exporter-otlp-proto-common==1.45.2
+opentelemetry-exporter-otlp-proto-http==1.45.2
+opentelemetry-proto==1.45.2
+opentelemetry-sdk==1.45.2
+opentelemetry-semantic-conventions==0.66b2
+opt_einsum==3.4.0
+packaging @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_packaging_1777103621/work
+packmol_memgen==2025.1.29
+pandas @ file:///home/conda/feedstock_root/build_artifacts/pandas_1764614468005/work
+ParmEd @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_parmed_1777536130/work
+pdb4amber==22.0
+pdbfixer @ file:///home/conda/feedstock_root/build_artifacts/pdbfixer_1775865420242/work
+pillow @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_pillow_1782912080/work
+Pint @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_pint_1773969991/work
+pip @ file:///home/conda/feedstock_root/build_artifacts/pip_1746249878903/work
+platformdirs @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_platformdirs_1779972894/work
+pluggy==1.7.0
+prometheus_client==0.26.0
+prompt_toolkit==3.0.53
+propcache==0.5.4
+propka==3.5.0
+protobuf==5.29.6
+psutil==7.2.2
+psycopg2-binary==2.9.9
+pycairo==1.29.0
+pydantic==2.13.4
+pydantic_core==2.46.4
+pyedr @ file:///home/conda/feedstock_root/build_artifacts/pyedr_1734172142114/work
+Pygments @ file:///home/conda/feedstock_root/build_artifacts/pygments_1774796700044/work
+pyMSMT==22.0
+pyparsing @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_pyparsing_1769003998/work
+pytest==7.4.3
+pytest-asyncio==0.21.1
+python-constraint @ file:///home/conda/feedstock_root/build_artifacts/python-constraint_1734362967806/work
+python-dateutil @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_python-dateutil_1751104122/work
+python-dotenv==1.0.0
+pytorch-lightning==2.5.0
+pytraj==2.0.6
+pytz @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_pytz_1777892201/work
+PyYAML==6.0.2
+rdkit @ file:///home/conda/feedstock_root/build_artifacts/rdkit-meta_1770016756618/work
+redis==5.0.1
+regex==2026.11.15
+reportlab @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_reportlab_1781795843/work
+requests==2.32.3
+rich @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_rich_1775991661/work/dist
+rlPyCairo @ file:///home/conda/feedstock_root/build_artifacts/rlpycairo_1756864152814/work
+ruff==0.16.10
+safetensors==0.8.0
+sander==22.0
+scikit-learn==1.6.1
+scipy @ file:///home/conda/feedstock_root/build_artifacts/scipy-split_1716470220807/work/dist/scipy-1.13.1-cp311-cp311-linux_x86_64.whl#sha256=497f9d1a91aa2301c4dbd6d0678fb3053900d59dde1ee936267e18aee722ba8f
+sentry-sdk==2.75.0
+setproctitle==1.3.8
+setuptools==80.9.0
+shellingham==1.5.4
+six @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_six_1753199211/work
+smmap==5.0.3
+sniffio==1.3.1
+SQLAlchemy==2.0.23
+starlette==0.27.0
+sympy==1.13.1
+synchronicity==0.12.7
+threadpoolctl==3.8.0
+tinydb @ file:///home/conda/feedstock_root/build_artifacts/tinydb_1734364319788/work
+tokenizers==0.23.3
+toml==0.10.2
+torch==2.6.0+cu126
+torchaudio==2.6.0+cu126
+torchmetrics @ file:///home/conda/feedstock_root/build_artifacts/torchmetrics_1773827606811/work
+torchvision==0.21.0+cu126
+tornado==6.6.1
+tqdm @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_tqdm_1783440211/work
+transformers==5.23.0
+triton==3.2.0
+truststore==0.10.5
+typer==0.29.1
+types-certifi==2021.10.8.3
+types-requests==2.33.0.20261030
+types-toml==0.10.8.20260518
+typing-inspection @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_typing-inspection_1777105465/work
+typing_extensions @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_typing_extensions_1783002732/work
+tzdata @ file:///home/conda/feedstock_root/build_artifacts/python-tzdata_1783704735836/work
+unicodedata2 @ file:///home/conda/feedstock_root/build_artifacts/unicodedata2_1770908962415/work
+urllib3==2.8.0
+uvicorn==0.24.0
+uvloop==0.23.0
+validators @ file:///home/conda/feedstock_root/build_artifacts/validators_1746267078840/work
+vina==1.2.7
+vine==5.1.0
+wandb==0.18.7
+watchfiles==1.3.0
+wcwidth==0.9.4
+websockets==17.4
+wheel==0.45.1
+xmltodict @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_xmltodict_1758191083/work
+xxhash==4.1.0
+yarl==1.25.1
+zipp @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_zipp_1779159948/work

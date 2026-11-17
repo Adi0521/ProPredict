@@ -1,6 +1,6 @@
 # Adopting pyproject.toml as the install source
 
-**Status:** Step 1 of 4 complete (Docker). Follows Process/pyproject.md, which created
+**Status:** Steps 1–2 of 4 complete (Docker, Modal). Follows Process/pyproject.md, which created
 `pyproject.toml` but left every build installing from `requirements*.txt`.
 
 ## Plan
@@ -8,7 +8,7 @@
 | Step | Consumer | Change | Status |
 |---|---|---|---|
 | 1 | `Dockerfile.api`, `Dockerfile.celery` | install from pyproject via `scripts/pyproject_deps.py` | **done** |
-| 2 | `modal_app.py` main image | `pip_install_from_pyproject(..., ["ml","modal","tracking","dev"])`; keep cu126 torch + Boltz SHA steps in order | pending |
+| 2 | `modal_app.py` main image | `pip_install_from_pyproject(..., ["ml","modal","tracking","dev"])`; keep cu126 torch + Boltz SHA steps in order; pin cuEquivariance (step 2a) | **done** |
 | 3 | `requirements-gpu.txt` | delete; `pip install -e ".[gpu]"` replaces it; `check_boltz_updates.py` + workflow go from 3 pin sites to 2 | pending |
 | 4 | `requirements.txt` | delete; update README, CLAUDE.md, pyproject comments | pending |
 
@@ -76,3 +76,82 @@ Later, deliberately separate (each changes what gets installed, so none can be v
 - `tomllib`: https://docs.python.org/3/library/tomllib.html
 - PEP 503 name normalisation: https://peps.python.org/pep-0503/#normalized-names
 - Docker build cache: https://docs.docker.com/build/cache/
+
+## Step 2 — Modal main image
+
+- **`modal_app.py`**: `pip_install_from_requirements("requirements.txt")` →
+  `pip_install_from_pyproject("pyproject.toml", optional_dependencies=MODAL_IMAGE_EXTRAS)`, with
+  `MODAL_IMAGE_EXTRAS = ["ml", "modal", "tracking", "dev"]` — the same set as Docker. The cu126
+  torch step and the Boltz git-SHA step are unchanged and still follow it: Boltz is not taken from
+  `[gpu]` because it must install after the CUDA torch.
+- **Modal's helper skips unknown extras silently** (`if dep_group_name in optionals`) and pastes
+  self-references through, so a typo such as `"trackng"` would just drop wandb from the image.
+  `tests/test_pyproject_deps.py` now reads `MODAL_IMAGE_EXTRAS` (via `ast`, no `modal` import)
+  and both Dockerfiles' extras, asserts all three equal, and runs them through the extractor,
+  which raises on unknown/self-referencing names. Mutation-checked: a typo and an added `gpu`
+  each fail the test.
+- Modal sorts all deps into one `pip install` line; reproducing its logic locally gives exactly
+  the requirements.txt set + `ruff`, no duplicates.
+
+### Step 2a — the Modal image could not be built fresh (pre-existing, fixed)
+
+The first verification builds — of the **old** `requirements.txt` image and the new one, run
+side by side — both failed identically at the Boltz weight-bake step:
+`RuntimeError: operator torchvision::nms does not exist`.
+
+- **Cause:** `.pip_install("cuequivariance-ops-torch-cu12")` was unpinned. It now resolves to
+  0.13.0, which requires `torch>=2.11`, so pip uninstalled `torch==2.6.0+cu126` and installed
+  torch 2.15.0 + a CUDA 13 stack, leaving `torchvision 0.21.0+cu126` broken. Every fresh build
+  from `main` was broken; the benchmark-record image only existed because Modal had it cached,
+  and the 2026-11-15 numpy change to requirements.txt had already invalidated that cache.
+- **Version recovery:** an attempt to re-hydrate the benchmark-era image from `cce39f0`
+  (requirements.txt before the numpy change) missed Modal's cache and was aborted at the first
+  `Building image` line. No version was ever recorded (`Process/proteinmpnn-version-pin.md`
+  lists cuEquivariance as unpinned). From PyPI metadata: `cuequivariance-ops-torch-cu12` ≤ 0.10.0
+  lists torch only under the `test` extra; 0.11.1+ require `torch>=2.11` (0.11.0 was the
+  transition). Run 011 — the rebuild behind the current record — was **2026-07-21**, when 0.10.0
+  was the newest release of all three packages (0.11.x: 07-26 for `cuequivariance`/`-torch`,
+  08-04 for the ops package). So that image almost certainly had 0.10.0. Inferred from release
+  dates, not observed.
+- **Fix:** pin `cuequivariance-ops-torch-cu12==0.10.0`, `cuequivariance-torch==0.10.0`,
+  `cuequivariance==0.10.0`, each call also carrying `torch==2.6.0` so pip can never swap torch
+  again (`==2.6.0` matches the installed `2.6.0+cu126` under PEP 440, so it's a no-op).
+
+### Verification (new image, workspace `kalshi-hft-real`)
+
+| Check | Result |
+|---|---|
+| image build | green |
+| `report_boltz_version` | `b1ebfc46…` (matches pin), weights baked, torch `2.6.0+cu126`, numpy `1.26.4`, scipy `1.13.1` — identical to the Run 011 snapshot in BENCHMARKS.md |
+| `report_proteinmpnn_version` | `8907e66`, `PASS: true` |
+| `test_ligands_modal` | all ok (`gnina_in_image: False` is expected — GNINA has its own image) |
+| `test_membrane_modal` | **fails, pre-existing** — see below |
+
+Full `pip freeze --all` saved as `Process/modal-image-freeze-2026-11-16.txt` (230 packages) — the
+first recorded freeze of this image. No old-vs-new freeze diff: the old image wasn't in Modal's
+cache, so a "before" would have been a second fresh build testing only pip determinism on an
+identical input set, which step 1 already showed for Docker.
+
+**Pre-existing, not fixed here:**
+- `test_membrane_modal` returns `charmm36_ff_error: Could not locate file "charmm36/lipids.xml"`
+  (through an early `return` that skips its `print`, so `modal run` shows nothing). OpenMM has no
+  such file — CHARMM36 lipids are inside `charmm36.xml`. The micromamba layer (OpenMM 8.5.2) was
+  served from cache, so this rebuild didn't change it. The same path is in
+  `orchestrator/membrane.py:227` and `orchestrator/simulation.py:816`, i.e. the real OpenMM
+  membrane path too. Process/mutation-task-5b-membrane-tests.md records only a parse check.
+- Boltz's exact pins conflict with what's installed (`protobuf 5.29.6` vs googleapis-common-protos'
+  `>=6.33.5`; `click 8.1.7` vs huggingface-hub's `>=8.4.2`). Identical in the old
+  requirements.txt build, so unchanged by this step.
+
+Local: `ruff check` / `ruff format --check` clean; `tests/test_pyproject_deps.py` +
+`tests/test_boltz.py` 33 passed, 2 skipped; `check_boltz_updates.py` 3 sites agree, no conflict.
+
+Cost note: three failed CPU builds (old + new before the fix, plus one aborted cache probe) and
+one successful build.
+
+### Sources (step 2)
+
+- Modal `Image.pip_install_from_pyproject` — installed modal 1.4.2 source.
+- PyPI JSON API, release dates + `requires_dist`: https://pypi.org/pypi/cuequivariance-ops-torch-cu12/json
+- PEP 440 local version matching: https://peps.python.org/pep-0440/#version-matching
+- OpenMM bundled force fields: http://docs.openmm.org/latest/userguide/application/02_running_sims.html#force-fields

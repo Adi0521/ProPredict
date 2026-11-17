@@ -1,6 +1,13 @@
 import modal
 from modal import App, Image, Secret
 
+# pyproject.toml extras installed into the main image — the same set the Docker images use.
+# LEAF extras only: Modal pastes each extra's strings straight into `pip install`, so `gpu` /
+# `all` (which contain `propredict[...]`) would make pip look `propredict` up on PyPI. Modal
+# also SILENTLY skips an unknown name, so a typo here would drop packages without an error —
+# tests/test_pyproject_deps.py checks this list against pyproject.toml.
+MODAL_IMAGE_EXTRAS = ["ml", "modal", "tracking", "dev"]
+
 # x86_64 Linux — ambertools, openff-*, and all other conda packages build cleanly here
 image = (
     Image.micromamba()
@@ -25,15 +32,25 @@ image = (
         channels=["conda-forge"],
     )
     .apt_install("gromacs", "curl", "git", "build-essential")
-    .pip_install_from_requirements("requirements.txt")
+    # Dependencies come from pyproject.toml (single source of truth). Boltz is NOT taken from
+    # the `[gpu]` extra: it must install after the cu126 torch below, so it keeps its own step.
+    .pip_install_from_pyproject("pyproject.toml", optional_dependencies=MODAL_IMAGE_EXTRAS)
     .pip_install(
         "torch==2.6.0",
         "torchvision==0.21.0",
         "torchaudio==2.6.0",
         extra_index_url="https://download.pytorch.org/whl/cu126",
     )
-    .pip_install("cuequivariance-ops-torch-cu12")
-    .pip_install("cuequivariance-torch")
+    # cuEquivariance, PINNED to 0.10.0. Unpinned, `cuequivariance-ops-torch-cu12` resolved to
+    # 0.13.0 (2026-11), which requires torch>=2.11: pip silently replaced the cu126 torch above
+    # with torch 2.15 + a CUDA 13 stack, torchvision 0.21 broke (`torchvision::nms does not
+    # exist`) and the weight-bake step below failed. 0.10.0 is the last release without that
+    # requirement, and the newest of all three packages on 2026-07-21 — the Run 011 rebuild
+    # behind the current benchmark record. `torch==2.6.0` rides along in each call so pip can
+    # never swap torch out again (`==2.6.0` matches the installed `2.6.0+cu126`, so it's a no-op).
+    # See Process/pyproject-adoption.md.
+    .pip_install("cuequivariance-ops-torch-cu12==0.10.0", "torch==2.6.0")
+    .pip_install("cuequivariance-torch==0.10.0", "cuequivariance==0.10.0", "torch==2.6.0")
     # Boltz-2, PINNED to an exact commit. Do not relax this to a bare git URL or to
     # `boltz==2.2.1` without reading the note below.
     #
