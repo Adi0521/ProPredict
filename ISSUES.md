@@ -84,6 +84,15 @@ cannot recur; the 300-pair epistasis artifact is restored. See
       linear in K; the cheap-search savings vs re-folding leave room. Decide whether this
       becomes the default in `.env.example` or only applies under `MUTATION_SEARCH_ENABLED`.
 
+- [ ] **I-23 — Qualify the `PROTEINMPNN_NUM_DECODING_ORDERS` ≥ 32 recommendation (amends I-11).**
+      Measured on all 300 analysed pairs per domain, K=32 gives per-double epistasis reliability
+      of 0.89 on 4G3O but only **0.40 / 0.51** on 3DKM / 3L1X. Decoding noise is roughly constant
+      in absolute units while epistasis magnitude varies ~3× across domains, so no fixed K gives
+      a fixed SNR. Decide between a larger K and averaging the oracle over several invocations —
+      note `score_only` is **not** invariant to batch composition at a fixed seed (same doubles,
+      same seed, different invocation: r = 0.28–0.92), so separate invocations are genuinely
+      independent draws. See `Process/rowB-step2-stability-arm.md`.
+
 ## P2 — Verification gaps (medium)
 
 - [ ] **I-12 — Run the determinism gate on the Modal GPU image.**
@@ -99,6 +108,12 @@ cannot recur; the 300-pair epistasis artifact is restored. See
 - [ ] **I-15 — Measure Row A within-model sampling noise.** Every job ran at a single seed
       (37) with `diffusion_samples=1`, so Boltz-2's own sampling spread is unmeasured. A
       handful of repeat seeds on a subset would bound it.
+
+- [ ] **I-24 — Choose benchmark assays for position-pair diversity, not variant count.**
+      The Row B stability arm's 300 doubles per domain sit on only **7–16 distinct position
+      pairs**, so the effective n for any cross-pair claim is single-digit and the block CIs are
+      wide. Scoring more doubles buys almost nothing; an assay selection that maximises distinct
+      position pairs is what would add power. Applies to any future epistasis arm.
 
 ## P3 — Builds (large; sequenced)
 
@@ -118,12 +133,13 @@ cannot recur; the 300-pair epistasis artifact is restored. See
       (`Process/rowA-affinity-invariance-result.md`). None of the xtb/ORCA specifics in the
       module are live-verified — treat them as design intent to confirm against the tools.
       **Do I-16 first.**
-- [ ] **I-18 — Row B sub-question B: does model epistasis track *experimental* epistasis?**
-      Correlate `eps_model` against `eps_exp = DMS(m12) − DMS(m1) − DMS(m2) + DMS(WT)` from the
-      same ProteinGym parquet. Stability arm (Tsuboyama ΔG doubles, this domain + 2 more) and
-      one functional DMS arm, expecting weaker correlation there. Readout: Spearman/Pearson and
-      slope. Run at ≥32 decoding orders (I-11). CPU-only, no GPU. A near-zero slope is still a
-      publishable negative and a reason to lean on the tier-3 re-fold funnel.
+- [ ] **I-18 — Row B sub-question B: the FUNCTION arm.** The stability arm is done
+      (`Process/rowB-step2-stability-arm.md`): model epistasis tracks experimental stability
+      epistasis weakly and positively on three X-ray Tsuboyama domains, almost entirely at the
+      level of *which position pairs* couple. Remaining: one functional DMS assay, expecting a
+      weaker/noisier correlation. It needs **domain-slice threading** — those assays'
+      `target_seq` are full-length (GB1/SPG1 448 aa, GRB2 217 aa) and will not match a PDB chain
+      gap-free the way the Tsuboyama domains do. CPU-only, no GPU.
 - [ ] **I-19 — Confront Boltz-2's near-FEP affinity claim against the Row A null.**
       Passaro et al. (2025) claim Boltz-2 approaches FEP-level affinity performance, which sits
       in direct tension with measured mutation-blindness. Proposed reconciliation — their

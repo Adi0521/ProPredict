@@ -499,7 +499,36 @@ def _score_batch(pdb: str, seqs: List[str], decoding_orders: int, mpnn_seed: int
     return f, time.time() - t0
 
 
-def analyze_domain(rows: List[Dict], rel: Dict) -> Dict:
+def _replicate_full_sample(prev: Dict, args) -> Dict:
+    """Re-score every analysed double of a stored artifact at decoding seed B.
+
+    Needed because the 60-pair reliability subset turned out to be unrepresentative on some
+    domains, and because scores are NOT invariant to batch composition at a fixed seed (a
+    sequence's decoding orders depend on the invocation), so the only honest replicate is a
+    separate invocation. One extra batch per domain; the expensive main pass is reused.
+    """
+    dms_id = prev["config"]["dms_id"]
+    pdb_code = prev["structure"]["pdb_code"]
+    assay = load_assay(dms_id)
+    by_mutant = {d["mutant"]: d for d in assay.doubles}
+    mutants = [r["mutant"] for r in prev["doubles"]]
+    sample = [by_mutant[m] for m in mutants]
+    pdb = trim_pdb_to_dms(_fetch_pdb(pdb_code), assay.wt_seq, pdb_code)
+    print(f"[{pdb_code}] full-sample replicate: re-scoring {len(sample)} doubles at seed {args.mpnn_seed_b}...")
+    t0 = time.time()
+    eps_b = _eps_for_sample(
+        pdb, assay.wt_seq, assay.singles, sample, prev["config"]["decoding_orders"], args.mpnn_seed_b
+    )
+    dt = time.time() - t0
+    print(f"[{pdb_code}] full-sample replicate done in {dt:.1f} s")
+    prev.setdefault("runtime_seconds", {})["full_sample_replicate_scoring"] = dt
+    return {
+        "full_sample_mutants": mutants,
+        "full_sample_eps_seed_b": [float(v) for v in eps_b],
+    }
+
+
+def analyze_domain(rows: List[Dict], rel: Dict, replicate: Optional[Dict] = None) -> Dict:
     """Per-domain association, bootstraps, reliability and the additive-baseline comparison.
 
     Primary: Spearman, Pearson and OLS slope (with intercept) of eps_exp on eps_model, all
@@ -522,6 +551,33 @@ def analyze_domain(rows: List[Dict], rel: Dict) -> Dict:
         },
         "decoding_noise_reliability": rel,
     }
+
+    # Where does the decoding noise sit — in WHICH position pairs couple, or in which
+    # substitutions couple at a fixed pair? These support different claims, so they are
+    # separated rather than averaged into one per-double number.
+    if replicate and replicate.get("eps_seed_a") and replicate.get("subset_mutants"):
+        out["reliability_decomposition"] = es.reliability_decomposition(
+            replicate["eps_seed_a"],
+            replicate["eps_seed_b"],
+            [es.residue_pair(m) for m in replicate["subset_mutants"]],
+        )
+    # Full-sample cross-seed reliability, when a --replicate-full pass has been run: the
+    # subset estimate above is only 60 pairs and can be unrepresentative of the 300 analysed.
+    if replicate and replicate.get("full_sample_eps_seed_b"):
+        stored = {r["mutant"]: r["eps_model"] for r in rows}
+        mutants = replicate["full_sample_mutants"]
+        rel_full = es.reliability([stored[m] for m in mutants], replicate["full_sample_eps_seed_b"])
+        rel_full["note"] = (
+            "Cross-seed over ALL analysed pairs: draw A is the main batch (seed "
+            f"{replicate.get('mpnn_seed_a')}), draw B a separate invocation at seed "
+            f"{replicate.get('mpnn_seed_b')}."
+        )
+        out["decoding_noise_reliability_full_sample"] = rel_full
+        out["reliability_decomposition_full_sample"] = es.reliability_decomposition(
+            [stored[m] for m in mutants],
+            replicate["full_sample_eps_seed_b"],
+            [es.residue_pair(m) for m in mutants],
+        )
 
     # Secondary: eps_exp detrended for global (nonspecific) epistasis. If the experimental
     # double effect is largely a smooth function of the summed single effects, raw eps_exp is
@@ -638,7 +694,13 @@ def run_stability_domain(
                 rel_prev = prev["analysis"]["decoding_noise_reliability"]
                 rel_new = es.reliability(prev["replicate"]["eps_seed_a"], prev["replicate"]["eps_seed_b"])
                 rel_new.update({k: rel_prev[k] for k in ("mpnn_seed_a", "mpnn_seed_b", "caveats") if k in rel_prev})
-                prev["analysis"] = analyze_domain(prev["doubles"], rel_new)
+                rep = dict(prev["replicate"])
+                rep.setdefault("mpnn_seed_a", prev["config"]["mpnn_seed_a"])
+                rep.setdefault("mpnn_seed_b", prev["config"]["mpnn_seed_b"])
+                if args.replicate_full and "full_sample_eps_seed_b" not in rep:
+                    rep.update(_replicate_full_sample(prev, args))
+                    prev["replicate"] = rep
+                prev["analysis"] = analyze_domain(prev["doubles"], rel_new, rep)
                 prev["reanalyzed_utc"] = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
                 with open(out_path, "w") as fh:
                     json.dump(prev, fh, indent=2)
@@ -752,7 +814,17 @@ def run_stability_domain(
             "eps_seed_a": [float(v) for v in eps_a],
             "eps_seed_b": [float(v) for v in eps_b],
         },
-        "analysis": analyze_domain(rows, rel),
+        "analysis": analyze_domain(
+            rows,
+            rel,
+            {
+                "subset_mutants": [d["mutant"] for d in subset],
+                "eps_seed_a": [float(v) for v in eps_a],
+                "eps_seed_b": [float(v) for v in eps_b],
+                "mpnn_seed_a": args.mpnn_seed,
+                "mpnn_seed_b": args.mpnn_seed_b,
+            },
+        ),
         "environment": {
             "python": sys.version.split()[0],
             "numpy": np.__version__,
@@ -797,12 +869,17 @@ def plot_domain(artifact: Dict, png_path: str) -> None:
 
     ax = axes[1]
     y = np.array([r["exp_double_effect"] for r in rows])
+    h = a["additive_vs_full"]["held_out"]
+    preds = h.get("predictions", {})
     for name, color in (("additive", "#888888"), ("full", "#2e8b57")):
-        x = np.array([r["additive_pred"] if name == "additive" else r["model_double_effect"] for r in rows])
-        h = a["additive_vs_full"]["held_out"]
+        p = np.array([np.nan if v is None else v for v in preds.get(name, [])], dtype=float)
+        if p.size != len(y):
+            continue
         lab = f"{name} (held-out r={h.get(name, {}).get('pearson', float('nan')):.3f})"
-        ax.scatter(x, y, s=12, alpha=0.5, color=color, edgecolor="none", label=lab)
-    ax.set_xlabel("model predicted double effect (additive sum / full)")
+        ax.scatter(p, y, s=12, alpha=0.5, color=color, edgecolor="none", label=lab)
+    lims = [min(y.min(), np.nanmin(y)), max(y.max(), np.nanmax(y))]
+    ax.plot(lims, lims, color="#bbb", lw=0.8, ls="--")
+    ax.set_xlabel("held-out calibrated prediction of the double effect")
     ax.set_ylabel("experimental double effect")
     ax.set_title(f"{code}: additive baseline vs full model", fontsize=10)
     ax.legend(fontsize=8, loc="best")
@@ -820,22 +897,26 @@ def summarize(artifacts: List[Dict], args) -> Dict:
     for a generality claim, and the pooled row is labelled accordingly.
     """
     lines = [
-        "| domain | PDB | method | n doubles | position pairs | Spearman (block 95% CI) | Pearson | slope | within-pair median rho (pos/tested) | reliability | held-out r: additive -> full |",
-        "|---|---|---|--:|--:|---|--:|--:|---|--:|---|",
+        "| domain | PDB | method | n doubles | position pairs | Spearman (block 95% CI) | Pearson | slope | within-pair median rho (pos/tested) | reliability (n) | reliability between / within pair | held-out r: additive -> full |",
+        "|---|---|---|--:|--:|---|--:|--:|---|--:|--:|---|",
     ]
     cx, cy, cg = [], [], []
     for art in artifacts:
         a = art["analysis"]
         p = a["primary_eps_association"]
         blk = a["ci_residue_pair_block"]["spearman"]
-        rel = a["decoding_noise_reliability"]
+        # Prefer the full-sample cross-seed reliability when a --replicate-full pass exists:
+        # the 60-pair subset estimate proved unrepresentative on low-reliability domains.
+        rel = a.get("decoding_noise_reliability_full_sample") or a["decoding_noise_reliability"]
+        dec = a.get("reliability_decomposition_full_sample") or a.get("reliability_decomposition") or {}
         h = a["additive_vs_full"]["held_out"]
         code = art["structure"]["pdb_code"]
         wp = a.get("within_residue_pair")
-        wp_txt = (
-            f"{wp['median_spearman']:+.3f} ({wp['n_pairs_positive']}/{wp['n_pairs_tested']})" if wp else "n/a"
-        )
-        rel_txt = f"{rel['reliability']:.2f}" if rel.get("reliability") is not None else "n/a"
+        wp_txt = f"{wp['median_spearman']:+.3f} ({wp['n_pairs_positive']}/{wp['n_pairs_tested']})" if wp else "n/a"
+        rel_txt = f"{rel['reliability']:.2f} (n={rel.get('n')})" if rel.get("reliability") is not None else "n/a"
+        btw = dec.get("between_group", {}).get("reliability")
+        wtn = dec.get("within_group", {}).get("reliability")
+        dec_txt = f"{btw:.2f} / {wtn:.2f}" if btw is not None and wtn is not None else "n/a"
         if not rel.get("valid"):
             rel_txt += " (invalid)"
         elif not rel.get("stable", True):
@@ -845,7 +926,7 @@ def summarize(artifacts: List[Dict], args) -> Dict:
             f"{art['structure']['method'].split()[0] if art['structure']['method'] else '?'} | "
             f"{p['n']:.0f} | {a['n_residue_pair_groups']} | "
             f"{p['spearman']:+.3f} [{blk['lo']:+.3f}, {blk['hi']:+.3f}] | {p['pearson']:+.3f} | "
-            f"{p['slope']:+.3f} | {wp_txt} | {rel_txt} | "
+            f"{p['slope']:+.3f} | {wp_txt} | {rel_txt} | {dec_txt} | "
             f"{h.get('additive', {}).get('pearson', float('nan')):+.3f} -> "
             f"{h.get('full', {}).get('pearson', float('nan')):+.3f} |"
         )
@@ -1090,6 +1171,11 @@ def main() -> None:
     )
     ap.add_argument("--force", action="store_true", help="allow overwriting an existing results artifact")
     ap.add_argument("--rescore", action="store_true", help="stability arm: recompute even if an artifact matches")
+    ap.add_argument(
+        "--replicate-full",
+        action="store_true",
+        help="stability arm: re-score ALL analysed pairs at decoding seed B for a full-sample reliability",
+    )
     ap.add_argument(
         "--reanalyze",
         action="store_true",

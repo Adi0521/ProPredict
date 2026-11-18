@@ -1,8 +1,15 @@
 # Row B — Does ProteinMPNN `score_only` capture epistasis on real proteins?
 
-**Status: Step 1 (sub-question A) complete and run locally on CPU. Result: YES, `score_only`
-is meaningfully non-additive on a real protein — modest but real signal, sharpened by more
-decoding orders. Sub-question B (correlation vs experimental epistasis) is the next step.**
+**Status: Step 1 (sub-question A) and Step 2's stability arm (sub-question B) both complete,
+run locally on CPU.**
+**(A) YES** — `score_only` is meaningfully non-additive on a real protein (~40% of the
+single-mutation effect scale).
+**(B) YES, weakly, and only coarsely** — that non-additivity tracks *experimental* stability
+epistasis in the same direction on all three domains tested (pooled ρ = +0.18 [+0.03, +0.32]),
+but the signal sits almost entirely in **which position pairs couple**, not in which
+substitutions couple there (within-pair median ρ = +0.07 over 24 pairs, sign test p = 0.54),
+and scoring the double outright gives no reliable held-out win over summing the two singles.
+Full results: `Process/rowB-step2-stability-arm.md`. The functional arm is still open.
 
 This is the mutation-search analogue of Row A (`rowA-boltz-affinity-invariance.md`). Row A
 asks whether Boltz-2's *affinity* head responds to mutations; Row B asks whether the tier-2
@@ -99,25 +106,72 @@ does not establish it**; a larger distal bin would be needed.
    this is sub-question (A) only — it shows the oracle *has* epistasis, not yet that it
    matches *experimental* epistasis.
 
-## Next — Step 2 (sub-question B)
-Correlate model epistasis `eps_model` against **experimental** epistasis
-`eps_exp = DMS(m12) - DMS(m1) - DMS(m2) + DMS(WT)` from the same parquet:
-- **Stability arm:** Tsuboyama ΔG doubles (this domain + 2 more) — the matched observable.
-- **Function arm** (per the study scoping): one functional DMS assay, expecting weaker/noisier
-  correlation since function depends on more than fold stability (a documented confound).
-- Readout: Spearman/Pearson of `eps_model` vs `eps_exp` and the slope. Slope > 0 and
-  significant ⇒ `score_only` epistasis points the right way; near-zero ⇒ the internal
-  non-additivity is real but experimentally uninformative (still a publishable negative,
-  and a reason to lean on the tier-3 re-fold funnel).
-- Run at ≥32 decoding orders given the SNR finding above.
+## Step 2 — sub-question B, stability arm (DONE)
 
-Until Step 2 lands, the tier-3 re-fold funnel (`Process/phase2-task-3-refold-funnel.md`)
-remains the backstop: whatever the cheap search proposes is validated against real predicted
-structure before it is trusted.
+Model epistasis vs **experimental** epistasis
+`eps_exp = DMS(m12) - DMS(m1) - DMS(m2) + DMS(WT)`, over three X-ray Tsuboyama-2023 domains
+(AMFR/4G3O 47 aa, HECD1/3DKM 72 aa, UBE4B/3L1X 69 aa), 300 doubles each at K=32 decoding
+orders. Engineering record, method decisions and limitations:
+**`Process/rowB-step2-stability-arm.md`**.
+
+| domain | Spearman (residue-pair block 95% CI) | detrended ρ | within-pair median ρ | reliability (K=32) | held-out r: additive → full |
+|---|---|--:|--:|--:|---|
+| 4G3O | +0.113 [−0.118, +0.358] | +0.316 | +0.025 (4/7) | 0.89 | −0.329 → −0.448 |
+| 3DKM | +0.251 [−0.006, +0.459] | +0.214 | −0.108 (3/8) | 0.40 | +0.193 → +0.266 |
+| 3L1X | +0.230 [−0.071, +0.498] | +0.171 | +0.180 (7/9) | 0.51 | +0.093 → +0.134 |
+
+Pooled (secondary, within-domain centred): **ρ = +0.181 [+0.031, +0.319]**, n = 900.
+
+Four findings worth carrying forward:
+
+1. **Direction is consistent, magnitude is small, per-domain CIs include zero.** Only the
+   pooled estimate excludes zero, over three proteins — weak evidence, not a generality claim.
+2. **The signal is positional.** Cross-seed reliability decomposes into ~0.85–1.00 *between*
+   position pairs and only 0.21–0.79 *within* a pair. The oracle knows which positions
+   interact; it does not resolve which substitutions interact there. On 4G3O, where within-pair
+   reliability is high (0.79), the near-zero within-pair correlation is a genuine miss rather
+   than a noise ceiling.
+3. **No usable predictive win over the additive baseline.** Held-out gains of +0.07 and +0.04
+   on two domains, a loss on the third, and paired block-bootstrap deltas that straddle zero.
+4. **Experimental ΔΔG epistasis here is mostly *global***: the additive-null fit
+   `DMS(AB) ~ a + b·(DMS(A)+DMS(B))` gives b ≈ 0.39–0.54 on every candidate domain. Detrending
+   that curvature out *strengthens* the association on 4G3O (+0.11 → +0.32), so the model
+   lines up better with the pair-specific part of experiment than with raw `eps_exp`.
+
+**The WT caveat.** These assays have no wild-type row, and because b ≪ 1 the additive-null
+intercept cannot recover it either, so `DMS(WT) = 0` is a stated convention. All primary
+readouts are within-domain and provably invariant to the offset; `eps_exp` signs and magnitudes
+are not interpretable, and uncentered values are never pooled across domains.
+
+**Correction to the Step 1 recommendation.** The ≥32 decoding-orders advice above was
+calibrated on 4G3O — the domain with by far the largest epistasis magnitude. Measured on all
+300 analysed pairs, K=32 gives per-double reliability of 0.89 on 4G3O but only **0.40 / 0.51**
+on 3DKM / 3L1X: noise is roughly constant in absolute units while epistasis magnitude varies
+~3× across domains, so no fixed K delivers a fixed SNR. Search use needs a larger K or
+averaging over several invocations. (Related: `score_only` scores are **not** invariant to
+batch composition at a fixed seed — same doubles, same seed, different invocation correlate at
+0.28–0.92 — so a separate invocation is the only honest replicate.)
+
+**What this means for the search.** The cheap oracle is trustworthy for *proposing*
+combinations at coupled positions and not for *ranking* substitutions at them. The tier-3
+re-fold funnel (`Process/phase2-task-3-refold-funnel.md`) therefore stays load-bearing:
+whatever the cheap search proposes is validated against real predicted structure before it is
+trusted.
+
+## Still open — Step 2's function arm
+One functional DMS assay, expecting weaker/noisier correlation since function depends on more
+than fold stability (a documented confound). It needs domain-slice threading: those assays'
+`target_seq` are full-length and will not match a PDB chain gap-free, unlike the Tsuboyama
+domains.
 
 ## Artifacts
-- `benchmarks/benchmark_score_only_epistasis.py` — harness (extract → trim PDB → batched
-  `score_only` → epistasis stats + `--noise-check`).
+- `benchmarks/benchmark_score_only_epistasis.py` — harness, both arms
+  (`--arm internal` = sub-question A, `--arm stability` = sub-question B).
+- `benchmarks/epistasis_stats.py` — the statistics (associations, block bootstraps,
+  reliability + decomposition, grouped held-out additive-vs-full), pure and unit-tested in
+  `tests/test_epistasis_stats.py`.
+- `benchmarks/score_only_epistasis_stability_{4G3O,3DKM,3L1X}_n300_k32.json` + `.png`, and
+  `..._summary_n300_k32.{json,md}` — Step 2 per-domain artifacts, plots and comparison table.
 - `benchmarks/epistasis_structures/4G3O.raw.pdb` — cached RCSB structure.
 - `benchmarks/score_only_epistasis_n300_k8.jsonl` — per-pair `eps_model`, single deltas, CA
   distance for the 300-pair run reported above.

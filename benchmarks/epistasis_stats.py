@@ -337,6 +337,7 @@ def additive_vs_full(
         }
     held["delta_pearson_full_minus_additive"] = held["full"]["pearson"] - held["additive"]["pearson"]
     held["delta_rmse_full_minus_additive"] = held["full"]["rmse"] - held["additive"]["rmse"]
+    held["predictions"] = {k: [None if np.isnan(v) else float(v) for v in preds[k]] for k in preds}
     held["note"] = (
         "Group-disjoint by residue pair; distinct pairs still share individual single "
         "mutations, so train/test are not fully independent."
@@ -381,3 +382,42 @@ def paired_delta_ci(
         "n_boot_ok": len(vals),
         "kind": f"paired block bootstrap of delta {stat} (full - additive)",
     }
+
+
+def reliability_decomposition(x_a: Sequence[float], x_b: Sequence[float], groups: Sequence) -> Dict:
+    """Split test-retest reliability into BETWEEN-group and WITHIN-group parts.
+
+    Motivation: these DMS doubles cluster on a handful of position pairs, so model epistasis
+    can be reliable at the position-pair level (which pairs couple) while being noise at the
+    substitution level (which amino acids couple at that pair) — or the reverse. A single
+    per-double reliability cannot tell those apart, and the two support very different claims.
+
+    `between` is the reliability of the per-group means; `within` is the reliability of the
+    deviations from those means. Both are estimated on few units here, so both carry the same
+    stability caveats as `reliability`.
+    """
+    a = np.asarray(x_a, dtype=float)
+    b = np.asarray(x_b, dtype=float)
+    uniq, index_of = _group_index(groups)
+    if len(uniq) < 3:
+        return {"valid": False, "reason": f"only {len(uniq)} groups"}
+    means_a, means_b, dev_a, dev_b = [], [], [], []
+    for g in uniq:
+        idx = index_of[g]
+        means_a.append(a[idx].mean())
+        means_b.append(b[idx].mean())
+        if len(idx) > 1:
+            dev_a.extend(a[idx] - a[idx].mean())
+            dev_b.extend(b[idx] - b[idx].mean())
+    out = {
+        "n_groups": len(uniq),
+        "between_group": reliability(means_a, means_b),
+        "note": (
+            "between_group = reliability of per-position-pair means (does the model agree with "
+            "itself about WHICH pairs couple); within_group = reliability of substitution-level "
+            "deviations at a fixed pair."
+        ),
+    }
+    if len(dev_a) >= 3:
+        out["within_group"] = reliability(dev_a, dev_b)
+    return out
