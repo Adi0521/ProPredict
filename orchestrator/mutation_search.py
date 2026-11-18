@@ -22,9 +22,24 @@ wired later in the two-stage funnel; it is not in this module.
 Fitness convention: HIGHER = better for every oracle. ProteinMPNN's `global_score` is a
 mean NLL (lower = better fit), so score_only_oracle returns its NEGATION.
 
-Reproducibility mirrors mutation_scan.py: scores are the mean over `num_decoding_orders`
-random decoding orders at a FIXED, non-zero seed. seed=0 is rejected — ProteinMPNN's CLI
-does `if args.seed:` and treats 0 as unset, randomizing the seed.
+Reproducibility: scores are the mean over `num_decoding_orders` random decoding orders at a
+FIXED, non-zero seed. seed=0 is rejected — ProteinMPNN's CLI does `if args.seed:` and treats
+0 as unset, randomizing the seed.
+
+Reproducibility is NOT the same as comparability, and the two came apart here. Under the
+upstream CLI (protocol v1) a sequence's decoding orders are determined by its INDEX in the
+scored batch, because ProteinMPNN seeds torch once per process and then draws sequentially
+through the fasta. So an identical batch replays exactly, but the same sequence rescored in
+a differently-composed batch gets a different number — and `adalead_search` accumulates
+`measured` across one invocation per round, then ranks those scores against each other.
+`score_only_oracle` therefore defaults to protocol v2 (`orchestrator/mpnn_score_only.py`),
+which draws the K orders once and shares them across the batch, making a score a function
+of (backbone, sequence, model, K, seed) alone. Measured effect on the WT/single/double
+epistasis contrast: cross-seed reliability 0.53 -> 0.98
+(`benchmarks/diagnose_score_only_batching.py`).
+
+This is a numerical-consistency property only. It does not make a high score evidence of
+stability, function or fitness — see `Process/rowB-step2-stability-arm.md`.
 
 Standalone module (params, not config.py wiring). The AdaLead search that consumes these
 oracles is built on top in a later task.
@@ -45,6 +60,11 @@ from models.schemas import MutationCandidate, MutationSearchResult, StructurePre
 
 # Reuse mutation_scan's verified alphabet and conditional-probs runner so the two modules
 # can never drift (same [L,21] ordering, same seed guard, same decoding-order averaging).
+from orchestrator.mpnn_score_only import (
+    SCORE_PROTOCOL_V1,
+    SCORE_PROTOCOL_V2,
+    score_only_shared_orders,
+)
 from orchestrator.mutation_scan import (
     _ALPHABET,
     _STANDARD_AA,
@@ -260,6 +280,7 @@ def score_only_oracle(
     model_name: str = "v_48_020",
     seed: int = 37,
     num_decoding_orders: int = 8,
+    protocol: str = SCORE_PROTOCOL_V2,
 ) -> List[float]:
     """
     Epistasis-aware fitness for a batch of mutant `sequences`, threaded onto the WT backbone
@@ -272,6 +293,17 @@ def score_only_oracle(
     All sequences must be the same length as the WT backbone (mutation search produces only
     substitutions); ProteinMPNN threads each into S[:, :len(seq)], so a wrong length would
     silently score a chimera or crash.
+
+    `protocol` selects how decoding orders are drawn — see `orchestrator/mpnn_score_only.py`:
+
+      SCORE_PROTOCOL_V2 (default) — in-process, K orders drawn once and SHARED by every
+          sequence. A sequence's score depends only on (backbone, sequence, model, K, seed),
+          so results are invariant to batch composition, order and chunking, and the shared
+          draws cancel in WT/single/double contrasts (measured eps reliability 0.53 -> 0.98).
+      SCORE_PROTOCOL_V1 — the upstream CLI. Reproducible for an identical fasta in an
+          identical order, but a sequence's score depends on its INDEX in the batch. Kept
+          only so the pre-fix artifacts can be reproduced and compared; do not use it to
+          rank candidates that were scored in different invocations.
     """
     if not proteinmpnn_dir:
         raise RuntimeError(
@@ -287,15 +319,29 @@ def score_only_oracle(
             "mutation search only produces substitutions."
         )
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        global_scores = _run_proteinmpnn_score_only(
+    if protocol == SCORE_PROTOCOL_V2:
+        global_scores = score_only_shared_orders(
             pdb_string,
             sequences,
-            tmpdir,
-            proteinmpnn_dir,
-            model_name,
+            proteinmpnn_dir=proteinmpnn_dir,
+            model_name=model_name,
             seed=seed,
             num_decoding_orders=num_decoding_orders,
+        )
+    elif protocol == SCORE_PROTOCOL_V1:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            global_scores = _run_proteinmpnn_score_only(
+                pdb_string,
+                sequences,
+                tmpdir,
+                proteinmpnn_dir,
+                model_name,
+                seed=seed,
+                num_decoding_orders=num_decoding_orders,
+            )
+    else:
+        raise ValueError(
+            f"unknown scoring protocol {protocol!r}; expected {SCORE_PROTOCOL_V2!r} or {SCORE_PROTOCOL_V1!r}"
         )
     # global_score is a mean NLL (lower = better fit); negate so higher = better everywhere.
     return [-g for g in global_scores]
@@ -656,6 +702,12 @@ def _cli() -> None:
         help="ProteinMPNN decoding seed (must be non-zero)",
     )
     ap.add_argument("--num-decoding-orders", type=int, default=int(os.getenv("PROTEINMPNN_NUM_DECODING_ORDERS", "8")))
+    ap.add_argument(
+        "--score-protocol",
+        default=os.getenv("PROTEINMPNN_SCORE_PROTOCOL", SCORE_PROTOCOL_V2),
+        choices=[SCORE_PROTOCOL_V2, SCORE_PROTOCOL_V1],
+        help="score_only protocol: v2 shares decoding orders across the batch (default); v1 is the upstream CLI",
+    )
     ap.add_argument("--rounds", type=int, default=10)
     ap.add_argument("--candidates-per-round", type=int, default=20)
     ap.add_argument("--max-sites", type=int, default=3)
@@ -676,6 +728,7 @@ def _cli() -> None:
             model_name=args.model_name,
             seed=args.mpnn_seed,
             num_decoding_orders=args.num_decoding_orders,
+            protocol=args.score_protocol,
         )
 
     result = search_and_validate(

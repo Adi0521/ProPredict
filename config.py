@@ -102,7 +102,17 @@ PROTEINMPNN_MODEL_NAME = os.getenv("PROTEINMPNN_MODEL_NAME", "v_48_020")
 # 0 as "unset" and randomizes, making scores non-reproducible (mutation_scan.py guards it).
 PROTEINMPNN_SEED = int(os.getenv("PROTEINMPNN_SEED", "37"))
 # Random decoding orders averaged per scan. Higher = less noise, linearly more compute.
+# NOTE: a fixed K does NOT buy a fixed reliability across proteins — measured per-double
+# epistasis reliability at K=32 under the old protocol was 0.89/0.40/0.51 on three domains
+# (ISSUES I-23). Measure repeatability on the domain you care about rather than assuming.
 PROTEINMPNN_NUM_DECODING_ORDERS = int(os.getenv("PROTEINMPNN_NUM_DECODING_ORDERS", "8"))
+# score_only scoring protocol. "score_only/v2" (default) draws the K decoding orders once
+# and shares them across every sequence in a call, so a score depends only on (backbone,
+# sequence, model, K, seed) — invariant to batch composition, order and chunking.
+# "score_only/v1" is the upstream CLI, whose per-sequence decoding orders depend on the
+# sequence's INDEX in the batch; keep it only to reproduce pre-fix artifacts.
+# See orchestrator/mpnn_score_only.py and Process/mutation-scoring-consistency.md.
+PROTEINMPNN_SCORE_PROTOCOL = os.getenv("PROTEINMPNN_SCORE_PROTOCOL", "score_only/v2")
 
 # Combinatorial / multi-site mutation search (hand-rolled AdaLead over a ProteinMPNN
 # oracle). Cheap tier-2 score_only search loop, budget-capped tier-3 re-fold validation.

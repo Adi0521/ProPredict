@@ -21,6 +21,7 @@ from config import (
     PROTEINMPNN_MODEL_NAME,
     PROTEINMPNN_NUM_DECODING_ORDERS,
     PROTEINMPNN_PATH,
+    PROTEINMPNN_SCORE_PROTOCOL,
     PROTEINMPNN_SEED,
     ROSETTA_ENABLED,
 )
@@ -501,6 +502,7 @@ def _execute_agent_tool(
                 model_name=PROTEINMPNN_MODEL_NAME,
                 seed=PROTEINMPNN_SEED,
                 num_decoding_orders=PROTEINMPNN_NUM_DECODING_ORDERS,
+                protocol=PROTEINMPNN_SCORE_PROTOCOL,
             )
 
         try:

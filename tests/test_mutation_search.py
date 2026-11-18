@@ -21,6 +21,7 @@ import numpy as np
 import pytest
 
 from models.schemas import MutationCandidate, StructurePrediction
+from orchestrator.mpnn_score_only import SCORE_PROTOCOL_V1
 from orchestrator.mutation_search import (
     _run_proteinmpnn_score_only,
     adalead_search,
@@ -142,13 +143,20 @@ def _make_fake_srun(global_scores_by_index, decoding_orders=3):
     return fake_srun
 
 
+# The four tests below mock the upstream CLI subprocess, so they necessarily test protocol
+# v1 and pin it explicitly rather than riding `score_only_oracle`'s default (now v2, which
+# runs the model in-process and so cannot be reached by mocking subprocess.run). v2's own
+# numerical claims — batch-composition invariance and fidelity to the CLI's arithmetic —
+# need the real model and live in tests/test_mpnn_score_only.py.
+
+
 @patch("orchestrator.mutation_search.subprocess.run")
 def test_score_only_negates_and_preserves_order(mock_srun, tmp_path):
     (tmp_path / "protein_mpnn_run.py").write_text("# stub")
     # global_score is a mean NLL (lower = better); oracle returns the negation (higher = better).
     mock_srun.side_effect = _make_fake_srun([1.0, 0.5, 2.0])
     seqs = ["AAAA", "AACA", "AAGA"]
-    out = score_only_oracle("PDBSTR", seqs, proteinmpnn_dir=str(tmp_path))
+    out = score_only_oracle("PDBSTR", seqs, proteinmpnn_dir=str(tmp_path), protocol=SCORE_PROTOCOL_V1)
     assert out == pytest.approx([-1.0, -0.5, -2.0])
     # Ordering preserved: best (highest) fitness is the 0.5-NLL candidate at index 1.
     assert out.index(max(out)) == 1
@@ -173,7 +181,7 @@ def test_score_only_averages_over_decoding_orders(mock_srun, tmp_path):
         return _R()
 
     mock_srun.side_effect = fake_srun
-    out = score_only_oracle("PDBSTR", ["ACDE"], proteinmpnn_dir=str(tmp_path))
+    out = score_only_oracle("PDBSTR", ["ACDE"], proteinmpnn_dir=str(tmp_path), protocol=SCORE_PROTOCOL_V1)
     assert out == pytest.approx([-2.0])
 
 
@@ -181,7 +189,9 @@ def test_score_only_averages_over_decoding_orders(mock_srun, tmp_path):
 def test_score_only_passes_score_only_flags(mock_srun, tmp_path):
     (tmp_path / "protein_mpnn_run.py").write_text("# stub")
     mock_srun.side_effect = _make_fake_srun([1.0])
-    score_only_oracle("PDBSTR", ["ACDE"], proteinmpnn_dir=str(tmp_path), seed=37, num_decoding_orders=3)
+    score_only_oracle(
+        "PDBSTR", ["ACDE"], proteinmpnn_dir=str(tmp_path), seed=37, num_decoding_orders=3, protocol=SCORE_PROTOCOL_V1
+    )
     cmd = mock_srun.call_args[0][0]
     assert "--score_only" in cmd and cmd[cmd.index("--score_only") + 1] == "1"
     assert "--path_to_fasta" in cmd
@@ -195,7 +205,7 @@ def test_score_only_missing_output_raises(mock_srun, tmp_path):
     # Writes only fasta_1; index 1 (second candidate) missing -> error names it.
     mock_srun.side_effect = _make_fake_srun([1.0])
     with pytest.raises(RuntimeError, match=r"no output for candidate indices \[1\]"):
-        score_only_oracle("PDBSTR", ["ACDE", "GCDE"], proteinmpnn_dir=str(tmp_path))
+        score_only_oracle("PDBSTR", ["ACDE", "GCDE"], proteinmpnn_dir=str(tmp_path), protocol=SCORE_PROTOCOL_V1)
 
 
 def test_score_only_empty_sequences_shortcircuits():
