@@ -1,0 +1,596 @@
+{
+  "schema": "score_only_batching_diagnostic/1",
+  "generated_utc": "2026-11-18T20:35:08+00:00",
+  "runtime_seconds": 365.0,
+  "config": {
+    "dms_id": "AMFR_HUMAN_Tsuboyama_2023_4G3O",
+    "pdb_code": "4G3O",
+    "decoding_orders": 8,
+    "mpnn_seed": 37,
+    "mpnn_seed_b": 38,
+    "panel_seed": 20261118,
+    "shuffle_seed": 7,
+    "chunks": 3,
+    "max_offset": 6,
+    "top_k": 5,
+    "model_name": "v_48_020",
+    "proteinmpnn_rev": "8907e6671bfbfc92303b5f79c4b5e6ce47cdef57",
+    "scoring_protocol": "score_only/v1 (upstream CLI, one global RNG stream per process)"
+  },
+  "panel": {
+    "wt_length": 47,
+    "names": [
+      "WT",
+      "D28E",
+      "D28F",
+      "D28G",
+      "D28H",
+      "D28N",
+      "D28S",
+      "D28T",
+      "D28V",
+      "N41D",
+      "N41E",
+      "N41F",
+      "N41H",
+      "N41K",
+      "N41L",
+      "N41P",
+      "N41S",
+      "N41V",
+      "N41W",
+      "N41Y",
+      "R46D",
+      "R46I",
+      "R46L",
+      "R46S",
+      "R46Y",
+      "T32A",
+      "T32E",
+      "T32F",
+      "T32G",
+      "T32I",
+      "T32M",
+      "T32P",
+      "T32Q",
+      "T32S",
+      "T32Y",
+      "T38G",
+      "T38H",
+      "T38I",
+      "T38Q",
+      "T38V",
+      "T38W",
+      "T38Y",
+      "D28E:N41S",
+      "D28E:T32F",
+      "D28F:T32Y",
+      "D28G:N41Y",
+      "D28G:T32E",
+      "D28H:T32A",
+      "D28H:T32S",
+      "D28N:T38H",
+      "D28S:T32M",
+      "D28T:N41S",
+      "D28T:T32Q",
+      "D28T:T38I",
+      "D28V:T38Y",
+      "N41H:R46L",
+      "N41L:R46S",
+      "N41P:R46D",
+      "N41P:R46I",
+      "N41V:R46Y",
+      "T32E:N41E",
+      "T32E:N41W",
+      "T32E:T38Q",
+      "T32G:N41K",
+      "T32I:N41W",
+      "T32I:T38I",
+      "T32M:T38G",
+      "T32P:T38H",
+      "T32Q:N41D",
+      "T38I:N41P",
+      "T38V:N41L",
+      "T38W:N41F"
+    ],
+    "doubles": [
+      {
+        "mutant": "D28E:N41S",
+        "components": [
+          "D28E",
+          "N41S"
+        ]
+      },
+      {
+        "mutant": "D28E:T32F",
+        "components": [
+          "D28E",
+          "T32F"
+        ]
+      },
+      {
+        "mutant": "D28F:T32Y",
+        "components": [
+          "D28F",
+          "T32Y"
+        ]
+      },
+      {
+        "mutant": "D28G:N41Y",
+        "components": [
+          "D28G",
+          "N41Y"
+        ]
+      },
+      {
+        "mutant": "D28G:T32E",
+        "components": [
+          "D28G",
+          "T32E"
+        ]
+      },
+      {
+        "mutant": "D28H:T32A",
+        "components": [
+          "D28H",
+          "T32A"
+        ]
+      },
+      {
+        "mutant": "D28H:T32S",
+        "components": [
+          "D28H",
+          "T32S"
+        ]
+      },
+      {
+        "mutant": "D28N:T38H",
+        "components": [
+          "D28N",
+          "T38H"
+        ]
+      },
+      {
+        "mutant": "D28S:T32M",
+        "components": [
+          "D28S",
+          "T32M"
+        ]
+      },
+      {
+        "mutant": "D28T:N41S",
+        "components": [
+          "D28T",
+          "N41S"
+        ]
+      },
+      {
+        "mutant": "D28T:T32Q",
+        "components": [
+          "D28T",
+          "T32Q"
+        ]
+      },
+      {
+        "mutant": "D28T:T38I",
+        "components": [
+          "D28T",
+          "T38I"
+        ]
+      },
+      {
+        "mutant": "D28V:T38Y",
+        "components": [
+          "D28V",
+          "T38Y"
+        ]
+      },
+      {
+        "mutant": "N41H:R46L",
+        "components": [
+          "N41H",
+          "R46L"
+        ]
+      },
+      {
+        "mutant": "N41L:R46S",
+        "components": [
+          "N41L",
+          "R46S"
+        ]
+      },
+      {
+        "mutant": "N41P:R46D",
+        "components": [
+          "N41P",
+          "R46D"
+        ]
+      },
+      {
+        "mutant": "N41P:R46I",
+        "components": [
+          "N41P",
+          "R46I"
+        ]
+      },
+      {
+        "mutant": "N41V:R46Y",
+        "components": [
+          "N41V",
+          "R46Y"
+        ]
+      },
+      {
+        "mutant": "T32E:N41E",
+        "components": [
+          "T32E",
+          "N41E"
+        ]
+      },
+      {
+        "mutant": "T32E:N41W",
+        "components": [
+          "T32E",
+          "N41W"
+        ]
+      },
+      {
+        "mutant": "T32E:T38Q",
+        "components": [
+          "T32E",
+          "T38Q"
+        ]
+      },
+      {
+        "mutant": "T32G:N41K",
+        "components": [
+          "T32G",
+          "N41K"
+        ]
+      },
+      {
+        "mutant": "T32I:N41W",
+        "components": [
+          "T32I",
+          "N41W"
+        ]
+      },
+      {
+        "mutant": "T32I:T38I",
+        "components": [
+          "T32I",
+          "T38I"
+        ]
+      },
+      {
+        "mutant": "T32M:T38G",
+        "components": [
+          "T32M",
+          "T38G"
+        ]
+      },
+      {
+        "mutant": "T32P:T38H",
+        "components": [
+          "T32P",
+          "T38H"
+        ]
+      },
+      {
+        "mutant": "T32Q:N41D",
+        "components": [
+          "T32Q",
+          "N41D"
+        ]
+      },
+      {
+        "mutant": "T38I:N41P",
+        "components": [
+          "T38I",
+          "N41P"
+        ]
+      },
+      {
+        "mutant": "T38V:N41L",
+        "components": [
+          "T38V",
+          "N41L"
+        ]
+      },
+      {
+        "mutant": "T38W:N41F",
+        "components": [
+          "T38W",
+          "N41F"
+        ]
+      }
+    ],
+    "n_decoys": 3
+  },
+  "reference_scores": {
+    "WT": -1.9195500612258911,
+    "D28E": -1.8903769254684448,
+    "D28F": -2.00830078125,
+    "D28G": -1.977798581123352,
+    "D28H": -1.9850335121154785,
+    "D28N": -1.9104009866714478,
+    "D28S": -1.916194200515747,
+    "D28T": -1.9409117698669434,
+    "D28V": -1.992663860321045,
+    "N41D": -1.9063851833343506,
+    "N41E": -1.9609096050262451,
+    "N41F": -1.9503848552703857,
+    "N41H": -1.8963518142700195,
+    "N41K": -1.9213852882385254,
+    "N41L": -1.9150012731552124,
+    "N41P": -2.00022554397583,
+    "N41S": -1.9390556812286377,
+    "N41V": -1.9943674802780151,
+    "N41W": -1.9510430097579956,
+    "N41Y": -1.944824457168579,
+    "R46D": -1.9592832326889038,
+    "R46I": -1.976226568222046,
+    "R46L": -1.9100100994110107,
+    "R46S": -1.944082498550415,
+    "R46Y": -1.959104299545288,
+    "T32A": -1.9660531282424927,
+    "T32E": -1.9710992574691772,
+    "T32F": -2.008784055709839,
+    "T32G": -1.971689224243164,
+    "T32I": -2.0119283199310303,
+    "T32M": -2.0036463737487793,
+    "T32P": -2.0012171268463135,
+    "T32Q": -1.9705052375793457,
+    "T32S": -1.894173502922058,
+    "T32Y": -2.004850149154663,
+    "T38G": -2.041774272918701,
+    "T38H": -2.0232949256896973,
+    "T38I": -2.041358470916748,
+    "T38Q": -2.0079450607299805,
+    "T38V": -2.0086920261383057,
+    "T38W": -2.0371670722961426,
+    "T38Y": -2.045877695083618,
+    "D28E:N41S": -1.871008038520813,
+    "D28E:T32F": -2.023317337036133,
+    "D28F:T32Y": -2.09995436668396,
+    "D28G:N41Y": -1.954176664352417,
+    "D28G:T32E": -2.0211398601531982,
+    "D28H:T32A": -2.044060230255127,
+    "D28H:T32S": -1.9977840185165405,
+    "D28N:T38H": -2.0319747924804688,
+    "D28S:T32M": -2.0093517303466797,
+    "D28T:N41S": -1.955308437347412,
+    "D28T:T32Q": -2.0335609912872314,
+    "D28T:T38I": -2.0952277183532715,
+    "D28V:T38Y": -2.1280722618103027,
+    "N41H:R46L": -1.887427568435669,
+    "N41L:R46S": -1.9678901433944702,
+    "N41P:R46D": -2.0172832012176514,
+    "N41P:R46I": -2.041389226913452,
+    "N41V:R46Y": -2.0341506004333496,
+    "T32E:N41E": -2.0079894065856934,
+    "T32E:N41W": -2.047227382659912,
+    "T32E:T38Q": -2.067882776260376,
+    "T32G:N41K": -2.0129880905151367,
+    "T32I:N41W": -2.0606937408447266,
+    "T32I:T38I": -2.160245895385742,
+    "T32M:T38G": -2.135586738586426,
+    "T32P:T38H": -2.1215083599090576,
+    "T32Q:N41D": -1.9705891609191895,
+    "T38I:N41P": -2.153557062149048,
+    "T38V:N41L": -2.036797046661377,
+    "T38W:N41F": -2.083219051361084
+  },
+  "reference_epistasis": [
+    0.03887450695037842,
+    -0.043706417083740234,
+    -0.006353497505187988,
+    0.04889631271362305,
+    0.008207917213439941,
+    -0.012523651123046875,
+    -0.03812706470489502,
+    -0.017828941345214844,
+    -0.009061217308044434,
+    0.005108952522277832,
+    -0.041694045066833496,
+    -0.03250753879547119,
+    -0.009080767631530762,
+    -0.0006157159805297852,
+    -0.028356432914733887,
+    0.022675514221191406,
+    0.015512824058532715,
+    -0.0002288818359375,
+    0.004469394683837891,
+    -0.04463517665863037,
+    -0.008388519287109375,
+    -0.03946363925933838,
+    -0.017272472381591797,
+    -0.02650916576385498,
+    -0.009716153144836426,
+    -0.01654636859893799,
+    -0.013248801231384277,
+    -0.03152310848236084,
+    -0.03265380859375,
+    -0.015217185020446777
+  ],
+  "conditions": {
+    "repeat": {
+      "exact_match": true,
+      "n_sequences": 72,
+      "score_abs_delta_mean": 0.0,
+      "score_abs_delta_max": 0.0,
+      "score_delta_sd": 0.0,
+      "score_ref_sd": 0.06516706701614634,
+      "score_spearman": 1.0,
+      "n_doubles": 30,
+      "eps_abs_delta_mean": 0.0,
+      "eps_abs_delta_max": 0.0,
+      "eps_ref_sd": 0.023305491483689926,
+      "eps_spearman": 1.0,
+      "eps_pearson": 1.0,
+      "top5_overlap": 5,
+      "top5_of": 5
+    },
+    "reorder": {
+      "exact_match": false,
+      "n_sequences": 72,
+      "score_abs_delta_mean": 0.0113844805293613,
+      "score_abs_delta_max": 0.0331721305847168,
+      "score_delta_sd": 0.014472331227582578,
+      "score_ref_sd": 0.06516706701614634,
+      "score_spearman": 0.9775548266769568,
+      "n_doubles": 30,
+      "eps_abs_delta_mean": 0.028333489100138345,
+      "eps_abs_delta_max": 0.08310317993164062,
+      "eps_ref_sd": 0.023305491483689926,
+      "eps_spearman": 0.27252502780867627,
+      "eps_pearson": 0.38395552783906667,
+      "top5_overlap": 4,
+      "top5_of": 5
+    },
+    "insert": {
+      "exact_match": false,
+      "n_sequences": 72,
+      "score_abs_delta_mean": 0.010878420538372464,
+      "score_abs_delta_max": 0.032176971435546875,
+      "score_delta_sd": 0.01323691245321452,
+      "score_ref_sd": 0.06516706701614634,
+      "score_spearman": 0.9676506527750983,
+      "n_doubles": 30,
+      "eps_abs_delta_mean": 0.02051360607147217,
+      "eps_abs_delta_max": 0.046640634536743164,
+      "eps_ref_sd": 0.023305491483689926,
+      "eps_spearman": 0.4269187986651835,
+      "eps_pearson": 0.47132394149773543,
+      "top5_overlap": 4,
+      "top5_of": 5
+    },
+    "chunked": {
+      "exact_match": false,
+      "n_sequences": 72,
+      "score_abs_delta_mean": 0.006545984082751804,
+      "score_abs_delta_max": 0.0389101505279541,
+      "score_delta_sd": 0.010031788433455603,
+      "score_ref_sd": 0.06516706701614634,
+      "score_spearman": 0.9843398289279054,
+      "n_doubles": 30,
+      "eps_abs_delta_mean": 0.011645642916361491,
+      "eps_abs_delta_max": 0.0389101505279541,
+      "eps_ref_sd": 0.023305491483689926,
+      "eps_spearman": 0.7677419354838709,
+      "eps_pearson": 0.7962395397468826,
+      "top5_overlap": 5,
+      "top5_of": 5
+    },
+    "individual": {
+      "exact_match": false,
+      "n_sequences": 72,
+      "score_abs_delta_mean": 0.02055631743537055,
+      "score_abs_delta_max": 0.05377316474914551,
+      "score_delta_sd": 0.011209969354463382,
+      "score_ref_sd": 0.06516706701614634,
+      "score_spearman": 0.9829892597594703,
+      "n_doubles": 30,
+      "eps_abs_delta_mean": 0.02323284149169922,
+      "eps_abs_delta_max": 0.05151164531707764,
+      "eps_ref_sd": 0.023305491483689926,
+      "eps_spearman": 0.6031145717463848,
+      "eps_pearson": 0.6489642514979052,
+      "top5_overlap": 4,
+      "top5_of": 5
+    }
+  },
+  "stream_offset": {
+    "probe_is_double": "T38W:N41F",
+    "offsets": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "scores": [
+      -2.100588798522949,
+      -2.086972713470459,
+      -2.0806827545166016,
+      -2.0958900451660156,
+      -2.0795464515686035,
+      -2.089601755142212
+    ],
+    "min": -2.100588798522949,
+    "max": -2.0795464515686035,
+    "range": 0.021042346954345703,
+    "sd": 0.00830307566207787,
+    "seconds": 10.1,
+    "sequences_scored": 21
+  },
+  "shared_draw_benefit": {
+    "batched_v1": {
+      "mpnn_seed_a": 37,
+      "mpnn_seed_b": 38,
+      "n_doubles": 30,
+      "eps_pearson_across_seeds": 0.5329753013166577,
+      "eps_spearman_across_seeds": 0.5123470522803114,
+      "eps_noise_sd": 0.015905816273069803,
+      "eps_observed_sd": 0.023274757880428994,
+      "reliability": 0.5329734402251016,
+      "seconds": 30.2,
+      "sequences_scored": 144
+    },
+    "shared_draws": {
+      "mpnn_seed_a": 37,
+      "mpnn_seed_b": 38,
+      "n_doubles": 30,
+      "eps_pearson_across_seeds": 0.9773199128738025,
+      "eps_spearman_across_seeds": 0.9764182424916574,
+      "eps_noise_sd": 0.0023593463952870167,
+      "eps_observed_sd": 0.015565578408504895,
+      "reliability": 0.9770251391887902,
+      "seconds": 160.2,
+      "sequences_scored": 144
+    }
+  },
+  "scoring_cost": {
+    "reference": {
+      "invocations": 1,
+      "sequences_scored": 72,
+      "seconds": 16.4
+    },
+    "repeat": {
+      "invocations": 1,
+      "sequences_scored": 72,
+      "seconds": 15.0
+    },
+    "reorder": {
+      "invocations": 1,
+      "sequences_scored": 72,
+      "seconds": 16.0
+    },
+    "insert": {
+      "invocations": 1,
+      "sequences_scored": 75,
+      "seconds": 15.4
+    },
+    "chunked": {
+      "invocations": 3,
+      "sequences_scored": 72,
+      "seconds": 19.4
+    },
+    "individual": {
+      "invocations": 72,
+      "sequences_scored": 72,
+      "seconds": 82.4
+    },
+    "stream_offset": {
+      "invocations": 6,
+      "sequences_scored": 21,
+      "seconds": 10.1
+    },
+    "shared_draw_benefit": {
+      "invocations": 146,
+      "sequences_scored": 288,
+      "seconds": 190.4
+    }
+  }
+}
