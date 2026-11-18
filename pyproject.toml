@@ -70,6 +70,9 @@ bench = [
     # benchmark_proteinmpnn_checkpoints.py and benchmark_score_only_epistasis.py fail at
     # their first read_parquet with "Unable to find a usable engine".
     "pyarrow>=14",
+    # Per-domain scatter plots for the Row B stability arm
+    # (benchmark_score_only_epistasis.py --arm stability --plots).
+    "matplotlib>=3.8",
 ]
 # Boltz-2, PINNED to an exact commit — keep in lockstep with modal_app.py. b1ebfc46 reports version "2.2.1" but is 6 commits AHEAD of the
 # v2.2.1 tag (two numerics fixes); `boltz==2.2.1` from PyPI is a DIFFERENT build and would

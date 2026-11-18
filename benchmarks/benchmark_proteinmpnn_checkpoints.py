@@ -36,7 +36,6 @@ Run (ProPredict conda env; needs PROTEINMPNN_PATH + ESMFOLD_LOCAL=True in .env):
 import argparse
 import json
 import os
-import subprocess
 import sys
 import tempfile
 from typing import Dict, List, Optional
@@ -45,6 +44,7 @@ import numpy as np
 import pandas as pd
 from scipy.stats import spearmanr
 
+from benchmarks import _proteingym as _pg
 from benchmarks._artifacts import guard_overwrite
 from config import (
     PROTEINMPNN_NUM_DECODING_ORDERS,
@@ -54,8 +54,8 @@ from config import (
 from orchestrator.backends.esmfold import call_esmfold_local
 from orchestrator.mutation_scan import _ALPHABET, _run_proteinmpnn_conditional_probs
 
-CACHE_DIR = os.path.join(os.path.dirname(__file__), "proteingym_cache")
-PARQUET_S3 = "s3://proteingym/DMS_substitutions.parquet"
+CACHE_DIR = _pg.CACHE_DIR
+PARQUET_S3 = _pg.PARQUET_S3
 
 # Same three assays as the Task-2 validation gate: two Stability (best case for a
 # structural scorer) + one Activity (contrast category — tests generalization).
@@ -69,16 +69,9 @@ DEFAULT_CHECKPOINTS = ["v_48_002", "v_48_010", "v_48_020", "v_48_030"]
 
 
 def _ensure_parquet() -> str:
-    """Download the combined ProteinGym substitutions parquet once, then cache."""
-    os.makedirs(CACHE_DIR, exist_ok=True)
-    path = os.path.join(CACHE_DIR, "DMS_substitutions.parquet")
-    if not os.path.isfile(path):
-        print(f"Downloading ProteinGym parquet (~89 MB) -> {path}")
-        subprocess.run(
-            ["aws", "s3", "cp", "--no-sign-request", PARQUET_S3, path],
-            check=True,
-        )
-    return path
+    """Download the combined ProteinGym substitutions parquet once, then cache.
+    Shared with benchmark_score_only_epistasis.py via benchmarks/_proteingym.py."""
+    return _pg.ensure_parquet()
 
 
 def _score_mutant(mutant: str, log_p: np.ndarray, target_seq: str) -> Optional[float]:
