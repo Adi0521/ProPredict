@@ -102,9 +102,11 @@ PROTEINMPNN_MODEL_NAME = os.getenv("PROTEINMPNN_MODEL_NAME", "v_48_020")
 # 0 as "unset" and randomizes, making scores non-reproducible (mutation_scan.py guards it).
 PROTEINMPNN_SEED = int(os.getenv("PROTEINMPNN_SEED", "37"))
 # Random decoding orders averaged per scan. Higher = less noise, linearly more compute.
-# NOTE: a fixed K does NOT buy a fixed reliability across proteins — measured per-double
-# epistasis reliability at K=32 under the old protocol was 0.89/0.40/0.51 on three domains
-# (ISSUES I-23). Measure repeatability on the domain you care about rather than assuming.
+# NOTE: a fixed K does NOT buy a fixed reliability across proteins. Under the old protocol,
+# measured per-double epistasis reliability at K=32 was 0.89/0.40/0.51 on three domains; under
+# v2 (shared decoding orders) the same panel reaches 0.99 on all three at K=32 and 0.977 on
+# 4G3O at K=8, so K=32 is over-provisioned here — but the K at which the other domains reach a
+# target is unmeasured (ISSUES I-23). Measure repeatability on the domain you care about.
 PROTEINMPNN_NUM_DECODING_ORDERS = int(os.getenv("PROTEINMPNN_NUM_DECODING_ORDERS", "8"))
 # score_only scoring protocol. "score_only/v2" (default) draws the K decoding orders once
 # and shares them across every sequence in a call, so a score depends only on (backbone,

@@ -1,6 +1,6 @@
 {
   "schema": "rowB-stability-arm-summary/1",
-  "generated_utc": "2026-11-18T23:25:31+00:00",
+  "generated_utc": "2026-11-19T05:31:35+00:00",
   "config": {
     "n_doubles_requested": 300,
     "decoding_orders": 32,
@@ -120,6 +120,53 @@
             "reliability_ci95": [
               0.9864198769484653,
               0.9952366094937709
+            ],
+            "stable": true
+          }
+        },
+        "decoding_noise_reliability_full_sample": {
+          "n": 300,
+          "noise_var": 4.158905362950681e-06,
+          "observed_var": 0.0005042028466739476,
+          "reliability": 0.9917515234386606,
+          "replicate_corr": 0.9918621784516736,
+          "valid": true,
+          "attenuation": 0.9958672217914698,
+          "reliability_ci95": [
+            0.9889388795121618,
+            0.9936651068718992
+          ],
+          "stable": true,
+          "note": "Cross-seed over ALL analysed pairs: draw A is the main batch (seed 37), draw B a separate invocation at seed 38."
+        },
+        "reliability_decomposition_full_sample": {
+          "n_groups": 7,
+          "between_group": {
+            "n": 7,
+            "noise_var": 1.0482695794334313e-06,
+            "observed_var": 0.00028275883494738,
+            "reliability": 0.9962927079550723,
+            "replicate_corr": 0.9965550926966764,
+            "valid": true,
+            "attenuation": 0.9981446327837826,
+            "reliability_ci95": [
+              0.9027083247691364,
+              0.9994996157069521
+            ],
+            "stable": true
+          },
+          "note": "between_group = reliability of per-position-pair means (does the model agree with itself about WHICH pairs couple); within_group = reliability of substitution-level deviations at a fixed pair.",
+          "within_group": {
+            "n": 300,
+            "noise_var": 3.200426181198229e-06,
+            "observed_var": 0.0002471823372963174,
+            "reliability": 0.9870523670250694,
+            "replicate_corr": 0.9870627182369731,
+            "valid": true,
+            "attenuation": 0.9935050915949396,
+            "reliability_ci95": [
+              0.9830758549231102,
+              0.9900466734913033
             ],
             "stable": true
           }
@@ -911,7 +958,8 @@
       },
       "runtime_seconds": {
         "main_scoring": 379.87850284576416,
-        "replicate_scoring": 183.42495489120483
+        "replicate_scoring": 183.42495489120483,
+        "full_sample_replicate_scoring": 328.5113790035248
       }
     },
     {
@@ -1022,6 +1070,53 @@
             "reliability_ci95": [
               0.9668526521360579,
               0.9902380475353665
+            ],
+            "stable": true
+          }
+        },
+        "decoding_noise_reliability_full_sample": {
+          "n": 300,
+          "noise_var": 5.138455369856723e-07,
+          "observed_var": 6.284249996778597e-05,
+          "reliability": 0.9918232798305434,
+          "replicate_corr": 0.9919913660803469,
+          "valid": true,
+          "attenuation": 0.9959032482277299,
+          "reliability_ci95": [
+            0.9895287437575292,
+            0.9936048025772914
+          ],
+          "stable": true,
+          "note": "Cross-seed over ALL analysed pairs: draw A is the main batch (seed 37), draw B a separate invocation at seed 38."
+        },
+        "reliability_decomposition_full_sample": {
+          "n_groups": 16,
+          "between_group": {
+            "n": 16,
+            "noise_var": 2.0581594431127566e-07,
+            "observed_var": 3.365601607416357e-05,
+            "reliability": 0.9938847205249206,
+            "replicate_corr": 0.9953311207161648,
+            "valid": true,
+            "attenuation": 0.9969376713340311,
+            "reliability_ci95": [
+              0.9894161790462959,
+              0.9988053115677378
+            ],
+            "stable": true
+          },
+          "note": "between_group = reliability of per-position-pair means (does the model agree with itself about WHICH pairs couple); within_group = reliability of substitution-level deviations at a fixed pair.",
+          "within_group": {
+            "n": 300,
+            "noise_var": 3.0692629304905073e-07,
+            "observed_var": 2.9482696188053685e-05,
+            "reliability": 0.9895896124597513,
+            "replicate_corr": 0.9896958127513975,
+            "valid": true,
+            "attenuation": 0.9947811882317393,
+            "reliability_ci95": [
+              0.9858040968672744,
+              0.9923333241976708
             ],
             "stable": true
           }
@@ -1824,7 +1919,8 @@
       },
       "runtime_seconds": {
         "main_scoring": 915.4783329963684,
-        "replicate_scoring": 1228.3494789600372
+        "replicate_scoring": 1228.3494789600372,
+        "full_sample_replicate_scoring": 14133.268460035324
       }
     },
     {
@@ -1910,6 +2006,53 @@
         "reliability_decomposition": {
           "valid": false,
           "reason": "only 2 groups"
+        },
+        "decoding_noise_reliability_full_sample": {
+          "n": 300,
+          "noise_var": 6.226104295232954e-07,
+          "observed_var": 0.00010210715998545043,
+          "reliability": 0.9939023822657294,
+          "replicate_corr": 0.9949430890718571,
+          "valid": true,
+          "attenuation": 0.9969465292911799,
+          "reliability_ci95": [
+            0.992622760728651,
+            0.99499961250533
+          ],
+          "stable": true,
+          "note": "Cross-seed over ALL analysed pairs: draw A is the main batch (seed 37), draw B a separate invocation at seed 38."
+        },
+        "reliability_decomposition_full_sample": {
+          "n_groups": 9,
+          "between_group": {
+            "n": 9,
+            "noise_var": 1.940304914161937e-07,
+            "observed_var": 6.722029441450647e-05,
+            "reliability": 0.9971135132164146,
+            "replicate_corr": 0.9991076668474311,
+            "valid": true,
+            "attenuation": 0.9985557136266432,
+            "reliability_ci95": [
+              0.9946029455913369,
+              0.9989735888086846
+            ],
+            "stable": true
+          },
+          "note": "between_group = reliability of per-position-pair means (does the model agree with itself about WHICH pairs couple); within_group = reliability of substitution-level deviations at a fixed pair.",
+          "within_group": {
+            "n": 300,
+            "noise_var": 4.4626230754763987e-07,
+            "observed_var": 4.667519227624517e-05,
+            "reliability": 0.9904389829846558,
+            "replicate_corr": 0.9906491387776295,
+            "valid": true,
+            "attenuation": 0.9952080099078061,
+            "reliability_ci95": [
+              0.9874877299475017,
+              0.9924815548321376
+            ],
+            "stable": true
+          }
         },
         "secondary_detrended": {
           "note": "eps_exp replaced by the residual of DMS(AB) on a quadratic in DMS(A)+DMS(B) (global-epistasis detrending), fitted in-sample on these pairs: descriptive, not a held-out claim.",
@@ -2720,7 +2863,8 @@
       },
       "runtime_seconds": {
         "main_scoring": 671.3620719909668,
-        "replicate_scoring": 444.3094971179962
+        "replicate_scoring": 444.3094971179962,
+        "full_sample_replicate_scoring": 1365.1170802116394
       }
     }
   ],
@@ -2753,7 +2897,7 @@
       "kind": "residue-pair block (residual dependence via shared singles)"
     }
   },
-  "table_markdown": "| domain | PDB | method | n doubles | position pairs | Spearman (block 95% CI) | Pearson | slope | within-pair median rho (pos/tested) | reliability (n) | reliability between / within pair | held-out r: additive -> full |\n|---|---|---|--:|--:|---|--:|--:|---|--:|--:|---|\n| AMFR_HUMAN | 4G3O | X-RAY | 300 | 7 | +0.103 [-0.102, +0.313] | +0.178 | +6.365 | +0.145 (6/7) | 0.99 (n=60) | 1.00 / 0.99 | -0.338 -> -0.449 |\n| HECD1_HUMAN | 3DKM | X-RAY | 300 | 16 | +0.390 [+0.082, +0.614] | +0.450 | +50.611 | +0.036 (5/8) | 0.99 (n=60) | 1.00 / 0.98 | +0.235 -> +0.272 |\n| UBE4B_HUMAN | 3L1X | X-RAY | 300 | 9 | +0.286 [-0.113, +0.574] | +0.263 | +24.142 | +0.257 (9/9) | 0.99 (n=60) | n/a | +0.108 -> +0.147 |",
+  "table_markdown": "| domain | PDB | method | n doubles | position pairs | Spearman (block 95% CI) | Pearson | slope | within-pair median rho (pos/tested) | reliability (n) | reliability between / within pair | held-out r: additive -> full |\n|---|---|---|--:|--:|---|--:|--:|---|--:|--:|---|\n| AMFR_HUMAN | 4G3O | X-RAY | 300 | 7 | +0.103 [-0.102, +0.313] | +0.178 | +6.365 | +0.145 (6/7) | 0.99 (n=300) | 1.00 / 0.99 | -0.338 -> -0.449 |\n| HECD1_HUMAN | 3DKM | X-RAY | 300 | 16 | +0.390 [+0.082, +0.614] | +0.450 | +50.611 | +0.036 (5/8) | 0.99 (n=300) | 0.99 / 0.99 | +0.235 -> +0.272 |\n| UBE4B_HUMAN | 3L1X | X-RAY | 300 | 9 | +0.286 [-0.113, +0.574] | +0.263 | +24.142 | +0.257 (9/9) | 0.99 (n=300) | 1.00 / 0.99 | +0.108 -> +0.147 |",
   "domain_eligibility": [
     {
       "dms_id": "AMFR_HUMAN_Tsuboyama_2023_4G3O",

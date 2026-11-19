@@ -23,7 +23,11 @@ the study's conclusions.
    sequences and one-call-per-sequence all return bit-identical numbers.
 3. **Finalist rankings:** more consistent, and now reported with uncertainty instead of as a
    point estimate from the draw that won.
-4. **Biological predictive performance:** see "The rerun" below.
+4. **Biological predictive performance:** marginally better, not meaningfully. Pooled
+   model-vs-experiment epistasis ρ +0.181 → +0.208; within-position-pair substitution ranking
+   went from a coin flip (14/24 pairs positive, p = 0.54) to consistently positive (20/24,
+   p = 0.002) but still weak (median ρ ≈ 0.20). That is noise removal raising a ceiling, not
+   the model knowing more biology. See §6.
 5. **Has the combinatorial search earned an advantage over the additive baseline?** No.
 
 ## Audit finding: the original claim was not reproducible
@@ -225,7 +229,151 @@ spread 1.
 
 ## 6. The rerun
 
-_(filled in below once the three-domain v2 run completes)_
+The whole stability arm was re-run under v2 on the **same sampled variants**: same 300 doubles
+per domain, same constituent singles, same replicate subset, same structures. Verified rather
+than assumed — doubles, singles, `eps_exp` and the raw-PDB SHA-256 are identical element by
+element across all three domains, and the replicate subset lists match. The v1 artifacts were
+not touched; v2 results carry a `_v2` filename tag and a different `config_id`.
+
+```
+benchmarks/score_only_epistasis_stability_{4G3O,3DKM,3L1X}_n300_k32_v2.json  (+ .png)
+benchmarks/score_only_epistasis_stability_summary_n300_k32_v2.json
+```
+
+### 6.1 Batch sensitivity and repeatability — the fix works, and it was the whole story
+
+Cross-seed reliability of `eps_model` over all 300 analysed pairs (draw A = seed 37, draw B = a
+separate invocation at seed 38):
+
+| domain | v1 reliability [95% CI] | v2 reliability [95% CI] | noise SD v1 → v2 | signal SD v1 → v2 |
+|---|---|---|--:|--:|
+| AMFR 4G3O | 0.885 [0.848, 0.913] | **0.992** [0.989, 0.994] | 0.0083 → 0.0020 | 0.0229 → 0.0224 |
+| HECD1 3DKM | 0.401 [0.305, 0.485] | **0.992** [0.990, 0.994] | 0.0085 → 0.0007 | 0.0070 → 0.0079 |
+| UBE4B 3L1X | 0.514 [0.424, 0.595] | **0.994** [0.993, 0.995] | 0.0109 → 0.0008 | 0.0112 → 0.0101 |
+
+Noise SD falls 4–14×; **signal SD is preserved** (0.0229→0.0224, 0.0070→0.0079, 0.0112→0.0101).
+That is the point: v2 removes variance without moving the quantity being measured. The
+decomposition shows where the old noise lived:
+
+| domain | between position pairs (v1 → v2) | within a position pair (v1 → v2) |
+|---|--:|--:|
+| AMFR 4G3O | 0.997 → 0.996 | 0.791 → **0.987** |
+| HECD1 3DKM | 0.854 → 0.994 | 0.206 → **0.990** |
+| UBE4B 3L1X | 0.942 → 0.997 | 0.301 → **0.990** |
+
+Between-pair reliability was already high under v1 and barely moves. Essentially all of the
+old instability was **within** a position pair — exactly the substitution-level resolution the
+search needs. On 3DKM the within-pair signal under v1 (reliability 0.21) was close to pure
+batching artifact.
+
+This also retires the "scores correlate 0.28–0.92 across invocations" line. That figure was not
+reproducible from any artifact, described the four-term epistasis contrast rather than raw
+scores, and conflated a seed change with an invocation change. Under v2 a re-invocation at the
+same seed is bit-identical, and a re-invocation at a *different* seed reproduces `eps_model` at
+ρ ≈ 0.99.
+
+### 6.2 Model-versus-experimental epistasis association — slightly better, still weak
+
+| domain | v1 ρ [residue-pair block 95% CI] | v2 ρ [block 95% CI] | v1 Pearson | v2 Pearson |
+|---|---|---|--:|--:|
+| AMFR 4G3O | +0.113 [−0.118, +0.358] | +0.103 [−0.102, +0.313] | +0.184 | +0.178 |
+| HECD1 3DKM | +0.251 [−0.006, +0.459] | +0.390 [+0.082, +0.614] | +0.296 | +0.450 |
+| UBE4B 3L1X | +0.230 [−0.071, +0.498] | +0.286 [−0.113, +0.574] | +0.187 | +0.263 |
+
+Pooled (secondary, within-domain centred, n = 900, 32 blocks): **+0.181 [+0.031, +0.319] →
++0.208 [+0.034, +0.372]**. Detrended (global-epistasis residual): +0.316/+0.214/+0.171 →
++0.307/+0.246/+0.286.
+
+Two of three domains move up, one is flat, and 3DKM's CI now excludes zero where it previously
+did not. This is the direction attenuation theory predicts — less measurement noise, less
+attenuation — but it is **not** a change of conclusion. Three proteins, two per-domain CIs
+still straddling zero, a pooled estimate that remains an order of magnitude short of useful
+prediction. The association was never established as reliable and still is not. Removing
+measurement noise raised the *ceiling*; it did not demonstrate that the model knows more
+biology than it did yesterday.
+
+### 6.3 Within-position-pair substitution ranking — the one qualitative change
+
+This is the readout the stability arm called a genuine miss: given a position pair that does
+couple, does the model rank *which substitutions* couple there?
+
+| | v1 | v2 |
+|---|---|---|
+| AMFR 4G3O (7 pairs) | median ρ +0.025, 4/7 positive | median ρ +0.145, 6/7 positive |
+| HECD1 3DKM (8 pairs) | median ρ −0.108, 3/8 positive | median ρ +0.036, 5/8 positive |
+| UBE4B 3L1X (9 pairs) | median ρ +0.180, 7/9 positive | median ρ +0.257, 9/9 positive |
+| pooled, same 24 pairs | median **+0.069**, 14/24 positive, sign-test **p = 0.54** | median **+0.196**, 20/24 positive, sign-test **p = 0.002** |
+
+Under v1 the within-pair association was indistinguishable from a coin flip. Under v2 the sign
+test is clearly positive. Read carefully: the effect size is still small (median ρ ≈ 0.20), the
+sign test is a consistency-of-direction test over 24 pairs from three proteins and says nothing
+about magnitude, and the 24 pairs are not independent of each other (they share single
+mutations). What changed is that a signal previously buried under its own measurement noise is
+now visible. "Visible and weak" is the honest description.
+
+### 6.4 Additive versus full prediction — unchanged, and still no win
+
+Grouped held-out Pearson (group-disjoint by residue pair, linear calibration fitted on train
+groups only):
+
+| domain | v1 additive → full (Δ) | v2 additive → full (Δ) |
+|---|---|---|
+| AMFR 4G3O | −0.329 → −0.448 (**−0.120**) | −0.338 → −0.449 (**−0.111**) |
+| HECD1 3DKM | +0.193 → +0.266 (+0.073) | +0.235 → +0.272 (+0.037) |
+| UBE4B 3L1X | +0.093 → +0.134 (+0.041) | +0.108 → +0.147 (+0.039) |
+
+The pattern is identical to v1: a clear loss on one domain, two small gains on the others, and
+on 4G3O both predictors are *negatively* correlated with experiment. The in-sample paired
+block-bootstrap Δ Pearson CIs (a different, in-sample quantity from the held-out point
+estimates above, and reported as such) are +0.031/+0.259 on 4G3O, −0.015/+0.059 on 3DKM and
+−0.019/+0.059 on 3L1X — two of three straddle zero, and the third disagrees in sign with its
+own held-out estimate.
+
+So the fix did **not** rescue combinatorial scoring. Cleaner numbers did not turn the
+non-additive term into a better predictor of double-mutant effects than adding the two singles.
+That is the expected outcome if the limitation is the biological model rather than the
+numerics, and it is consistent with the note in §4: rescoring removes selection bias, not model
+bias.
+
+### 6.5 Runtime and scoring cost
+
+| domain | sequences scored (main) | v1 main | v2 main | v1 full-sample replicate | v2 full-sample replicate |
+|---|--:|--:|--:|--:|--:|
+| AMFR 4G3O | 392 | 306 s | 380 s | 291 s | 329 s |
+| HECD1 3DKM | 531 | 684 s | 915 s | 610 s | (unusable) |
+| UBE4B 3L1X | 510 | 637 s | 671 s | 555 s | 1365 s |
+
+v2 costs roughly 1.05–1.35× v1 per sequence at the same K. The reason is structural: v1 scores
+a batch in one subprocess with the model loaded once and the featurisation done once, and it
+burns K draws on an initial native-PDB pass; v2 runs in-process, reuses a cached model, and
+threads every sequence through the *same* K orders. The extra time is the per-sequence loop,
+not extra model work.
+
+Two of these numbers are wall-clock-contaminated and should not be used: the 3DKM v2
+full-sample replicate recorded 14,133 s because the host slept mid-run, and the 3DKM v2 n=60
+replicate (1,228 s) ran under CPU contention. They are listed here only so the artifact's
+`runtime_seconds` field is not read as clean measurement. The clean comparisons above are
+4G3O and 3L1X.
+
+The relevant cost conclusion is not the ratio but what it buys: v2 at **K=8** reached eps
+reliability 0.977 in the diagnostic, where v1 at **K=32** managed 0.40–0.89. Per unit of
+reliability, v2 is several times cheaper.
+
+### 6.6 What the rerun changes, and what it does not
+
+**Numerical improvement, firmly:** repeatability 0.40–0.89 → 0.99 across three domains, with
+the signal variance preserved and the gain concentrated exactly where the pipeline needs it.
+
+**Biological prediction, barely:** the association moved up a little, one CI crossed zero, and
+within-pair ranking became consistently positive instead of a coin flip. Every one of those is
+a *ceiling* effect from removing measurement noise, measured on the same three proteins, with
+the same unverified WT convention and the same dependence-aware block bootstraps. None of it
+establishes reliable substitution-level epistasis prediction, and none of it is evidence that a
+higher compatibility score means a better protein.
+
+**Combinatorial search, not at all:** it has still not beaten the additive baseline on held-out
+double-mutant effects, and the smoke run in §4 returned the same five candidates from both
+proposers. That remains open as I-25.
 
 ## 7. Limitations
 

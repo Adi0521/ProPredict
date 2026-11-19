@@ -84,16 +84,19 @@ cannot recur; the 300-pair epistasis artifact is restored. See
       linear in K; the cheap-search savings vs re-folding leave room. Decide whether this
       becomes the default in `.env.example` or only applies under `MUTATION_SEARCH_ENABLED`.
 
-- [ ] **I-23 — Qualify the `PROTEINMPNN_NUM_DECODING_ORDERS` ≥ 32 recommendation (amends I-11).**
-      Measured on all 300 analysed pairs per domain, K=32 gives per-double epistasis reliability
-      of 0.89 on 4G3O but only **0.40 / 0.51** on 3DKM / 3L1X. Most of that noise turned out to
-      be an artifact of v1's batching rather than of K: under scoring protocol v2 (shared
-      decoding orders — `Process/mutation-scoring-consistency.md`) the same contrast on 4G3O
-      reached reliability **0.977 at K=8**, against v1's 0.533 at the same K. So K≥32 is likely
-      over-provisioned now. Set the new default from the v2 rerun's per-domain reliability, not
-      from v1's numbers, and keep it configurable — reliability still varies by domain, so a
-      fixed K still does not buy a fixed SNR. (The r = 0.28–0.92 "batch composition" figure
-      previously cited here was not reproducible from any artifact; see the write-up.)
+- [ ] **I-23 — Pick `PROTEINMPNN_NUM_DECODING_ORDERS` from a v2 K-sweep (amends I-11).**
+      The ≥32 recommendation was calibrated against scoring protocol v1's noise, and most of
+      that noise was a batching artifact rather than decoding-order variance. The v2 rerun of
+      the same 300-double panel gives per-double epistasis reliability **0.99 on all three
+      domains at K=32** (was 0.89 / 0.40 / 0.51), and the diagnostic reached **0.977 at K=8**
+      on 4G3O against v1's 0.533 at the same K. So K=32 is over-provisioned and the current
+      default of 8 is defensible — but **only 4G3O has been measured at K=8**; the K at which
+      3DKM / 3L1X reach a given reliability is unmeasured, and a fixed K still does not buy a
+      fixed SNR across proteins. Action: sweep K ∈ {2, 4, 8, 16, 32} under v2 on all three
+      domains, pick the knee, and keep it configurable. (The r = 0.28–0.92 "batch composition"
+      figure previously cited here is withdrawn — not reproducible from any artifact, and it
+      described the epistasis contrast rather than raw scores. See
+      `Process/mutation-scoring-consistency.md`.)
 
 ## P2 — Verification gaps (medium)
 

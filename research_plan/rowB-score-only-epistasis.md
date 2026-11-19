@@ -114,6 +114,12 @@ Model epistasis vs **experimental** epistasis
 orders. Engineering record, method decisions and limitations:
 **`Process/rowB-step2-stability-arm.md`**.
 
+> **Superseded numerics — read with §"Re-run under scoring protocol v2" below.** The run in
+> this table used scoring protocol `score_only/v1`, whose scores are not invariant to batch
+> composition. The same panel was re-scored under `score_only/v2`; the v1 table is kept because
+> the committed artifacts and the earlier write-up cite it, but the v2 row is the current
+> result.
+
 | domain | Spearman (residue-pair block 95% CI) | detrended ρ | within-pair median ρ | reliability (K=32) | held-out r: additive → full |
 |---|---|--:|--:|--:|---|
 | 4G3O | +0.113 [−0.118, +0.358] | +0.316 | +0.025 (4/7) | 0.89 | −0.329 → −0.448 |
@@ -145,18 +151,68 @@ are not interpretable, and uncentered values are never pooled across domains.
 
 **Correction to the Step 1 recommendation.** The ≥32 decoding-orders advice above was
 calibrated on 4G3O — the domain with by far the largest epistasis magnitude. Measured on all
-300 analysed pairs, K=32 gives per-double reliability of 0.89 on 4G3O but only **0.40 / 0.51**
-on 3DKM / 3L1X: noise is roughly constant in absolute units while epistasis magnitude varies
-~3× across domains, so no fixed K delivers a fixed SNR. Search use needs a larger K or
-averaging over several invocations. (Related: `score_only` scores are **not** invariant to
-batch composition at a fixed seed — same doubles, same seed, different invocation correlate at
-0.28–0.92 — so a separate invocation is the only honest replicate.)
+300 analysed pairs, K=32 under v1 gives per-double reliability of 0.89 on 4G3O but only
+**0.40 / 0.51** on 3DKM / 3L1X: noise was roughly constant in absolute units while epistasis
+magnitude varies ~3× across domains, so no fixed K delivered a fixed SNR. Under v2 (below)
+most of that noise turns out to have been a batching artifact rather than an irreducible
+decoding-order variance, and K=8 outperforms v1's K=32 on every domain. K still does not buy a
+fixed reliability for every protein, so it stays a per-protein question — but the operating
+point moved by roughly 4× in cost.
 
-**What this means for the search.** The cheap oracle is trustworthy for *proposing*
-combinations at coupled positions and not for *ranking* substitutions at them. The tier-3
-re-fold funnel (`Process/phase2-task-3-refold-funnel.md`) therefore stays load-bearing:
-whatever the cheap search proposes is validated against real predicted structure before it is
-trusted.
+## Re-run under scoring protocol v2
+
+The "not invariant to batch composition" note above was diagnosed, traced to ProteinMPNN's
+per-process torch seeding (a sequence's decoding-order draws depend on its index in the batch),
+and fixed by scoring every sequence against a **shared** set of K decoding orders drawn once
+from a dedicated generator. Full record: **`Process/mutation-scoring-consistency.md`**.
+
+The 0.28–0.92 cross-invocation correlation quoted above is **withdrawn**: it was not
+reproducible from any artifact, described the four-term epistasis contrast rather than raw
+scores, and conflated a seed change with an invocation change. Under v2, a re-invocation at the
+same seed is bit-identical; a re-invocation at a different seed reproduces `eps_model` at
+ρ ≈ 0.99.
+
+Same 300 doubles per domain, same singles, same structures, same replicate subsets — verified
+element-by-element against the v1 artifacts, not assumed.
+
+| domain | Spearman (block 95% CI) | detrended ρ | within-pair median ρ | reliability (K=32) | between / within pair | held-out r: additive → full |
+|---|---|--:|--:|--:|--:|---|
+| 4G3O | +0.103 [−0.102, +0.313] | +0.307 | +0.145 (6/7) | 0.99 | 1.00 / 0.99 | −0.338 → −0.449 |
+| 3DKM | +0.390 [+0.082, +0.614] | +0.246 | +0.036 (5/8) | 0.99 | 0.99 / 0.99 | +0.235 → +0.272 |
+| 3L1X | +0.286 [−0.113, +0.574] | +0.286 | +0.257 (9/9) | 0.99 | 1.00 / 0.99 | +0.108 → +0.147 |
+
+Pooled (secondary, within-domain centred): **ρ = +0.208 [+0.034, +0.372]**, n = 900.
+
+What changed, and what did not:
+
+1. **Repeatability, decisively.** Per-double reliability 0.89 / 0.40 / 0.51 → **0.99** on all
+   three. Noise SD fell 4–14× while signal SD was preserved (0.0229→0.0224, 0.0070→0.0079,
+   0.0112→0.0101), so the estimand is unchanged. Finding 2 above needs restating: the old
+   between/within split (≈0.85–1.00 vs 0.21–0.79) was **mostly a measurement artifact**. Under
+   v2 within-pair reliability is 0.99 everywhere.
+2. **Within-pair substitution ranking is now consistently positive.** Pooled over the same 24
+   position pairs: median ρ +0.069 with 14/24 positive (sign-test p = 0.54) → median **+0.196**
+   with **20/24 positive (p = 0.002)**. Still weak in magnitude, over non-independent pairs
+   from three proteins — "visible and weak", not "usable".
+3. **The association is a little stronger and still not reliable prediction.** Two of three
+   domains move up, 3DKM's CI now excludes zero, two per-domain CIs still straddle zero. This
+   is the attenuation ceiling lifting, not new biology.
+4. **Finding 3 is unchanged: still no predictive win over the additive baseline.** Held-out
+   Δ Pearson −0.120 / +0.073 / +0.041 → −0.111 / +0.037 / +0.039 — a clear loss on 4G3O
+   (where both predictors are negatively correlated with experiment) and two small gains.
+   Cleaner numerics did not make the non-additive term a better predictor, which is what one
+   expects if the limitation is the biological model rather than the arithmetic.
+5. **Finding 4 (global epistasis) and the WT caveat are untouched.** Detrending still helps,
+   and `DMS(WT) = 0` is still an unverified convention with every primary readout invariant to
+   it by construction.
+
+**What this means for the search.** Unchanged in substance. The cheap oracle is now internally
+consistent enough to *compare* candidates — which it was not before — but it is still only
+trustworthy for *proposing* combinations at coupled positions, not for establishing that a
+proposal is better protein. The tier-3 re-fold funnel
+(`Process/phase2-task-3-refold-funnel.md`) stays load-bearing: whatever the cheap search
+proposes is screened against real predicted structure, and even that is a plausibility screen,
+not experimental validation.
 
 ## Still open — Step 2's function arm
 One functional DMS assay, expecting weaker/noisier correlation since function depends on more
@@ -171,7 +227,14 @@ domains.
   reliability + decomposition, grouped held-out additive-vs-full), pure and unit-tested in
   `tests/test_epistasis_stats.py`.
 - `benchmarks/score_only_epistasis_stability_{4G3O,3DKM,3L1X}_n300_k32.json` + `.png`, and
-  `..._summary_n300_k32.{json,md}` — Step 2 per-domain artifacts, plots and comparison table.
+  `..._summary_n300_k32.{json,md}` — Step 2 per-domain artifacts, plots and comparison table
+  (scoring protocol `score_only/v1`).
+- `benchmarks/score_only_epistasis_stability_{4G3O,3DKM,3L1X}_n300_k32_v2.json` + `.png`, and
+  `..._summary_n300_k32_v2.json` — the same panel re-scored under `score_only/v2`. The protocol
+  is part of both the config hash and the filename, so a v2 run can neither reuse nor overwrite
+  a v1 result.
+- `orchestrator/mpnn_score_only.py` — protocol v2; `benchmarks/diagnose_score_only_batching.py`
+  + `..._4G3O_k8_d30.json` — the batch-sensitivity diagnostic that motivated it.
 - `benchmarks/epistasis_structures/4G3O.raw.pdb` — cached RCSB structure.
 - `benchmarks/score_only_epistasis_n300_k8.jsonl` — per-pair `eps_model`, single deltas, CA
   distance for the 300-pair run reported above.
