@@ -57,6 +57,7 @@ from benchmarks import _proteingym as _pg
 from benchmarks import epistasis_stats as es
 from benchmarks._artifacts import guard_overwrite, stamped_path
 from config import PROTEINMPNN_MODEL_NAME, PROTEINMPNN_PATH, PROTEINMPNN_SEED
+from orchestrator.mpnn_score_only import SCORE_PROTOCOL_V1, SCORE_PROTOCOL_V2
 from orchestrator.mutation_search import score_only_oracle
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -349,7 +350,7 @@ def _pos(mut: str) -> int:
     return int(mut[1:-1])
 
 
-def _eps_for_sample(pdb, wt_seq, singles, sample, decoding_orders, mpnn_seed):
+def _eps_for_sample(pdb, wt_seq, singles, sample, decoding_orders, mpnn_seed, protocol=SCORE_PROTOCOL_V2):
     """Model epistasis for each double in `sample`, as a numpy array (fitness units)."""
     need = sorted({m for d in sample for m in d["components"]})
     seqs = [wt_seq] + [singles[m][0] for m in need] + [d["sequence"] for d in sample]
@@ -360,6 +361,7 @@ def _eps_for_sample(pdb, wt_seq, singles, sample, decoding_orders, mpnn_seed):
         model_name=PROTEINMPNN_MODEL_NAME,
         seed=mpnn_seed,
         num_decoding_orders=decoding_orders,
+        protocol=protocol,
     )
     f_wt = f[0]
     f_single = {m: f[1 + i] for i, m in enumerate(need)}
@@ -486,7 +488,13 @@ def _sample_doubles(assay: Assay, n: int, sampling_seed: int) -> List[Dict]:
     return [doubles[i] for i in sorted(idx)]
 
 
-def _score_batch(pdb: str, seqs: List[str], decoding_orders: int, mpnn_seed: int) -> Tuple[List[float], float]:
+def _score_batch(
+    pdb: str,
+    seqs: List[str],
+    decoding_orders: int,
+    mpnn_seed: int,
+    protocol: str = SCORE_PROTOCOL_V2,
+) -> Tuple[List[float], float]:
     t0 = time.time()
     f = score_only_oracle(
         pdb,
@@ -495,6 +503,7 @@ def _score_batch(pdb: str, seqs: List[str], decoding_orders: int, mpnn_seed: int
         model_name=PROTEINMPNN_MODEL_NAME,
         seed=mpnn_seed,
         num_decoding_orders=decoding_orders,
+        protocol=protocol,
     )
     return f, time.time() - t0
 
@@ -517,7 +526,13 @@ def _replicate_full_sample(prev: Dict, args) -> Dict:
     print(f"[{pdb_code}] full-sample replicate: re-scoring {len(sample)} doubles at seed {args.mpnn_seed_b}...")
     t0 = time.time()
     eps_b = _eps_for_sample(
-        pdb, assay.wt_seq, assay.singles, sample, prev["config"]["decoding_orders"], args.mpnn_seed_b
+        pdb,
+        assay.wt_seq,
+        assay.singles,
+        sample,
+        prev["config"]["decoding_orders"],
+        args.mpnn_seed_b,
+        protocol=prev["config"].get("scoring_protocol", SCORE_PROTOCOL_V1),
     )
     dt = time.time() - t0
     print(f"[{pdb_code}] full-sample replicate done in {dt:.1f} s")
@@ -679,6 +694,7 @@ def run_stability_domain(
         "sampling_seed": args.sampling_seed,
         "replicate_subset_size": args.replicate_subset,
         "model_name": PROTEINMPNN_MODEL_NAME,
+        "scoring_protocol": args.score_protocol,
         "proteinmpnn_rev": _proteinmpnn_rev(),
         "wt_reference_assumed": args.dms_wt,
         "bootstrap_seed": args.bootstrap_seed,
@@ -724,7 +740,7 @@ def run_stability_domain(
         f"scoring {len(sample)} doubles + {len(needed)} singles + WT at K={args.decoding_orders}"
     )
     seqs = [assay.wt_seq] + [assay.singles[m][0] for m in needed] + [d["sequence"] for d in sample]
-    fits, t_main = _score_batch(pdb, seqs, args.decoding_orders, args.mpnn_seed)
+    fits, t_main = _score_batch(pdb, seqs, args.decoding_orders, args.mpnn_seed, args.score_protocol)
     print(f"[{pdb_code}] main scoring: {len(seqs)} sequences in {t_main:.1f} s")
 
     f_wt = fits[0]
@@ -769,8 +785,12 @@ def run_stability_domain(
     # seeds -> test-retest reliability of eps_model.
     subset = sample[: min(args.replicate_subset, len(sample))]
     t0 = time.time()
-    eps_a = _eps_for_sample(pdb, assay.wt_seq, assay.singles, subset, args.decoding_orders, args.mpnn_seed)
-    eps_b = _eps_for_sample(pdb, assay.wt_seq, assay.singles, subset, args.decoding_orders, args.mpnn_seed_b)
+    eps_a = _eps_for_sample(
+        pdb, assay.wt_seq, assay.singles, subset, args.decoding_orders, args.mpnn_seed, args.score_protocol
+    )
+    eps_b = _eps_for_sample(
+        pdb, assay.wt_seq, assay.singles, subset, args.decoding_orders, args.mpnn_seed_b, args.score_protocol
+    )
     t_rep = time.time() - t0
     rel = es.reliability(eps_a, eps_b)
     rel["mpnn_seed_a"] = args.mpnn_seed
@@ -991,6 +1011,13 @@ def summarize(artifacts: List[Dict], args) -> Dict:
     return summary
 
 
+def _protocol_tag(protocol: str) -> Dict[str, str]:
+    """Filename tag for the scoring protocol: {} for v1 so the pre-fix artifacts keep the
+    names cited in research_plan/ and Process/, and {"": "v2"} for v2 so the rerun lands
+    beside them instead of on top of them."""
+    return {} if protocol == SCORE_PROTOCOL_V1 else {"": protocol.split("/")[-1]}
+
+
 def cmd_stability(args) -> None:
     selected, records = select_stability_domains(n_extra=args.extra_domains, min_doubles=args.min_doubles)
     print("=== domain eligibility (recorded before any correlation was computed) ===")
@@ -1027,6 +1054,7 @@ def cmd_stability(args) -> None:
             "json",
             n=args.n_doubles,
             k=args.decoding_orders,
+            **_protocol_tag(args.score_protocol),
         )
         art = run_stability_domain(dms_id, code, args, out_path)
         artifacts.append(art)
@@ -1036,7 +1064,12 @@ def cmd_stability(args) -> None:
     summary = summarize(artifacts, args)
     summary["domain_eligibility"] = records
     sum_path = stamped_path(
-        args.out_dir, "score_only_epistasis_stability_summary", "json", n=args.n_doubles, k=args.decoding_orders
+        args.out_dir,
+        "score_only_epistasis_stability_summary",
+        "json",
+        n=args.n_doubles,
+        k=args.decoding_orders,
+        **_protocol_tag(args.score_protocol),
     )
     guard_overwrite(sum_path, args.force or args.rescore)
     with open(sum_path, "w") as fh:
@@ -1048,8 +1081,16 @@ def cmd_stability(args) -> None:
 
 def cmd_internal(args) -> None:
     """Sub-question A — unchanged behaviour (same sampling, same statistics, same output)."""
+    # The protocol tags the filename (empty for v1), so the committed sub-question A
+    # artifacts keep their cited names and a v2 re-run lands beside them. Reproducing those
+    # numbers needs `--score-protocol score_only/v1` explicitly: the default is now v2.
     out_path = args.out or stamped_path(
-        _HERE, "score_only_epistasis", "jsonl", n=args.n_doubles, k=args.decoding_orders
+        _HERE,
+        "score_only_epistasis",
+        "jsonl",
+        n=args.n_doubles,
+        k=args.decoding_orders,
+        **_protocol_tag(args.score_protocol),
     )
     guard_overwrite(out_path, args.force)
 
@@ -1080,6 +1121,7 @@ def cmd_internal(args) -> None:
         model_name=PROTEINMPNN_MODEL_NAME,
         seed=PROTEINMPNN_SEED,
         num_decoding_orders=args.decoding_orders,
+        protocol=args.score_protocol,
     )
     f_wt = fits[0]
     f_single = {m: fits[1 + i] for i, m in enumerate(needed_singles)}
@@ -1141,6 +1183,18 @@ def main() -> None:
     )
     ap.add_argument("--n-doubles", type=int, default=150, help="how many doubles to sample (deterministic)")
     ap.add_argument("--decoding-orders", type=int, default=8)
+    ap.add_argument(
+        "--score-protocol",
+        default=SCORE_PROTOCOL_V2,
+        choices=[SCORE_PROTOCOL_V2, SCORE_PROTOCOL_V1],
+        help=(
+            "score_only protocol. v2 (default) shares the K decoding orders across the batch, so a "
+            "score is invariant to batch composition and the WT/single/double contrast is not "
+            "polluted by four independent draws. v1 is the upstream CLI, kept to reproduce the "
+            "pre-fix artifacts. The protocol is part of the config identity and of the artifact "
+            "filename, so a v2 run never reuses or overwrites a v1 result."
+        ),
+    )
     ap.add_argument("--seed", type=int, default=0, help="internal arm: sampling seed (unchanged default)")
     ap.add_argument("--sampling-seed", type=int, default=0, help="stability arm: variant-sampling seed")
     ap.add_argument(

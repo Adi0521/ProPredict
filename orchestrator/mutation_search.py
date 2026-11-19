@@ -52,6 +52,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -668,6 +669,237 @@ def search_and_validate(
     return result.model_copy(update={"candidates": validated, "refolds_used": refolds_used})
 
 
+# ---------------------------------------------------------------------------
+# Bounded finalist evaluation — a common protocol for candidates from both proposers
+# ---------------------------------------------------------------------------
+#
+# Why a separate stage. Search scores are SELECTED scores: a candidate reaches the top of
+# `measured` partly because its draw was favourable, so its search score is biased upward
+# (winner's curse). Re-scoring the shortlist under INDEPENDENT draws removes that selection
+# bias from the reported number. Under protocol v1 the stage would also have been fixing
+# cross-invocation incomparability; v2 already guarantees that, so what remains is exactly
+# the selection problem plus an honest uncertainty estimate.
+#
+# What this does NOT do: it does not correct model bias. If ProteinMPNN is systematically
+# wrong about a backbone — on AMFR/4G3O both the additive and the full predictor were
+# NEGATIVELY correlated with measured stability — re-scoring reproduces that error more
+# precisely. This stage buys numerical trustworthiness and nothing biological.
+#
+# The additive proposer is the BASELINE, run through the same search machinery so the two
+# candidate sets differ in their oracle and not in how they were generated. (For a purely
+# additive objective a search is unnecessary in principle — the optimum of a sum of
+# independent per-site terms is the best substitution at each site — but matching the
+# generation process is what makes the comparison about the oracle.)
+
+
+def additive_proposals(
+    log_p: np.ndarray,
+    wild_type: str,
+    *,
+    rounds: int,
+    candidates_per_round: int,
+    max_sites: int,
+    seed: int,
+    top_k: int = 10,
+    **adalead_kwargs: Any,
+) -> MutationSearchResult:
+    """Baseline shortlist: the same AdaLead-lite search driven by the cheap additive oracle.
+
+    `log_p` is the [L, 21] mean log-prob matrix from one WT-structure conditional-probs pass
+    (`mutation_scan._run_proteinmpnn_conditional_probs`). The additive oracle is pure, so
+    this costs no ProteinMPNN calls beyond that one pass."""
+
+    def oracle(sequences: List[str]) -> List[float]:
+        return [additive_oracle(log_p, mutations_from_sequences(wild_type, s)) for s in sequences]
+
+    return adalead_search(
+        wild_type,
+        oracle,
+        rounds=rounds,
+        candidates_per_round=candidates_per_round,
+        max_sites=max_sites,
+        seed=seed,
+        oracle_name="additive",
+        top_k=top_k,
+        **adalead_kwargs,
+    )
+
+
+def _mean_pairwise_spearman(rankings: List[List[float]]) -> Optional[float]:
+    """Mean Spearman correlation over all pairs of per-seed score vectors — how stably the
+    finalists rank when the evaluation draws change. None if undefined (<2 seeds, <3
+    candidates, or a constant vector)."""
+    if len(rankings) < 2 or len(rankings[0]) < 3:
+        return None
+    from scipy.stats import spearmanr
+
+    vals = []
+    for i in range(len(rankings)):
+        for j in range(i + 1, len(rankings)):
+            r = spearmanr(rankings[i], rankings[j]).statistic
+            if not np.isnan(r):
+                vals.append(float(r))
+    return float(np.mean(vals)) if vals else None
+
+
+def evaluate_finalists(
+    pdb_string: str,
+    wild_type: str,
+    proposals: Dict[str, List[MutationCandidate]],
+    *,
+    proteinmpnn_dir: str,
+    eval_seeds: List[int],
+    search_seed: int,
+    model_name: str = "v_48_020",
+    num_decoding_orders: int = 8,
+    protocol: str = SCORE_PROTOCOL_V2,
+    max_finalists: int = 20,
+) -> Dict[str, Any]:
+    """Re-score a bounded shortlist under a common protocol and independent draws.
+
+    Parameters
+    ----------
+    proposals : {source_label: ranked candidates}, e.g.
+        `{"additive": [...], "score_only": [...]}`. Sources are merged by sequence, so a
+        candidate proposed by both is evaluated once and records both sources.
+    eval_seeds : the independent evaluation draws. Must be non-zero, distinct, and must NOT
+        include `search_seed` — reusing the search's draw is what reintroduces the selection
+        bias this stage exists to remove.
+    max_finalists : hard cap on sequences re-scored, taken round-robin from the sources so a
+        long list from one proposer cannot crowd the other out.
+
+    Returns a report dict: per-finalist mean/sd/sem over the evaluation draws, its rank under
+    each draw, the ranking-consistency summary, and the scoring cost, tracked separately from
+    the search's own cost.
+    """
+    if not eval_seeds:
+        raise ValueError("eval_seeds must be non-empty: finalists need at least one independent draw.")
+    if any(s == 0 for s in eval_seeds):
+        raise ValueError("eval_seeds must be non-zero (ProteinMPNN treats seed 0 as unset).")
+    if len(set(eval_seeds)) != len(eval_seeds):
+        raise ValueError(f"eval_seeds must be distinct, got {eval_seeds}.")
+    if search_seed in eval_seeds:
+        raise ValueError(
+            f"eval_seeds {eval_seeds} includes the search seed {search_seed}. Finalist evaluation must "
+            "use INDEPENDENT draws, or the reported score keeps the selection bias of the search."
+        )
+
+    # Merge sources round-robin, preserving each source's own ranking, deduping by sequence.
+    merged: Dict[str, Dict[str, Any]] = {}
+    ordered = [(label, list(cands)) for label, cands in proposals.items()]
+    depth = 0
+    while len(merged) < max_finalists and any(depth < len(c) for _, c in ordered):
+        for label, cands in ordered:
+            if depth >= len(cands) or len(merged) >= max_finalists:
+                continue
+            cand = cands[depth]
+            if cand.sequence == wild_type:
+                continue  # WT is the reference row, not a finalist
+            entry = merged.setdefault(
+                cand.sequence,
+                {
+                    "mutations": list(cand.mutations),
+                    "sequence": cand.sequence,
+                    "sources": [],
+                    "search_scores": {},
+                },
+            )
+            if label not in entry["sources"]:
+                entry["sources"].append(label)
+                entry["search_scores"][label] = cand.score
+        depth += 1
+
+    finalists = list(merged.values())
+    if not finalists:
+        raise ValueError("no finalists to evaluate (every proposal was the wild type, or the lists were empty).")
+
+    # WT first so every draw also yields a reference level; under v2 batching is safe (a
+    # score does not depend on batch composition), so one call per seed is enough.
+    seqs = [wild_type] + [f["sequence"] for f in finalists]
+    per_seed: List[List[float]] = []
+    t0 = time.time()
+    for seed in eval_seeds:
+        fits = score_only_oracle(
+            pdb_string,
+            seqs,
+            proteinmpnn_dir=proteinmpnn_dir,
+            model_name=model_name,
+            seed=seed,
+            num_decoding_orders=num_decoding_orders,
+            protocol=protocol,
+        )
+        per_seed.append(fits)
+    elapsed = time.time() - t0
+
+    wt_by_seed = [fits[0] for fits in per_seed]
+    # Rank finalists within each draw (1 = best) so ranking stability is visible directly.
+    ranks_by_seed: List[Dict[str, int]] = []
+    for fits in per_seed:
+        order = sorted(range(len(finalists)), key=lambda i: -fits[1 + i])
+        ranks_by_seed.append({finalists[i]["sequence"]: r + 1 for r, i in enumerate(order)})
+
+    for i, f in enumerate(finalists):
+        draws = np.array([fits[1 + i] for fits in per_seed], dtype=float)
+        deltas = draws - np.array(wt_by_seed, dtype=float)
+        n = len(draws)
+        sd = float(draws.std(ddof=1)) if n > 1 else None
+        f.update(
+            {
+                "mean_score": float(draws.mean()),
+                "sd_score": sd,
+                "sem_score": (float(sd / np.sqrt(n)) if sd is not None else None),
+                "n_eval_draws": n,
+                "scores_by_seed": dict(zip(eval_seeds, [float(x) for x in draws], strict=True)),
+                "mean_delta_vs_wt": float(deltas.mean()),
+                "ranks_by_seed": {s: ranks_by_seed[j][f["sequence"]] for j, s in enumerate(eval_seeds)},
+            }
+        )
+
+    finalists.sort(key=lambda f: (-f["mean_score"], f["sequence"]))
+    rank_spread = [max(f["ranks_by_seed"].values()) - min(f["ranks_by_seed"].values()) for f in finalists]
+    top3 = [{s for s, r in ranks.items() if r <= 3} for ranks in ranks_by_seed]
+
+    return {
+        "protocol": {
+            "scoring_protocol": protocol,
+            "model_name": model_name,
+            "num_decoding_orders": num_decoding_orders,
+            "eval_seeds": list(eval_seeds),
+            "search_seed": search_seed,
+            "max_finalists": max_finalists,
+            "note": (
+                "Finalists re-scored under independent decoding-order draws, so the reported mean is "
+                "free of the search's selection bias. This is numerical consistency only — it does "
+                "not correct model bias, and a high score remains a candidate hypothesis, not "
+                "evidence of improved stability, function or binding."
+            ),
+        },
+        "wild_type": {
+            "sequence": wild_type,
+            "mean_score": float(np.mean(wt_by_seed)),
+            "scores_by_seed": dict(zip(eval_seeds, [float(x) for x in wt_by_seed], strict=True)),
+        },
+        "finalists": finalists,
+        "n_finalists": len(finalists),
+        "sources": {label: len(cands) for label, cands in proposals.items()},
+        "ranking_consistency": {
+            "mean_pairwise_spearman": _mean_pairwise_spearman(
+                [[fits[1 + i] for i in range(len(finalists))] for fits in per_seed]
+            ),
+            "max_rank_spread": max(rank_spread) if rank_spread else 0,
+            "median_rank_spread": float(np.median(rank_spread)) if rank_spread else 0.0,
+            "top3_stable_across_all_draws": sorted(set.intersection(*top3)) if len(top3) > 1 else sorted(top3[0]),
+            "top3_size": 3,
+        },
+        "scoring_cost": {
+            "invocations": len(eval_seeds),
+            "sequences_scored": len(eval_seeds) * len(seqs),
+            "seconds": round(elapsed, 1),
+            "note": "finalist-stage cost only; the search's own oracle calls are counted separately",
+        },
+    }
+
+
 def _format_candidate_line(cand: MutationCandidate) -> str:
     """One-line human summary of a ranked candidate for the CLI."""
     muts = "+".join(cand.mutations) if cand.mutations else "(wild-type)"
@@ -715,6 +947,23 @@ def _cli() -> None:
     ap.add_argument("--seed", type=int, default=0, help="AdaLead RNG seed (search reproducibility)")
     ap.add_argument("--validate", action="store_true", help="Re-fold top candidates and rank by structure quality")
     ap.add_argument("--max-refolds", type=int, default=5)
+    ap.add_argument(
+        "--finalists",
+        action="store_true",
+        help=(
+            "After the search, re-score a bounded shortlist under INDEPENDENT decoding-order draws, "
+            "alongside candidates proposed by the additive baseline, and report mean score with "
+            "uncertainty plus ranking consistency. Costs one extra oracle call per --eval-seed."
+        ),
+    )
+    ap.add_argument(
+        "--eval-seeds",
+        type=int,
+        nargs="+",
+        default=[101, 102, 103],
+        help="Independent evaluation seeds for --finalists (non-zero, distinct, and not --mpnn-seed)",
+    )
+    ap.add_argument("--max-finalists", type=int, default=10)
     args = ap.parse_args()
 
     with open(args.pdb) as fh:
@@ -748,6 +997,68 @@ def _cli() -> None:
     )
     for cand in result.candidates:
         print(_format_candidate_line(cand))
+
+    if not args.finalists:
+        return
+
+    # The additive baseline needs one conditional-probs pass on the WT structure; that is a
+    # different ProteinMPNN mode from score_only, so it is a separate (cheap) call.
+    from orchestrator.mutation_scan import _run_proteinmpnn_conditional_probs
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        log_p = _run_proteinmpnn_conditional_probs(
+            pdb_string,
+            tmpdir,
+            args.proteinmpnn_dir,
+            args.model_name,
+            seed=args.mpnn_seed,
+            num_decoding_orders=args.num_decoding_orders,
+        )
+    baseline = additive_proposals(
+        log_p,
+        args.sequence,
+        rounds=args.rounds,
+        candidates_per_round=args.candidates_per_round,
+        max_sites=args.max_sites,
+        seed=args.seed,
+        top_k=args.top_k,
+    )
+
+    report = evaluate_finalists(
+        pdb_string,
+        args.sequence,
+        {"score_only": result.candidates, "additive": baseline.candidates},
+        proteinmpnn_dir=args.proteinmpnn_dir,
+        eval_seeds=args.eval_seeds,
+        search_seed=args.mpnn_seed,
+        model_name=args.model_name,
+        num_decoding_orders=args.num_decoding_orders,
+        protocol=args.score_protocol,
+        max_finalists=args.max_finalists,
+    )
+
+    rc = report["ranking_consistency"]
+    cost = report["scoring_cost"]
+    print(
+        f"\n# finalists: {report['n_finalists']} from {report['sources']} | "
+        f"protocol {report['protocol']['scoring_protocol']} | eval seeds {args.eval_seeds}"
+    )
+    print(f"# WT reference mean score {report['wild_type']['mean_score']:+.4f}")
+    for f in report["finalists"]:
+        muts = "+".join(f["mutations"])
+        sd = f"sd={f['sd_score']:.4f}" if f["sd_score"] is not None else "sd=n/a"
+        spread = max(f["ranks_by_seed"].values()) - min(f["ranks_by_seed"].values())
+        print(
+            f"{muts:<24} mean={f['mean_score']:+.4f} {sd} "
+            f"dWT={f['mean_delta_vs_wt']:+.4f} rank_spread={spread} "
+            f"from={'+'.join(f['sources'])}"
+        )
+    print(
+        f"# ranking consistency: mean pairwise rho={rc['mean_pairwise_spearman']} "
+        f"max rank spread={rc['max_rank_spread']} | finalist scoring cost: "
+        f"{cost['invocations']} invocations, {cost['sequences_scored']} sequences, {cost['seconds']}s"
+    )
+    print(f"# {report['protocol']['note']}")
 
 
 if __name__ == "__main__":

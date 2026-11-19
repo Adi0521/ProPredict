@@ -110,7 +110,9 @@ _AGENT_TOOLS = [
         "name": "scan_mutations",
         "description": (
             "Rank candidate single-point substitutions for the current structure using "
-            "the ProteinMPNN structural log-odds scorer (validated against ProteinGym). "
+            "the ProteinMPNN structural log-odds scorer. (Its SINGLE-substitution ranking "
+            "was checked against ProteinGym single-mutant DMS data; that says nothing about "
+            "ranking combinations of substitutions — see search_mutations.) "
             "Returns top candidates as {position, from_aa, to_aa, score}; a POSITIVE "
             "score means the substitution is more structurally compatible than the "
             "wild-type residue there. This is a STRUCTURAL-COMPATIBILITY ranking only — "
@@ -173,10 +175,16 @@ _AGENT_TOOLS = [
     {
         "name": "search_mutations",
         "description": (
-            "Search for beneficial MULTI-SITE mutation combinations on the current structure "
-            "(hand-rolled AdaLead over the ProteinMPNN score_only oracle), which scan_mutations "
-            "cannot do — scan_mutations ranks single substitutions independently and so misses "
-            "epistatic pairs whose halves are only good together. EXPENSIVE: one ProteinMPNN "
+            "EXPERIMENTAL. Propose MULTI-SITE mutation combinations on the current structure "
+            "(hand-rolled AdaLead over the ProteinMPNN score_only oracle). Unlike "
+            "scan_mutations, the oracle sees whole-sequence context, so it CAN in principle "
+            "rank a combination differently from the sum of its parts. Whether that helps is "
+            "unresolved: measured against experimental double-mutant stability it tracked "
+            "measured epistasis only weakly (per-protein confidence intervals all included "
+            "zero) and did NOT reliably beat the additive sum of single-site effects, which "
+            "is the baseline to compare against (Process/rowB-step2-stability-arm.md). "
+            "Prefer scan_mutations unless the task specifically calls for combinations. "
+            "EXPENSIVE: one ProteinMPNN "
             "subprocess per round (default from MUTATION_SEARCH_ROUNDS), and if validate=true an "
             "additional re-fold per top candidate (minutes each) — use once, deliberately, not "
             "as a scan. Read-only: returns a ranked shortlist of multi-site candidates to feed "
@@ -283,16 +291,32 @@ function, stability, or fitness):
   (positive = more structurally compatible than the wild-type residue). Read-only
   shortlist. Requires PROTEINMPNN_PATH; if unavailable the tool says so — fall back to
   analyze_structure and context.mutations.
-- search_mutations searches for MULTI-SITE combinations (epistatic pairs that
-  scan_mutations, being single-site, cannot find). Read-only shortlist too, but EXPENSIVE
-  (a subprocess per round; more with validate=true) — use once, deliberately. Requires
-  MUTATION_SEARCH_ENABLED + PROTEINMPNN_PATH.
+- search_mutations proposes MULTI-SITE combinations. EXPERIMENTAL: its non-additive signal
+  has not been shown to beat the additive sum of single-site effects on measured stability,
+  so treat the additive view (scan_mutations) as the baseline and this as a hypothesis
+  generator. Read-only shortlist too, but EXPENSIVE (a subprocess per round; more with
+  validate=true) — use once, deliberately. Requires MUTATION_SEARCH_ENABLED +
+  PROTEINMPNN_PATH.
 - apply_mutation mutates the sequence at a position and re-predicts. Limited to
   AGENT_MAX_MUTATIONS calls per session — use them deliberately.
+
+How to reason about these numbers, in order:
+  1. A high compatibility score identifies a candidate HYPOTHESIS — nothing more.
+  2. Repeat scoring assesses NUMERICAL CONSISTENCY — whether the score is stable, not
+     whether it is right.
+  3. Re-folding (validate=true, or apply_mutation) SCREENS PREDICTED STRUCTURAL
+     PLAUSIBILITY. High pLDDT and few clashes mean the backbone is predictable, not that
+     the protein is more stable, more active, or a better binder.
+  4. EXPERIMENTAL BENEFIT REMAINS UNVALIDATED. Nothing in this pipeline measures it.
+Keep compatibility score, uncertainty, pLDDT and clash count separately interpretable;
+never combine them into a single number and call it stability or fitness. Affinity is
+metadata, never a mutation-ranking signal.
+
 Typical flow: scan_mutations (or search_mutations for combinations) to shortlist in a
-low-confidence region, then apply_mutation on the most promising candidate to confirm it
-improves the structure. Only mutate when context.mutations requests it or analysis plus a
-scan give a concrete reason — never mutate speculatively without stating why.
+low-confidence region, then apply_mutation on the most promising candidate to see whether
+the re-predicted structure is more plausible — which is a screen, not confirmation that the
+mutation is an improvement. Only mutate when context.mutations requests it or analysis plus
+a scan give a concrete reason — never mutate speculatively without stating why.
 
 Be concise. Make a terminal decision as soon as you have enough information."""
 
@@ -537,7 +561,9 @@ def _execute_agent_tool(
                     "multi-site combinatorial search; ranking is ProteinMPNN structural "
                     "compatibility (or re-folded structure quality when validate=true). NOT a "
                     "function/stability/fitness proxy; affinity fields are metadata, not ranked. "
-                    "Read-only — feed a candidate into apply_mutation to adopt it."
+                    "EXPERIMENTAL: the non-additive signal has not been shown to beat an additive "
+                    "baseline on measured stability, so these are candidate hypotheses, not "
+                    "improvements. Read-only — feed a candidate into apply_mutation to adopt it."
                 ),
                 **result.model_dump(),
             }

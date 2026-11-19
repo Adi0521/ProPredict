@@ -394,6 +394,9 @@ class _Args:
     noise_check = False
     force = False
     dms_id = None
+    # The internal arm (sub-question A) was run under the upstream CLI, so reproducing its
+    # committed artifact means pinning v1 — the harness default is now v2.
+    score_protocol = "score_only/v1"
 
     def __init__(self, out):
         self.out = out

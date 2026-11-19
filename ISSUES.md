@@ -86,12 +86,14 @@ cannot recur; the 300-pair epistasis artifact is restored. See
 
 - [ ] **I-23 — Qualify the `PROTEINMPNN_NUM_DECODING_ORDERS` ≥ 32 recommendation (amends I-11).**
       Measured on all 300 analysed pairs per domain, K=32 gives per-double epistasis reliability
-      of 0.89 on 4G3O but only **0.40 / 0.51** on 3DKM / 3L1X. Decoding noise is roughly constant
-      in absolute units while epistasis magnitude varies ~3× across domains, so no fixed K gives
-      a fixed SNR. Decide between a larger K and averaging the oracle over several invocations —
-      note `score_only` is **not** invariant to batch composition at a fixed seed (same doubles,
-      same seed, different invocation: r = 0.28–0.92), so separate invocations are genuinely
-      independent draws. See `Process/rowB-step2-stability-arm.md`.
+      of 0.89 on 4G3O but only **0.40 / 0.51** on 3DKM / 3L1X. Most of that noise turned out to
+      be an artifact of v1's batching rather than of K: under scoring protocol v2 (shared
+      decoding orders — `Process/mutation-scoring-consistency.md`) the same contrast on 4G3O
+      reached reliability **0.977 at K=8**, against v1's 0.533 at the same K. So K≥32 is likely
+      over-provisioned now. Set the new default from the v2 rerun's per-domain reliability, not
+      from v1's numbers, and keep it configurable — reliability still varies by domain, so a
+      fixed K still does not buy a fixed SNR. (The r = 0.28–0.92 "batch composition" figure
+      previously cited here was not reproducible from any artifact; see the write-up.)
 
 ## P2 — Verification gaps (medium)
 
@@ -108,6 +110,30 @@ cannot recur; the 300-pair epistasis artifact is restored. See
 - [ ] **I-15 — Measure Row A within-model sampling noise.** Every job ran at a single seed
       (37) with `diffusion_samples=1`, so Boltz-2's own sampling spread is unmeasured. A
       handful of repeat seeds on a subset would bound it.
+
+- [ ] **I-25 — Decide whether `search_mutations` earns its keep at all.**
+      Two independent observations say the combinatorial search may be buying nothing over the
+      additive baseline. (a) The stability arm: the non-additive signal did not reliably beat the
+      additive sum of single-site effects on measured double-mutant stability. (b) A smoke run of
+      the new finalist stage on 4G3O (`--rounds 3 --candidates-per-round 6 --max-sites 2`) had the
+      additive proposer and the `score_only` search return the **same five candidates** — the
+      oracle only re-ranked a shortlist both proposers had already found. If that holds at a
+      realistic search budget and on more backbones, the honest move is to demote the tier-2
+      search to an optional experiment and make the additive scan the default proposer, which
+      would also remove a ProteinMPNN subprocess per round from the agent's cost. Needs a proper
+      proposal-overlap measurement first (the smoke run shared the AdaLead seed, so the two
+      searches explored the same sequence neighbourhood by construction).
+      See `Process/mutation-scoring-consistency.md`.
+
+- [ ] **I-26 — Nothing in the pipeline measures experimental benefit.**
+      Tracking the gap explicitly so it stops being rediscovered. `scan_mutations` and
+      `search_mutations` score structural compatibility; the tier-3 funnel screens predicted
+      structural plausibility (pLDDT, clashes) with a model that shares its inductive bias with
+      the proposer; `apply_mutation` changes a sequence. No stage estimates ΔΔG, activity or
+      binding, so "the pipeline suggested this mutation" cannot be upgraded to "this mutation is
+      an improvement". Closing this means an independent oracle (a ΔΔG predictor, FoldX/Rosetta
+      ddg_monomer, or a held-out DMS benchmark), not a better ProteinMPNN score. Agent prose and
+      tool descriptions now state this; the capability gap remains.
 
 - [ ] **I-24 — Choose benchmark assays for position-pair diversity, not variant count.**
       The Row B stability arm's 300 doubles per domain sit on only **7–16 distinct position
