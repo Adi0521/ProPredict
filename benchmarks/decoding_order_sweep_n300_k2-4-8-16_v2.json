@@ -1,0 +1,1260 @@
+{
+  "schema": "rowB-decoding-order-sweep/1",
+  "generated_utc": "2026-11-19T22:23:47+00:00",
+  "config": {
+    "k_values_scored": [
+      2,
+      4,
+      8,
+      16
+    ],
+    "k_reused": 32,
+    "seed_a": 37,
+    "seed_b": 38,
+    "scoring_protocol": "score_only/v2",
+    "model_name": "v_48_020",
+    "domains": [
+      "4G3O",
+      "3DKM",
+      "3L1X"
+    ]
+  },
+  "what_is_measured": "Test-retest reliability across two independent draws of the shared decoding orders at a fixed K. `single_delta` is f(mut)-f(WT), the quantity the mutation search ranks by; `eps` is the four-term epistasis contrast, ~4x noisier, and is what earlier K figures measured. This is Monte-Carlo stability of the score against re-drawing the orders. It says NOTHING about whether the score is biologically right: a K reaching reliability 0.99 buys no experimental validity.",
+  "domains": [
+    {
+      "pdb_code": "4G3O",
+      "dms_id": "AMFR_HUMAN_Tsuboyama_2023_4G3O",
+      "n_doubles": 300,
+      "n_singles": 91,
+      "n_sequences_per_draw": 392,
+      "source_artifact": "score_only_epistasis_stability_4G3O_n300_k32_v2.json",
+      "source_config_id": "e103a9e3ddea8c19",
+      "points": [
+        {
+          "k": 2,
+          "source": "sweep",
+          "seed_a": 37,
+          "seed_b": 38,
+          "n_sequences_per_draw": 392,
+          "eps_reliability": {
+            "n": 300,
+            "reliability": 0.9302301738782659,
+            "reliability_ci95": [
+              0.9099050384603377,
+              0.9455205943314217
+            ],
+            "replicate_corr": 0.930305893715239,
+            "noise_var": 4.459231885111106e-05,
+            "observed_var": 0.0006391347281460402,
+            "valid": true,
+            "noise_sd": 0.006677748037408349,
+            "signal_sd": 0.0243832403362418
+          },
+          "single_delta_reliability": {
+            "n": 91,
+            "reliability": 0.9612154321019497,
+            "reliability_ci95": [
+              0.947223317647442,
+              0.9722278460488025
+            ],
+            "replicate_corr": 0.9612685416071399,
+            "noise_var": 6.0646010907820676e-05,
+            "observed_var": 0.001563663441274782,
+            "valid": true,
+            "noise_sd": 0.007787554873503022,
+            "signal_sd": 0.03876876874969028
+          },
+          "eps_reliability_decomposition": {
+            "between_group": {
+              "n": 7,
+              "reliability": 0.9863954325825453,
+              "reliability_ci95": [
+                0.5677560778031011,
+                0.9977013672061341
+              ],
+              "replicate_corr": 0.9897502112118609,
+              "noise_var": 4.88993647864684e-06,
+              "observed_var": 0.0003594334408878763,
+              "valid": true,
+              "noise_sd": 0.002211320076028534,
+              "signal_sd": 0.01882932564934893
+            },
+            "within_group": {
+              "n": 300,
+              "reliability": 0.8688871597963921,
+              "reliability_ci95": [
+                0.833360314933305,
+                0.8958961054781706
+              ],
+              "replicate_corr": 0.8748642458911332,
+              "noise_var": 4.022379422242348e-05,
+              "observed_var": 0.00030678760493601625,
+              "valid": true,
+              "noise_sd": 0.006342223129346955,
+              "signal_sd": 0.016326782007290742
+            }
+          },
+          "eps_association_seed_a": {
+            "n": 300.0,
+            "spearman": 0.012586362070689673,
+            "spearman_p": 0.8281298705335128,
+            "pearson": 0.11844527916036313,
+            "pearson_p": 0.0403458675659115,
+            "slope": 3.804826132611391,
+            "slope_stderr": 1.8477403211265262,
+            "intercept": 1.9649269638061408,
+            "r_squared": 0.01402928415537636
+          },
+          "runtime_seconds": {
+            "draw_a": 27.45280694961548,
+            "draw_b": 26.532259941101074,
+            "total": 53.98506689071655
+          },
+          "seconds_per_sequence_per_order": 0.03442925184356923
+        },
+        {
+          "k": 4,
+          "source": "sweep",
+          "seed_a": 37,
+          "seed_b": 38,
+          "n_sequences_per_draw": 392,
+          "eps_reliability": {
+            "n": 300,
+            "reliability": 0.952334270099471,
+            "reliability_ci95": [
+              0.9343491170565996,
+              0.9643105843013621
+            ],
+            "replicate_corr": 0.9523602384147838,
+            "noise_var": 2.621186347507226e-05,
+            "observed_var": 0.0005499100408149081,
+            "valid": true,
+            "noise_sd": 0.005119752286495144,
+            "signal_sd": 0.022884452742852206
+          },
+          "single_delta_reliability": {
+            "n": 91,
+            "reliability": 0.9799074227961088,
+            "reliability_ci95": [
+              0.9707969415409929,
+              0.9871194190617628
+            ],
+            "replicate_corr": 0.9806435267027205,
+            "noise_var": 3.264126589526637e-05,
+            "observed_var": 0.0016245435099756602,
+            "valid": true,
+            "noise_sd": 0.0057132535297557355,
+            "signal_sd": 0.03989864965234279
+          },
+          "eps_reliability_decomposition": {
+            "between_group": {
+              "n": 7,
+              "reliability": 0.981916719180314,
+              "reliability_ci95": [
+                0.267193020138067,
+                0.9984517607515863
+              ],
+              "replicate_corr": 0.9841757135547272,
+              "noise_var": 5.742030639293952e-06,
+              "observed_var": 0.00031753257036427733,
+              "valid": true,
+              "noise_sd": 0.00239625345890078,
+              "signal_sd": 0.01765759156071358
+            },
+            "within_group": {
+              "n": 300,
+              "reliability": 0.91993743653684,
+              "reliability_ci95": [
+                0.8918116643477235,
+                0.9415959219717245
+              ],
+              "replicate_corr": 0.9218651989055107,
+              "noise_var": 2.061436685810462e-05,
+              "observed_var": 0.00025747822660699744,
+              "valid": true,
+              "noise_sd": 0.004540304709830015,
+              "signal_sd": 0.01539038205337648
+            }
+          },
+          "eps_association_seed_a": {
+            "n": 300.0,
+            "spearman": 0.015604173379704217,
+            "spearman_p": 0.7878063283347565,
+            "pearson": 0.13551848659289742,
+            "pearson_p": 0.01885967172204708,
+            "slope": 4.646008721209446,
+            "slope_stderr": 1.967652063845048,
+            "intercept": 1.9610264125306636,
+            "r_squared": 0.018365260208429317
+          },
+          "runtime_seconds": {
+            "draw_a": 46.857691049575806,
+            "draw_b": 46.80548572540283,
+            "total": 93.66317677497864
+          },
+          "seconds_per_sequence_per_order": 0.029867084430796758
+        },
+        {
+          "k": 8,
+          "source": "sweep",
+          "seed_a": 37,
+          "seed_b": 38,
+          "n_sequences_per_draw": 392,
+          "eps_reliability": {
+            "n": 300,
+            "reliability": 0.9786042740614531,
+            "reliability_ci95": [
+              0.9706006066625784,
+              0.9841398534821425
+            ],
+            "replicate_corr": 0.9786546382071775,
+            "noise_var": 1.0993675859578948e-05,
+            "observed_var": 0.0005138257935792957,
+            "valid": true,
+            "noise_sd": 0.003315671253242539,
+            "signal_sd": 0.02242391842920672
+          },
+          "single_delta_reliability": {
+            "n": 91,
+            "reliability": 0.990360463141047,
+            "reliability_ci95": [
+              0.9863594231744226,
+              0.9934759391803362
+            ],
+            "replicate_corr": 0.9904730840447231,
+            "noise_var": 1.590182119327074e-05,
+            "observed_var": 0.0016496457688733594,
+            "valid": true,
+            "noise_sd": 0.003987708764851157,
+            "signal_sd": 0.040419598559115956
+          },
+          "eps_reliability_decomposition": {
+            "between_group": {
+              "n": 7,
+              "reliability": 0.9916468733049648,
+              "reliability_ci95": [
+                0.6408051451388288,
+                0.9989894970338095
+              ],
+              "replicate_corr": 0.992473852568122,
+              "noise_var": 2.431546835368883e-06,
+              "observed_var": 0.0002910942122803067,
+              "valid": true,
+              "noise_sd": 0.001559341795556344,
+              "signal_sd": 0.016990075498506115
+            },
+            "within_group": {
+              "n": 300,
+              "reliability": 0.9644657078411769,
+              "reliability_ci95": [
+                0.9519188283381934,
+                0.974168008087922
+              ],
+              "replicate_corr": 0.9669915701104923,
+              "noise_var": 8.784547873358064e-06,
+              "observed_var": 0.0002472132506282914,
+              "valid": true,
+              "noise_sd": 0.0029638737951130888,
+              "signal_sd": 0.015441136705402661
+            }
+          },
+          "eps_association_seed_a": {
+            "n": 300.0,
+            "spearman": 0.04352981699796664,
+            "spearman_p": 0.4525520711119546,
+            "pearson": 0.14726214743804114,
+            "pearson_p": 0.010650981569031437,
+            "slope": 5.268929461630311,
+            "slope_stderr": 2.0500394868547986,
+            "intercept": 1.957093183931142,
+            "r_squared": 0.02168614006806341
+          },
+          "runtime_seconds": {
+            "draw_a": 115.36148285865784,
+            "draw_b": 117.17902684211731,
+            "total": 232.54050970077515
+          },
+          "seconds_per_sequence_per_order": 0.03707597412321032
+        },
+        {
+          "k": 16,
+          "source": "sweep",
+          "seed_a": 37,
+          "seed_b": 38,
+          "n_sequences_per_draw": 392,
+          "eps_reliability": {
+            "n": 300,
+            "reliability": 0.986925943299454,
+            "reliability_ci95": [
+              0.982113987858855,
+              0.990240761055599
+            ],
+            "replicate_corr": 0.9878177185865689,
+            "noise_var": 6.978721026436216e-06,
+            "observed_var": 0.0005337839039771617,
+            "valid": true,
+            "noise_sd": 0.0026417269023190524,
+            "signal_sd": 0.022952236992300458
+          },
+          "single_delta_reliability": {
+            "n": 91,
+            "reliability": 0.9926978187427727,
+            "reliability_ci95": [
+              0.9897367947986365,
+              0.9948714401605947
+            ],
+            "replicate_corr": 0.9927352035445942,
+            "noise_var": 1.2286144242919215e-05,
+            "observed_var": 0.0016825307137862664,
+            "valid": true,
+            "noise_sd": 0.003505159660118097,
+            "signal_sd": 0.04086862573592789
+          },
+          "eps_reliability_decomposition": {
+            "between_group": {
+              "n": 7,
+              "reliability": 0.9947355449400896,
+              "reliability_ci95": [
+                0.8526782529469529,
+                0.9984784710990037
+              ],
+              "replicate_corr": 0.9962492619845338,
+              "noise_var": 1.5709156831162655e-06,
+              "observed_var": 0.0002984004356080533,
+              "valid": true,
+              "noise_sd": 0.001253361752694036,
+              "signal_sd": 0.017228741100989854
+            },
+            "within_group": {
+              "n": 300,
+              "reliability": 0.9783278937747603,
+              "reliability_ci95": [
+                0.9701456787587629,
+                0.9845441125653377
+              ],
+              "replicate_corr": 0.9789138689728024,
+              "noise_var": 5.657386786633699e-06,
+              "observed_var": 0.000261044622420916,
+              "valid": true,
+              "noise_sd": 0.002378526179514049,
+              "signal_sd": 0.015980839641091524
+            }
+          },
+          "eps_association_seed_a": {
+            "n": 300.0,
+            "spearman": 0.09116234624829164,
+            "spearman_p": 0.11510210687214888,
+            "pearson": 0.16884712514837816,
+            "pearson_p": 0.00335272885484465,
+            "slope": 6.026462643505185,
+            "slope_stderr": 2.0378864346382803,
+            "intercept": 1.945952269240584,
+            "r_squared": 0.028509351670872103
+          },
+          "runtime_seconds": {
+            "draw_a": 221.26799607276917,
+            "draw_b": 625.4759011268616,
+            "total": 846.7438971996307
+          },
+          "seconds_per_sequence_per_order": 0.06750190507012363
+        },
+        {
+          "k": 32,
+          "source": "reused_artifact",
+          "seed_a": 37,
+          "seed_b": 38,
+          "n_sequences_per_draw": 392,
+          "eps_reliability": {
+            "n": 300,
+            "reliability": 0.9917515234386606,
+            "reliability_ci95": [
+              0.9889388795121618,
+              0.9936651068718992
+            ],
+            "replicate_corr": 0.9918621784516736,
+            "noise_var": 4.158905362950681e-06,
+            "observed_var": 0.0005042028466739476,
+            "valid": true,
+            "noise_sd": 0.0020393394427977605,
+            "signal_sd": 0.022361662310995505
+          },
+          "single_delta_reliability": {
+            "valid": false,
+            "reason": "the committed artifact stores eps only, not raw per-sequence scores; pass --k-values ...,32 to score K=32 fresh and measure this"
+          },
+          "eps_reliability_decomposition": {
+            "between_group": {
+              "n": 7,
+              "reliability": 0.9962927079550723,
+              "reliability_ci95": [
+                0.9027083247691364,
+                0.9994996157069521
+              ],
+              "replicate_corr": 0.9965550926966764,
+              "noise_var": 1.0482695794334313e-06,
+              "observed_var": 0.00028275883494738,
+              "valid": true,
+              "noise_sd": 0.0010238503696504834,
+              "signal_sd": 0.016784235620603834
+            },
+            "within_group": {
+              "n": 300,
+              "reliability": 0.9870523670250694,
+              "reliability_ci95": [
+                0.9830758549231102,
+                0.9900466734913033
+              ],
+              "replicate_corr": 0.9870627182369731,
+              "noise_var": 3.200426181198229e-06,
+              "observed_var": 0.0002471823372963174,
+              "valid": true,
+              "noise_sd": 0.0017889734993001515,
+              "signal_sd": 0.015619920329986294
+            }
+          },
+          "eps_association_seed_a": {
+            "n": 300.0,
+            "spearman": 0.10301047789419882,
+            "spearman_p": 0.07483287390583103,
+            "pearson": 0.17844133222747455,
+            "pearson_p": 0.0019174385494944617,
+            "slope": 6.3649977079475315,
+            "slope_stderr": 2.0331430523724183,
+            "intercept": 1.9370457361018825,
+            "r_squared": 0.031841309047115976
+          },
+          "runtime_seconds": {
+            "main_scoring": 379.87850284576416,
+            "replicate_scoring": 183.42495489120483,
+            "full_sample_replicate_scoring": 328.5113790035248
+          },
+          "note": "reused from the committed v2 artifact; not re-scored by this sweep"
+        }
+      ]
+    },
+    {
+      "pdb_code": "3DKM",
+      "dms_id": "HECD1_HUMAN_Tsuboyama_2023_3DKM",
+      "n_doubles": 300,
+      "n_singles": 230,
+      "n_sequences_per_draw": 531,
+      "source_artifact": "score_only_epistasis_stability_3DKM_n300_k32_v2.json",
+      "source_config_id": "faf2857c2b3e46e2",
+      "points": [
+        {
+          "k": 2,
+          "source": "sweep",
+          "seed_a": 37,
+          "seed_b": 38,
+          "n_sequences_per_draw": 531,
+          "eps_reliability": {
+            "n": 300,
+            "reliability": 0.8267338501784468,
+            "reliability_ci95": [
+              0.7823307198076535,
+              0.8686349298527682
+            ],
+            "replicate_corr": 0.8477417469032881,
+            "noise_var": 1.2453886610075214e-05,
+            "observed_var": 7.187720522965088e-05,
+            "valid": true,
+            "noise_sd": 0.0035290064621753266,
+            "signal_sd": 0.007708652192152378
+          },
+          "single_delta_reliability": {
+            "n": 230,
+            "reliability": 0.934838208983219,
+            "reliability_ci95": [
+              0.913396175327402,
+              0.952660066920556
+            ],
+            "replicate_corr": 0.9349528756380869,
+            "noise_var": 5.537257513761097e-05,
+            "observed_var": 0.0008497706136307852,
+            "valid": true,
+            "noise_sd": 0.007441275101594549,
+            "signal_sd": 0.028185067651030647
+          },
+          "eps_reliability_decomposition": {
+            "between_group": {
+              "n": 16,
+              "reliability": 0.8646126325996217,
+              "reliability_ci95": [
+                0.7352060362298277,
+                0.923991476439891
+              ],
+              "replicate_corr": 0.9118620857218548,
+              "noise_var": 5.766639639364295e-06,
+              "observed_var": 4.259363151889003e-05,
+              "valid": true,
+              "noise_sd": 0.002401382859804803,
+              "signal_sd": 0.006068524687230475
+            },
+            "within_group": {
+              "n": 300,
+              "reliability": 0.8028778671349377,
+              "reliability_ci95": [
+                0.7377360328553733,
+                0.8501584462426888
+              ],
+              "replicate_corr": 0.8042926288295567,
+              "noise_var": 6.1233837469022915e-06,
+              "observed_var": 3.1063907730208976e-05,
+              "valid": true,
+              "noise_sd": 0.0024745471801730294,
+              "signal_sd": 0.004994048856720034
+            }
+          },
+          "eps_association_seed_a": {
+            "n": 300.0,
+            "spearman": 0.350923899154435,
+            "spearman_p": 4.032202274941057e-10,
+            "pearson": 0.4773711252400969,
+            "pearson_p": 1.7603739796813773e-18,
+            "slope": 45.880384191656546,
+            "slope_stderr": 4.892200764062176,
+            "intercept": 0.7930621263227954,
+            "r_squared": 0.22788319121299638
+          },
+          "runtime_seconds": {
+            "draw_a": 61.44875693321228,
+            "draw_b": 60.34710884094238,
+            "total": 121.79586577415466
+          },
+          "seconds_per_sequence_per_order": 0.05734268633434777
+        },
+        {
+          "k": 4,
+          "source": "sweep",
+          "seed_a": 37,
+          "seed_b": 38,
+          "n_sequences_per_draw": 531,
+          "eps_reliability": {
+            "n": 300,
+            "reliability": 0.9268645382975707,
+            "reliability_ci95": [
+              0.9029543828427158,
+              0.9469402516879795
+            ],
+            "replicate_corr": 0.9272668002370046,
+            "noise_var": 5.18390481064354e-06,
+            "observed_var": 7.08808653144982e-05,
+            "valid": true,
+            "noise_sd": 0.0022768190113936462,
+            "signal_sd": 0.008105366154829444
+          },
+          "single_delta_reliability": {
+            "n": 230,
+            "reliability": 0.9724569426421246,
+            "reliability_ci95": [
+              0.9626743576106431,
+              0.9802081689458374
+            ],
+            "replicate_corr": 0.9724654769563125,
+            "noise_var": 2.1722480728272212e-05,
+            "observed_var": 0.00078867354651393,
+            "valid": true,
+            "noise_sd": 0.004660738217093105,
+            "signal_sd": 0.027693881378124983
+          },
+          "eps_reliability_decomposition": {
+            "between_group": {
+              "n": 16,
+              "reliability": 0.9588257211245574,
+              "reliability_ci95": [
+                0.8767206086408886,
+                0.9855727414257299
+              ],
+              "replicate_corr": 0.9588379981523547,
+              "noise_var": 1.6479366253395015e-06,
+              "observed_var": 4.002344838448097e-05,
+              "valid": true,
+              "noise_sd": 0.0012837198391158025,
+              "signal_sd": 0.006194797152380494
+            },
+            "within_group": {
+              "n": 300,
+              "reliability": 0.8882347179059819,
+              "reliability_ci95": [
+                0.8535592734744195,
+                0.9162778114965375
+              ],
+              "replicate_corr": 0.8890743250700774,
+              "noise_var": 3.583036655556051e-06,
+              "observed_var": 3.205858374286536e-05,
+              "valid": true,
+              "noise_sd": 0.0018928910839126616,
+              "signal_sd": 0.005336248409445471
+            }
+          },
+          "eps_association_seed_a": {
+            "n": 300.0,
+            "spearman": 0.36292047689418766,
+            "spearman_p": 9.04783526801319e-11,
+            "pearson": 0.4556109377762975,
+            "pearson_p": 8.805665016516771e-17,
+            "slope": 49.46391895750039,
+            "slope_stderr": 5.598395794619411,
+            "intercept": 0.8143080405700042,
+            "r_squared": 0.2075813266213973
+          },
+          "runtime_seconds": {
+            "draw_a": 1648.2208597660065,
+            "draw_b": 112.68968915939331,
+            "total": 1760.9105489253998
+          },
+          "seconds_per_sequence_per_order": 0.41452696537791894
+        },
+        {
+          "k": 8,
+          "source": "sweep",
+          "seed_a": 37,
+          "seed_b": 38,
+          "n_sequences_per_draw": 531,
+          "eps_reliability": {
+            "n": 300,
+            "reliability": 0.9575785354549645,
+            "reliability_ci95": [
+              0.945239720459623,
+              0.9675151381869918
+            ],
+            "replicate_corr": 0.9588452083522342,
+            "noise_var": 2.584040368415709e-06,
+            "observed_var": 6.091351150011429e-05,
+            "valid": true,
+            "noise_sd": 0.001607495060152817,
+            "signal_sd": 0.007637373313626785
+          },
+          "single_delta_reliability": {
+            "n": 230,
+            "reliability": 0.982326339314955,
+            "reliability_ci95": [
+              0.9764315906368704,
+              0.9872236458579501
+            ],
+            "replicate_corr": 0.9823490393442291,
+            "noise_var": 1.3080096886718166e-05,
+            "observed_var": 0.0007400898500776509,
+            "valid": true,
+            "noise_sd": 0.003616641658599614,
+            "signal_sd": 0.026963118387733506
+          },
+          "eps_reliability_decomposition": {
+            "between_group": {
+              "n": 16,
+              "reliability": 0.9546718428044747,
+              "reliability_ci95": [
+                0.8877191144083271,
+                0.9844180913542416
+              ],
+              "replicate_corr": 0.9612152683755515,
+              "noise_var": 1.451225835612428e-06,
+              "observed_var": 3.201599017918361e-05,
+              "valid": true,
+              "noise_sd": 0.001204668350880203,
+              "signal_sd": 0.0055285408873925485
+            },
+            "within_group": {
+              "n": 300,
+              "reliability": 0.9603545238411838,
+              "reliability_ci95": [
+                0.9456294688133936,
+                0.9711908725356477
+              ],
+              "replicate_corr": 0.9607513086634724,
+              "noise_var": 1.1621213804142348e-06,
+              "observed_var": 2.9312836999583026e-05,
+              "valid": true,
+              "noise_sd": 0.0010780173377150457,
+              "signal_sd": 0.005305724796780247
+            }
+          },
+          "eps_association_seed_a": {
+            "n": 300.0,
+            "spearman": 0.37610240113779037,
+            "spearman_p": 1.6278849362466646e-11,
+            "pearson": 0.43968168291854465,
+            "pearson_p": 1.3001025255294867e-15,
+            "slope": 49.47298907387594,
+            "slope_stderr": 5.85426388529083,
+            "intercept": 0.8138946902962765,
+            "r_squared": 0.19331998229408373
+          },
+          "runtime_seconds": {
+            "draw_a": 376.2917420864105,
+            "draw_b": 327.44422006607056,
+            "total": 703.7359621524811
+          },
+          "seconds_per_sequence_per_order": 0.08283144563941633
+        },
+        {
+          "k": 16,
+          "source": "sweep",
+          "seed_a": 37,
+          "seed_b": 38,
+          "n_sequences_per_draw": 531,
+          "eps_reliability": {
+            "n": 300,
+            "reliability": 0.9819205540878159,
+            "reliability_ci95": [
+              0.9759906229477899,
+              0.9864672433908966
+            ],
+            "replicate_corr": 0.983141595593094,
+            "noise_var": 1.1252390504340688e-06,
+            "observed_var": 6.223858053502332e-05,
+            "valid": true,
+            "noise_sd": 0.0010607728552494491,
+            "signal_sd": 0.0078175022535711
+          },
+          "single_delta_reliability": {
+            "n": 230,
+            "reliability": 0.9962559575648369,
+            "reliability_ci95": [
+              0.994840358419882,
+              0.9972819996202563
+            ],
+            "replicate_corr": 0.9962574190047315,
+            "noise_var": 2.7754893809199413e-06,
+            "observed_var": 0.0007413082060324017,
+            "valid": true,
+            "noise_sd": 0.0016659800061585197,
+            "signal_sd": 0.027175958431147958
+          },
+          "eps_reliability_decomposition": {
+            "between_group": {
+              "n": 16,
+              "reliability": 0.990656113448664,
+              "reliability_ci95": [
+                0.9727425096230005,
+                0.997452235411092
+              ],
+              "replicate_corr": 0.9906699763392224,
+              "noise_var": 3.0751355779211855e-07,
+              "observed_var": 3.291066903505462e-05,
+              "valid": true,
+              "noise_sd": 0.0005545390498351929,
+              "signal_sd": 0.005709917291630633
+            },
+            "within_group": {
+              "n": 300,
+              "reliability": 0.9733211804204324,
+              "reliability_ci95": [
+                0.9634845321550667,
+                0.980523354782411
+              ],
+              "replicate_corr": 0.9762976139864283,
+              "noise_var": 7.933261640261268e-07,
+              "observed_var": 2.9736179356065218e-05,
+              "valid": true,
+              "noise_sd": 0.0008906885898147157,
+              "signal_sd": 0.005379856242692651
+            }
+          },
+          "eps_association_seed_a": {
+            "n": 300.0,
+            "spearman": 0.3838900432227024,
+            "spearman_p": 5.694618684403129e-12,
+            "pearson": 0.43925931011261077,
+            "pearson_p": 1.3936530351963346e-15,
+            "slope": 51.43472109017643,
+            "slope_stderr": 6.093654706338601,
+            "intercept": 0.8050361505288333,
+            "r_squared": 0.1929487415206067
+          },
+          "runtime_seconds": {
+            "draw_a": 427.11878395080566,
+            "draw_b": 379.43035912513733,
+            "total": 806.549143075943
+          },
+          "seconds_per_sequence_per_order": 0.04746640437123017
+        },
+        {
+          "k": 32,
+          "source": "reused_artifact",
+          "seed_a": 37,
+          "seed_b": 38,
+          "n_sequences_per_draw": 531,
+          "eps_reliability": {
+            "n": 300,
+            "reliability": 0.9918232798305434,
+            "reliability_ci95": [
+              0.9895287437575292,
+              0.9936048025772914
+            ],
+            "replicate_corr": 0.9919913660803469,
+            "noise_var": 5.138455369856723e-07,
+            "observed_var": 6.284249996778597e-05,
+            "valid": true,
+            "noise_sd": 0.0007168302009441792,
+            "signal_sd": 0.007894849867527583
+          },
+          "single_delta_reliability": {
+            "valid": false,
+            "reason": "the committed artifact stores eps only, not raw per-sequence scores; pass --k-values ...,32 to score K=32 fresh and measure this"
+          },
+          "eps_reliability_decomposition": {
+            "between_group": {
+              "n": 16,
+              "reliability": 0.9938847205249206,
+              "reliability_ci95": [
+                0.9894161790462959,
+                0.9988053115677378
+              ],
+              "replicate_corr": 0.9953311207161648,
+              "noise_var": 2.0581594431127566e-07,
+              "observed_var": 3.365601607416357e-05,
+              "valid": true,
+              "noise_sd": 0.0004536694218384965,
+              "signal_sd": 0.005783614797845055
+            },
+            "within_group": {
+              "n": 300,
+              "reliability": 0.9895896124597513,
+              "reliability_ci95": [
+                0.9858040968672744,
+                0.9923333241976708
+              ],
+              "replicate_corr": 0.9896958127513975,
+              "noise_var": 3.0692629304905073e-07,
+              "observed_var": 2.9482696188053685e-05,
+              "valid": true,
+              "noise_sd": 0.0005540092896775745,
+              "signal_sd": 0.005401459978098943
+            }
+          },
+          "eps_association_seed_a": {
+            "n": 300.0,
+            "spearman": 0.3900558895098834,
+            "spearman_p": 2.4301808297514108e-12,
+            "pearson": 0.4496408606602752,
+            "pearson_p": 2.4555494908971285e-16,
+            "slope": 50.61106069755768,
+            "slope_stderr": 5.824046571844655,
+            "intercept": 0.7907453445015633,
+            "r_squared": 0.20217690357531312
+          },
+          "runtime_seconds": {
+            "main_scoring": 915.4783329963684,
+            "replicate_scoring": 1228.3494789600372,
+            "full_sample_replicate_scoring": 14133.268460035324
+          },
+          "note": "reused from the committed v2 artifact; not re-scored by this sweep"
+        }
+      ]
+    },
+    {
+      "pdb_code": "3L1X",
+      "dms_id": "UBE4B_HUMAN_Tsuboyama_2023_3L1X",
+      "n_doubles": 300,
+      "n_singles": 209,
+      "n_sequences_per_draw": 510,
+      "source_artifact": "score_only_epistasis_stability_3L1X_n300_k32_v2.json",
+      "source_config_id": "3a606a3be2d04503",
+      "points": [
+        {
+          "k": 2,
+          "source": "sweep",
+          "seed_a": 37,
+          "seed_b": 38,
+          "n_sequences_per_draw": 510,
+          "eps_reliability": {
+            "n": 300,
+            "reliability": 0.8921142954614691,
+            "reliability_ci95": [
+              0.8626438753207554,
+              0.9173508070740763
+            ],
+            "replicate_corr": 0.8937687295687367,
+            "noise_var": 1.2654386097013033e-05,
+            "observed_var": 0.0001172943732549253,
+            "valid": true,
+            "noise_sd": 0.0035573003945426136,
+            "signal_sd": 0.010229368854328808
+          },
+          "single_delta_reliability": {
+            "n": 209,
+            "reliability": 0.9505012612595561,
+            "reliability_ci95": [
+              0.9354756835533811,
+              0.9616483914140057
+            ],
+            "replicate_corr": 0.9515068860625593,
+            "noise_var": 3.3742251738468555e-05,
+            "observed_var": 0.0006816790204575213,
+            "valid": true,
+            "noise_sd": 0.005808808116857412,
+            "signal_sd": 0.025454602112762494
+          },
+          "eps_reliability_decomposition": {
+            "between_group": {
+              "n": 9,
+              "reliability": 0.9654796259313737,
+              "reliability_ci95": [
+                0.9063345530827698,
+                0.987683807150767
+              ],
+              "replicate_corr": 0.9664965538067674,
+              "noise_var": 2.4832302917403645e-06,
+              "observed_var": 7.193520808331097e-05,
+              "valid": true,
+              "noise_sd": 0.0015758268596963198,
+              "signal_sd": 0.008333785321903283
+            },
+            "within_group": {
+              "n": 300,
+              "reliability": 0.8208088714410271,
+              "reliability_ci95": [
+                0.7582141894198864,
+                0.8718291440123048
+              ],
+              "replicate_corr": 0.8218635722474685,
+              "noise_var": 1.0076768817404449e-05,
+              "observed_var": 5.623475279407105e-05,
+              "valid": true,
+              "noise_sd": 0.003174392669063556,
+              "signal_sd": 0.006793966733556075
+            }
+          },
+          "eps_association_seed_a": {
+            "n": 300.0,
+            "spearman": 0.273100812231247,
+            "spearman_p": 1.5701597671383093e-06,
+            "pearson": 0.25274855648964883,
+            "pearson_p": 9.352829595158114e-06,
+            "slope": 20.51340636211353,
+            "slope_stderr": 4.5488991044012135,
+            "intercept": 1.0440758166536457,
+            "r_squared": 0.06388183280760126
+          },
+          "runtime_seconds": {
+            "draw_a": 43.34302091598511,
+            "draw_b": 45.973406076431274,
+            "total": 89.31642699241638
+          },
+          "seconds_per_sequence_per_order": 0.0437825622511845
+        },
+        {
+          "k": 4,
+          "source": "sweep",
+          "seed_a": 37,
+          "seed_b": 38,
+          "n_sequences_per_draw": 510,
+          "eps_reliability": {
+            "n": 300,
+            "reliability": 0.8959837398241134,
+            "reliability_ci95": [
+              0.8497122694852565,
+              0.9317779541290899
+            ],
+            "replicate_corr": 0.8979559446794292,
+            "noise_var": 1.2165336328641584e-05,
+            "observed_var": 0.00011695610194089438,
+            "valid": true,
+            "noise_sd": 0.003487884219500639,
+            "signal_sd": 0.010236736081986914
+          },
+          "single_delta_reliability": {
+            "n": 209,
+            "reliability": 0.9335074385434929,
+            "reliability_ci95": [
+              0.9089825810996229,
+              0.9527316457002178
+            ],
+            "replicate_corr": 0.9345294952691592,
+            "noise_var": 3.9439489190275934e-05,
+            "observed_var": 0.0005931413729048988,
+            "valid": true,
+            "noise_sd": 0.006280086718372282,
+            "signal_sd": 0.023530870866047923
+          },
+          "eps_reliability_decomposition": {
+            "between_group": {
+              "n": 9,
+              "reliability": 0.9617479812754366,
+              "reliability_ci95": [
+                0.9005328372172703,
+                0.9945865646660987
+              ],
+              "replicate_corr": 0.9659874691841845,
+              "noise_var": 2.8906844379468785e-06,
+              "observed_var": 7.556946102012225e-05,
+              "valid": true,
+              "noise_sd": 0.0017002012933611357,
+              "signal_sd": 0.008525184841525453
+            },
+            "within_group": {
+              "n": 300,
+              "reliability": 0.8133961936942102,
+              "reliability_ci95": [
+                0.7424208086452593,
+                0.8724460410090554
+              ],
+              "replicate_corr": 0.8150976690235101,
+              "noise_var": 1.0097845303773044e-05,
+              "observed_var": 5.411382277607774e-05,
+              "valid": true,
+              "noise_sd": 0.003177710701711697,
+              "signal_sd": 0.006634453818688068
+            }
+          },
+          "eps_association_seed_a": {
+            "n": 300.0,
+            "spearman": 0.26575698238391504,
+            "spearman_p": 3.0408579577396942e-06,
+            "pearson": 0.24568243262033465,
+            "pearson_p": 1.6795149492209858e-05,
+            "slope": 21.283994895546275,
+            "slope_stderr": 4.864651032243086,
+            "intercept": 1.0398999221974343,
+            "r_squared": 0.06035985769824541
+          },
+          "runtime_seconds": {
+            "draw_a": 90.87144184112549,
+            "draw_b": 85.57322812080383,
+            "total": 176.44466996192932
+          },
+          "seconds_per_sequence_per_order": 0.04324624263772778
+        },
+        {
+          "k": 8,
+          "source": "sweep",
+          "seed_a": 37,
+          "seed_b": 38,
+          "n_sequences_per_draw": 510,
+          "eps_reliability": {
+            "n": 300,
+            "reliability": 0.9625036175093964,
+            "reliability_ci95": [
+              0.9454377192019253,
+              0.9765718890834015
+            ],
+            "replicate_corr": 0.9652704131244024,
+            "noise_var": 3.869175573809915e-06,
+            "observed_var": 0.00010318796952691388,
+            "valid": true,
+            "noise_sd": 0.0019670220064376288,
+            "signal_sd": 0.009965881494032727
+          },
+          "single_delta_reliability": {
+            "n": 209,
+            "reliability": 0.9802063230605212,
+            "reliability_ci95": [
+              0.9733878216437495,
+              0.9856313777839799
+            ],
+            "replicate_corr": 0.9804743404771097,
+            "noise_var": 1.184797436717375e-05,
+            "observed_var": 0.0005985736962061255,
+            "valid": true,
+            "noise_sd": 0.00344208866346783,
+            "signal_sd": 0.024222421882193194
+          },
+          "eps_reliability_decomposition": {
+            "between_group": {
+              "n": 9,
+              "reliability": 0.9824461358356826,
+              "reliability_ci95": [
+                0.9543112510805238,
+                0.9977661806619609
+              ],
+              "replicate_corr": 0.9882229278851972,
+              "noise_var": 1.1790967457990693e-06,
+              "observed_var": 6.717021020339654e-05,
+              "valid": true,
+              "noise_sd": 0.0010858622130818759,
+              "signal_sd": 0.00812349145734748
+            },
+            "within_group": {
+              "n": 300,
+              "reliability": 0.9352204222795637,
+              "reliability_ci95": [
+                0.9072701556986701,
+                0.9573924551358847
+              ],
+              "replicate_corr": 0.9364516145210553,
+              "noise_var": 3.0713135532428935e-06,
+              "observed_var": 4.741175631767003e-05,
+              "valid": true,
+              "noise_sd": 0.0017525163489231401,
+              "signal_sd": 0.006658861972171156
+            }
+          },
+          "eps_association_seed_a": {
+            "n": 300.0,
+            "spearman": 0.27191857687307636,
+            "spearman_p": 1.7487428384412329e-06,
+            "pearson": 0.25075285050873614,
+            "pearson_p": 1.1053838247573282e-05,
+            "slope": 23.244675054261574,
+            "slope_stderr": 5.198376958349966,
+            "intercept": 1.0188940336206787,
+            "r_squared": 0.06287699203825663
+          },
+          "runtime_seconds": {
+            "draw_a": 172.7202250957489,
+            "draw_b": 188.4152638912201,
+            "total": 361.135488986969
+          },
+          "seconds_per_sequence_per_order": 0.04425680012095208
+        },
+        {
+          "k": 16,
+          "source": "sweep",
+          "seed_a": 37,
+          "seed_b": 38,
+          "n_sequences_per_draw": 510,
+          "eps_reliability": {
+            "n": 300,
+            "reliability": 0.9900470261622834,
+            "reliability_ci95": [
+              0.9873747285417657,
+              0.9920569113559252
+            ],
+            "replicate_corr": 0.9913298899809624,
+            "noise_var": 1.00500676337061e-06,
+            "observed_var": 0.00010097552548185687,
+            "valid": true,
+            "noise_sd": 0.0010025002560451594,
+            "signal_sd": 0.009998525827265051
+          },
+          "single_delta_reliability": {
+            "n": 209,
+            "reliability": 0.9925502665021603,
+            "reliability_ci95": [
+              0.9887773419530157,
+              0.9951060802287367
+            ],
+            "replicate_corr": 0.9925508149257776,
+            "noise_var": 4.414947889161736e-06,
+            "observed_var": 0.0005926316546010673,
+            "valid": true,
+            "noise_sd": 0.0021011777385937,
+            "signal_sd": 0.0242531793114203
+          },
+          "eps_reliability_decomposition": {
+            "between_group": {
+              "n": 9,
+              "reliability": 0.9961628696889727,
+              "reliability_ci95": [
+                0.9921392022676566,
+                0.9987761529370415
+              ],
+              "replicate_corr": 0.9982520855287789,
+              "noise_var": 2.5286186779339485e-07,
+              "observed_var": 6.589869180796645e-05,
+              "valid": true,
+              "noise_sd": 0.0005028537240524274,
+              "signal_sd": 0.008102211422826057
+            },
+            "within_group": {
+              "n": 300,
+              "reliability": 0.9832028753693045,
+              "reliability_ci95": [
+                0.9770508707769625,
+                0.9879189630029538
+              ],
+              "replicate_corr": 0.9836194502886888,
+              "noise_var": 7.75545669507129e-07,
+              "observed_var": 4.617133506825789e-05,
+              "valid": true,
+              "noise_sd": 0.0008806507080035359,
+              "signal_sd": 0.006737639749849406
+            }
+          },
+          "eps_association_seed_a": {
+            "n": 300.0,
+            "spearman": 0.28399604440049336,
+            "spearman_p": 5.680237458060602e-07,
+            "pearson": 0.2637627605370729,
+            "pearson_p": 3.626536618738235e-06,
+            "slope": 24.392015120786738,
+            "slope_stderr": 5.167348306611678,
+            "intercept": 1.0021841517539531,
+            "r_squared": 0.0695707938461372
+          },
+          "runtime_seconds": {
+            "draw_a": 354.14025497436523,
+            "draw_b": 327.3537311553955,
+            "total": 681.4939861297607
+          },
+          "seconds_per_sequence_per_order": 0.041758209934421614
+        },
+        {
+          "k": 32,
+          "source": "reused_artifact",
+          "seed_a": 37,
+          "seed_b": 38,
+          "n_sequences_per_draw": 510,
+          "eps_reliability": {
+            "n": 300,
+            "reliability": 0.9939023822657294,
+            "reliability_ci95": [
+              0.992622760728651,
+              0.99499961250533
+            ],
+            "replicate_corr": 0.9949430890718571,
+            "noise_var": 6.226104295232954e-07,
+            "observed_var": 0.00010210715998545043,
+            "valid": true,
+            "noise_sd": 0.0007890566706664962,
+            "signal_sd": 0.010073954017957753
+          },
+          "single_delta_reliability": {
+            "valid": false,
+            "reason": "the committed artifact stores eps only, not raw per-sequence scores; pass --k-values ...,32 to score K=32 fresh and measure this"
+          },
+          "eps_reliability_decomposition": {
+            "between_group": {
+              "n": 9,
+              "reliability": 0.9971135132164146,
+              "reliability_ci95": [
+                0.9946029455913369,
+                0.9989735888086846
+              ],
+              "replicate_corr": 0.9991076668474311,
+              "noise_var": 1.940304914161937e-07,
+              "observed_var": 6.722029441450647e-05,
+              "valid": true,
+              "noise_sd": 0.00044048892314812375,
+              "signal_sd": 0.008186956939125202
+            },
+            "within_group": {
+              "n": 300,
+              "reliability": 0.9904389829846558,
+              "reliability_ci95": [
+                0.9874877299475017,
+                0.9924815548321376
+              ],
+              "replicate_corr": 0.9906491387776295,
+              "noise_var": 4.4626230754763987e-07,
+              "observed_var": 4.667519227624517e-05,
+              "valid": true,
+              "noise_sd": 0.0006680286726987397,
+              "signal_sd": 0.006799185978387231
+            }
+          },
+          "eps_association_seed_a": {
+            "n": 300.0,
+            "spearman": 0.2864622940254891,
+            "spearman_p": 4.4850865770364465e-07,
+            "pearson": 0.263225447537404,
+            "pearson_p": 3.8018698448517554e-06,
+            "slope": 24.141889767419165,
+            "slope_stderr": 5.125579799769841,
+            "intercept": 0.9984848653063443,
+            "r_squared": 0.06928763623126666
+          },
+          "runtime_seconds": {
+            "main_scoring": 671.3620719909668,
+            "replicate_scoring": 444.3094971179962,
+            "full_sample_replicate_scoring": 1365.1170802116394
+          },
+          "note": "reused from the committed v2 artifact; not re-scored by this sweep"
+        }
+      ]
+    }
+  ],
+  "total_runtime_seconds": 5942.563003063202,
+  "table_markdown": "| domain | K | source | single-delta reliability [95% CI] | eps reliability [95% CI] | eps between / within pair | eps rho vs experiment | noise SD (eps) | s/seq/order |\n|---|--:|---|---|---|---|--:|--:|--:|\n| 4G3O | 2 | sweep | 0.961 [0.947, 0.972] | 0.930 [0.910, 0.946] | 0.986 / 0.869 | +0.013 | 0.0067 | 0.03443 |\n| 4G3O | 4 | sweep | 0.980 [0.971, 0.987] | 0.952 [0.934, 0.964] | 0.982 / 0.920 | +0.016 | 0.0051 | 0.02987 |\n| 4G3O | 8 | sweep | 0.990 [0.986, 0.993] | 0.979 [0.971, 0.984] | 0.992 / 0.964 | +0.044 | 0.0033 | 0.03708 |\n| 4G3O | 16 | sweep | 0.993 [0.990, 0.995] | 0.987 [0.982, 0.990] | 0.995 / 0.978 | +0.091 | 0.0026 | 0.06750 |\n| 4G3O | 32 | reused_artifact | n/a | 0.992 [0.989, 0.994] | 0.996 / 0.987 | +0.103 | 0.0020 | n/a |\n| 3DKM | 2 | sweep | 0.935 [0.913, 0.953] | 0.827 [0.782, 0.869] | 0.865 / 0.803 | +0.351 | 0.0035 | 0.05734 |\n| 3DKM | 4 | sweep | 0.972 [0.963, 0.980] | 0.927 [0.903, 0.947] | 0.959 / 0.888 | +0.363 | 0.0023 | 0.41453 |\n| 3DKM | 8 | sweep | 0.982 [0.976, 0.987] | 0.958 [0.945, 0.968] | 0.955 / 0.960 | +0.376 | 0.0016 | 0.08283 |\n| 3DKM | 16 | sweep | 0.996 [0.995, 0.997] | 0.982 [0.976, 0.986] | 0.991 / 0.973 | +0.384 | 0.0011 | 0.04747 |\n| 3DKM | 32 | reused_artifact | n/a | 0.992 [0.990, 0.994] | 0.994 / 0.990 | +0.390 | 0.0007 | n/a |\n| 3L1X | 2 | sweep | 0.951 [0.935, 0.962] | 0.892 [0.863, 0.917] | 0.965 / 0.821 | +0.273 | 0.0036 | 0.04378 |\n| 3L1X | 4 | sweep | 0.934 [0.909, 0.953] | 0.896 [0.850, 0.932] | 0.962 / 0.813 | +0.266 | 0.0035 | 0.04325 |\n| 3L1X | 8 | sweep | 0.980 [0.973, 0.986] | 0.963 [0.945, 0.977] | 0.982 / 0.935 | +0.272 | 0.0020 | 0.04426 |\n| 3L1X | 16 | sweep | 0.993 [0.989, 0.995] | 0.990 [0.987, 0.992] | 0.996 / 0.983 | +0.284 | 0.0010 | 0.04176 |\n| 3L1X | 32 | reused_artifact | n/a | 0.994 [0.993, 0.995] | 0.997 / 0.990 | +0.286 | 0.0008 | n/a |"
+}
