@@ -98,7 +98,8 @@ does not establish it**; a larger distal bin would be needed.
    combinatorial search.
 2. **Per-pair epistasis is modest and noisy at the default 8 decoding orders** (SNR ~1.7).
    Concrete recommendation: when `MUTATION_SEARCH_ENABLED` is used, raise
-   `PROTEINMPNN_NUM_DECODING_ORDERS` (≥32 gives SNR ~3) so the search ranks on signal, not
+   `PROTEINMPNN_NUM_DECODING_ORDERS` (then ≥32 for SNR ~3; **superseded** — under protocol
+   v2, K=8 suffices for the score the search ranks, see the K-sweep below) so it ranks on signal, not
    noise — at a compute cost linear in K. The cheap-search savings vs re-folding leave ample
    room for this.
 3. **Caveats (honest scope):** one small domain, one protein; `|eps|` in `score_only` fitness
@@ -205,6 +206,32 @@ What changed, and what did not:
 5. **Finding 4 (global epistasis) and the WT caveat are untouched.** Detrending still helps,
    and `DMS(WT) = 0` is still an unverified convention with every primary readout invariant to
    it by construction.
+
+### How many decoding orders (I-23, resolved)
+
+Swept K ∈ {2, 4, 8, 16} on all three panels under v2, two draws of the shared orders per point,
+K=32 reused from the committed artifacts. Harness `benchmarks/sweep_decoding_orders.py`;
+artifact `benchmarks/decoding_order_sweep_n300_k2-4-8-16_v2.{json,md}`; discussion in
+`Process/mutation-scoring-consistency.md` §7.
+
+| K | single-delta reliability (4G3O / 3DKM / 3L1X) | eps reliability (4G3O / 3DKM / 3L1X) |
+|--:|---|---|
+| 2 | 0.961 / 0.935 / 0.951 | 0.930 / 0.827 / 0.892 |
+| 4 | 0.980 / 0.972 / 0.934 | 0.952 / 0.927 / 0.896 |
+| 8 | **0.990 / 0.982 / 0.980** | 0.979 / 0.958 / 0.963 |
+| 16 | 0.993 / 0.996 / 0.993 | 0.987 / 0.982 / 0.990 |
+| 32 | — | 0.992 / 0.992 / 0.994 |
+
+The two curves separate by ~4× in K. `single_delta` = `f(mut) − f(WT)`, the quantity the search
+ranks; `eps` = the four-term contrast, which every earlier K figure measured and which the
+pipeline never computes. So **the ≥32 advice was provisioned for the wrong quantity**, and K=8
+is sufficient for the right one on all three domains. Noise falls as K^−0.44…−0.68 against an
+ideal of −0.50 — plain Monte-Carlo averaging — so unmeasured K is predictable without
+re-measuring. The association with experiment is flat in K on 3DKM/3L1X and climbs only on
+4G3O, so past K≈8 additional orders buy numerical self-consistency rather than predictive
+power. K<8 is not supported here: 3L1X at K=4 scores below its own K=2 (0.934 vs 0.951), a
+non-monotonicity produced by the two-draw design, which would need ≥3 draws per point to
+resolve.
 
 **What this means for the search.** Unchanged in substance. The cheap oracle is now internally
 consistent enough to *compare* candidates — which it was not before — but it is still only

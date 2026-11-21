@@ -84,19 +84,27 @@ cannot recur; the 300-pair epistasis artifact is restored. See
       linear in K; the cheap-search savings vs re-folding leave room. Decide whether this
       becomes the default in `.env.example` or only applies under `MUTATION_SEARCH_ENABLED`.
 
-- [ ] **I-23 — Pick `PROTEINMPNN_NUM_DECODING_ORDERS` from a v2 K-sweep (amends I-11).**
-      The ≥32 recommendation was calibrated against scoring protocol v1's noise, and most of
-      that noise was a batching artifact rather than decoding-order variance. The v2 rerun of
-      the same 300-double panel gives per-double epistasis reliability **0.99 on all three
-      domains at K=32** (was 0.89 / 0.40 / 0.51), and the diagnostic reached **0.977 at K=8**
-      on 4G3O against v1's 0.533 at the same K. So K=32 is over-provisioned and the current
-      default of 8 is defensible — but **only 4G3O has been measured at K=8**; the K at which
-      3DKM / 3L1X reach a given reliability is unmeasured, and a fixed K still does not buy a
-      fixed SNR across proteins. Action: sweep K ∈ {2, 4, 8, 16, 32} under v2 on all three
-      domains, pick the knee, and keep it configurable. (The r = 0.28–0.92 "batch composition"
-      figure previously cited here is withdrawn — not reproducible from any artifact, and it
-      described the epistasis contrast rather than raw scores. See
-      `Process/mutation-scoring-consistency.md`.)
+- [ ] **I-23 — Confirm `PROTEINMPNN_NUM_DECODING_ORDERS = 8` and retire the ≥32 advice.**
+      The sweep is **done** — `benchmarks/sweep_decoding_orders.py`, artifact
+      `decoding_order_sweep_n300_k2-4-8-16_v2.{json,md}`, written up in
+      `Process/mutation-scoring-consistency.md` §7. K ∈ {2,4,8,16} on all three domains under
+      v2, two draws per point, K=32 reused from the committed artifacts. Findings: the quantity
+      the search actually ranks (`f(mut) − f(WT)`) reaches reliability **≥0.98 on all three
+      domains at K=8**, while the four-term epistasis contrast that every earlier K figure
+      measured needs K≈32 for the same — a ~4× separation, so **K=32 was provisioned for a
+      quantity the pipeline never computes**. Noise scales as K^−0.44…−0.68 (ideal −0.50), i.e.
+      plain Monte-Carlo averaging, so unmeasured K is predictable. The association with
+      experiment is flat in K on 3DKM/3L1X and only climbs on 4G3O, so past K≈8 the spend buys
+      numerical self-consistency, not predictive power.
+      **Remaining actions:** (a) the default was deliberately *not* changed by that work — it is
+      already 8, so this is a decision to ratify rather than a code change, and the ≥32 wording
+      should be struck wherever it survives; (b) K<8 is **not** supported on this evidence —
+      3L1X at K=4 scores *below* its own K=2 (0.934 vs 0.951), a non-monotonicity caused by the
+      two-draw design (the bootstrap CI resamples variants while conditioning on one pair of
+      order-draws, so it understates draw-level uncertainty). Three or more draws per point
+      would settle whether K=4 is genuinely viable and halve the oracle cost again.
+      A fixed K still does not buy a fixed reliability across proteins; measure on the domain
+      you care about.
 
 ## P2 — Verification gaps (medium)
 

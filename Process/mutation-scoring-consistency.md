@@ -375,7 +375,63 @@ higher compatibility score means a better protein.
 double-mutant effects, and the smoke run in §4 returned the same five candidates from both
 proposers. That remains open as I-25.
 
-## 7. Limitations
+## 7. How many decoding orders? (the K-sweep)
+
+`PROTEINMPNN_NUM_DECODING_ORDERS >= 32` was calibrated against v1's noise on one domain. With
+v2 in place that number needed re-deriving, so the same three panels were swept over
+K ∈ {2, 4, 8, 16}, two independent draws of the shared orders per point (seeds 37/38), with
+K=32 reused free from the committed artifacts. Harness:
+`benchmarks/sweep_decoding_orders.py`; artifact
+`benchmarks/decoding_order_sweep_n300_k2-4-8-16_v2.{json,md}`.
+
+**Two curves, because only one of them is the config value's question.** Every K figure on
+record until now measured the four-term epistasis contrast
+`f(AB) − f(A) − f(B) + f(WT)`. The pipeline does not compute that quantity — it ranks
+`f(mut) − f(WT)`. The contrast sums four perturbations and is correspondingly noisier, so the
+old numbers were a conservative proxy for the setting they were being used to choose. Both come
+free from the same scored panel, so the sweep reports both.
+
+| K | single-delta reliability (4G3O / 3DKM / 3L1X) | eps reliability (4G3O / 3DKM / 3L1X) |
+|--:|---|---|
+| 2 | 0.961 / 0.935 / 0.951 | 0.930 / 0.827 / 0.892 |
+| 4 | 0.980 / 0.972 / **0.934** | 0.952 / 0.927 / 0.896 |
+| 8 | **0.990 / 0.982 / 0.980** | 0.979 / 0.958 / 0.963 |
+| 16 | 0.993 / 0.996 / 0.993 | 0.987 / 0.982 / 0.990 |
+| 32 | — (not stored) | 0.992 / 0.992 / 0.994 |
+
+The curves separate by roughly **4× in K**, as the four-term structure predicts: single-delta
+reaches ≥0.98 on all three domains by K=8, where the contrast needs K≈32 for the same. K=32 was
+provisioned for a quantity the pipeline never evaluates.
+
+**It is plain Monte-Carlo averaging.** Fitting `noise_sd ~ K^a` over the six curves gives
+a ∈ [−0.68, −0.44] against an ideal of −0.50, so reliability at an unmeasured K is predictable
+rather than needing measurement. Extrapolated: single-delta wants K ≈ 2 for 0.95 and K ≈ 6–12
+for 0.99; eps wants K ≈ 4–5 for 0.95 and K ≈ 20–26 for 0.99. K=8 sits just past the
+single-delta 0.99 crossing on two of three domains.
+
+**Going below 8 is not supported.** 3L1X at K=4 gives single-delta 0.934 — *lower* than its own
+K=2 value of 0.951, with barely-overlapping CIs. That non-monotonicity is a limitation of the
+design rather than a finding about K: a two-draw reliability estimate conditions on one
+particular pair of order-draws, and the bootstrap CI resamples variants while holding those
+draws fixed, so the interval understates the true uncertainty. Three or more draws per point
+would resolve it and were not run. The honest reading is that K=4 is within noise of K=8 on two
+domains and visibly worse on one.
+
+**Raising K buys repeatability, not biology.** The association with experiment is nearly flat in
+K on 3DKM (+0.351 → +0.390 over K = 2 → 32) and 3L1X (+0.273 → +0.286) — saturated by K=2. Only
+4G3O climbs materially (+0.013 → +0.103), and that is the domain with the weakest association in
+absolute terms. Past K ≈ 8 the spend buys decimal places of numerical self-consistency.
+
+**Recommendation: leave the default at 8** — a 4× reduction against the old ≥32 advice, now
+measured on all three domains instead of extrapolated from one. The default was not changed as
+part of this work; that is a config commitment, left to the maintainer.
+
+**The sweep's cost column is unusable.** `s/seq/order` reads 0.41 s on 3DKM's K=4 point against
+≈0.04 s everywhere else — host contention, the same cause as the wall-clock contamination noted
+in §6.5. The reliability figures are computed from scores and are unaffected. No cost curve
+should be read off that column.
+
+## 8. Limitations
 
 - The diagnostic is **one domain** (4G3O, 47 aa, 30 doubles, K=8). The mechanism is
   domain-independent — it is a property of the RNG plumbing — but the *magnitudes* are not.
@@ -395,8 +451,11 @@ proposers. That remains open as I-25.
 
 ## Follow-ups
 
-- **I-23** — re-tune `PROTEINMPNN_NUM_DECODING_ORDERS` from the v2 rerun; K≥32 was calibrated
-  against v1's noise and is likely over-provisioned.
+- **I-23** — **done** (§7). Swept K ∈ {2,4,8,16} under v2 on all three domains, K=32 reused.
+  The knee is at K=8 for the quantity the search ranks; the default of 8 stands and K=32 is
+  retired. Residual gap: two draws per point, so the per-point reliability CI understates
+  draw-level uncertainty (3L1X is non-monotonic between K=2 and K=4).
+
 - **I-25** — decide whether `search_mutations` earns its keep over the additive baseline.
 - **I-26** — nothing in the pipeline measures experimental benefit; closing it needs an
   independent oracle, not a better compatibility score.
@@ -409,6 +468,8 @@ proposers. That remains open as I-25.
   config, panel membership, reference scores, reference epistasis, per-condition metrics,
   stream-offset probe, shared-draw comparison and per-condition scoring cost.
 - `orchestrator/mpnn_score_only.py` — protocol v2.
+- `benchmarks/sweep_decoding_orders.py` + `decoding_order_sweep_n300_k2-4-8-16_v2.{json,md}` —
+  the K-sweep of §7. Reads the committed v2 panels read-only; writes no stability-arm artifact.
 - `tests/test_mpnn_score_only.py` (17 tests), `tests/test_finalist_evaluation.py` (19 tests).
 - Model: ProteinMPNN `v_48_020`, clone pinned at `8907e6671bfbfc92303b5f79c4b5e6ce47cdef57`,
   CPU (M3), `augment_eps = 0`.
