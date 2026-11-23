@@ -480,7 +480,7 @@ def icc_reliability(
 
     **Why this exists.** `reliability` takes exactly two replicates and bootstraps over
     variants only, so its interval conditions on the two decoding-order sets that happened to
-    be drawn: it cannot see draw-level luck (ISSUES I-24). At D = 2 this function is the same
+    be drawn: it cannot see draw-level luck (ISSUES I-23(b)). At D = 2 this function is the same
     estimator -- the algebra reduces to `1 - Var(a-b)/2 / ((Var(a)+Var(b))/2)`, up to MSW using
     n(d-1) rather than n-1 degrees of freedom -- so it generalises `reliability` rather than
     replacing it. `reliability` is kept untouched: the committed two-draw artifacts must keep

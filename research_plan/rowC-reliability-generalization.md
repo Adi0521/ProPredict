@@ -7,6 +7,24 @@
 Two studies, designed together because they share one estimator and one flaw to fix, but kept
 separate because they answer different questions and need different statistics.
 
+## Amendments to this pre-registration
+
+Logged rather than edited in silently, so the body is never mistaken for the original plan.
+
+**A1 — 2026-11-22, before any run: the draw-axis interval is not a bootstrap.**
+As written, the CI was to be "bootstrapped over both variants and draws". Implementing it
+showed that scheme is unusable at D = 5. Resampling draw columns with replacement duplicates
+columns; duplicated columns contribute no within-variant spread, so the bootstrap MSW is
+attenuated by about (d−1)/d and the ICC distribution shifts **up**. Measured on synthetic data
+with a point estimate of 0.9119: naive two-level bootstrap median 0.9317, and its 2.5th
+percentile **0.9119 — exactly the point estimate**. The distribution is bounded below by the
+estimate and centred above it, so a "95% lower bound" taken from it clears any threshold the
+estimate itself clears. For a decision rule of the form *retain iff the lower bound ≥ 0.90*
+that is anti-conservative in the one direction that matters. Replaced by the ANOVA F interval
+as primary (it carries MSW at n(d−1) df, so it does propagate draw-axis error, under
+normality) plus a leave-one-draw-out jackknife (distribution-free, no such bias). The bias and
+its replacement are both locked in as tests in `tests/test_epistasis_stats.py`.
+
 ---
 
 ## The flaw both studies exist to fix: the two-draw design
@@ -41,8 +59,15 @@ that is an artifact.
 **Fix: D = 5 draws and a one-way random-effects estimator.** For variant *i* and draw *d*,
 `x_id = μ_i + e_id`; within-variant variance across draws is noise, between-variant variance is
 signal, and their ratio is an intraclass correlation. ICC(1,1) is the reliability of a *single*
-draw, so it is directly comparable to every two-draw number already on record. The CI is
-bootstrapped over **both** variants and draws.
+draw, so it is directly comparable to every two-draw number already on record — at D = 2 the
+estimator reduces to the formula above, agreeing with it to 8e-05 on 300-variant synthetic
+panels, so the published two-draw numbers stay on the same scale.
+
+Uncertainty is reported as **three** quantities, because no single interval covers both axes
+distribution-free (see amendment A1): the ANOVA F interval, which propagates error in both
+mean squares and so covers the draw axis under normality; a variant-row bootstrap, which is
+distribution-free on the axis with ~300 units; and a leave-one-draw-out jackknife, the direct
+distribution-free answer to "how much did this depend on which order-sets we drew".
 
 Large effects on record are safe — a 0.40 → 0.99 jump is far too big to be draw luck. Fine
 distinctions are not: "K=4 vs K=8" and "is 0.990 better than 0.982" are exactly what the old
@@ -108,19 +133,29 @@ of 813), 1GPB (823 aa, past the size target). Losing 1EMA cost the set its β-ba
 - **Estimand:** ICC(1,1) of `f(mut) − f(WT)`.
 
 ### Analysis, fixed in advance
-- Primary: ICC per (backbone, K), with a two-level bootstrap CI over variants and draws.
-- **Report the conditional (variants-only) interval alongside the full one.** The gap between
-  them is a direct measurement of how much the old two-draw design understated uncertainty —
-  worth having as a number rather than an argument.
+- Primary: ICC(1,1) per (backbone, K) with its **ANOVA F interval**, plus the variant-row
+  bootstrap interval and the leave-one-draw-out jackknife (amendment A1).
+- **Report the old two-draw interval on the same panel.** Take draws 1 and 2 alone, run
+  `es.reliability`, and print its interval beside the D=5 F interval. The gap is a direct
+  measurement of how much the old design understated uncertainty — worth having as a number
+  rather than an argument.
+- **Report the jackknife spread against the F interval's width.** A spread exceeding that
+  width means the F interval is understating draw sensitivity and its normality assumption is
+  doing work the data does not support. Declared now as a diagnostic to report, not as an
+  automatic override.
 - Pre-registered functional form: `noise_sd ∝ K^-0.5`. The K-sweep measured exponents in
   [−0.68, −0.44] over six curves. A clear departure is informative, so it is declared now.
 - Secondary (**exploratory, declared as such**): does ICC at K=8 track length, mean contact
   number, or fraction buried?
 
 ### Decision rule, fixed in advance
-Retain K=8 as the default iff **ICC(K=8) ≥ 0.95 on ≥ 90% of backbones with a full-bootstrap
+Retain K=8 as the default iff **ICC(K=8) ≥ 0.95 on ≥ 90% of backbones with an F-interval
 lower bound ≥ 0.90**. Otherwise raise it. Separately report the minimum qualifying K per
 backbone, so the answer is a distribution rather than one number.
+
+The gate is `stable` (F lower bound > 0), never `valid`. A pure-noise panel's ICC scatters
+around zero and lands slightly positive about half the time, so `valid` alone would accept
+noise; the interval is what refuses it.
 
 ### Cost — measured, not extrapolated
 Throughput was measured directly on five of the chosen backbones with the model cache warm and
@@ -255,11 +290,14 @@ chains that is ≈ 0.6 ks per domain: **≈ 2 h for the 12 X-ray domains**, ≈ 
 
 ---
 
-## Shared engineering (none of it written yet)
+## Shared engineering
 
-1. `epistasis_stats.icc_reliability(x)` — one-way random-effects ICC over an
-   `(n_variants, D)` matrix with a two-level bootstrap CI. **Additive**: `es.reliability` stays
-   for the committed two-draw artifacts, which must keep reproducing their published numbers.
+1. ~~`epistasis_stats.icc_reliability(x)`~~ — **done.** One-way random-effects ICC(1,1) over an
+   `(n_variants, D)` matrix, returning the variance components as SDs, the F interval, the
+   variant-row bootstrap interval and the leave-one-draw-out jackknife (amendment A1).
+   Additive: `es.reliability` is untouched, so the committed two-draw artifacts keep
+   reproducing their published numbers. Nine tests, including the D=2 equivalence and the
+   anti-conservative-bootstrap bias that A1 records.
 2. `epistasis_stats.meta_analyze(...)` — random-effects pooling on Fisher-z, returning mean,
    τ², I², CI and prediction interval.
 3. `benchmark_score_only_epistasis.py` — D-draw support (`--draws`, `--seeds`), remove the
