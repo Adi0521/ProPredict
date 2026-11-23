@@ -143,6 +143,128 @@ def test_reliability_flags_tiny_samples_and_rejects_mismatched_lengths():
 
 
 # ---------------------------------------------------------------------------
+# D >= 3 draws: one-way random-effects ICC (Row C's estimator)
+# ---------------------------------------------------------------------------
+def _draw_matrix(n=300, d=5, signal_sd=1.0, noise_sd=0.2, seed=0):
+    """(n, d) matrix of per-variant truth plus independent per-draw decoding noise."""
+    rng = np.random.default_rng(seed)
+    mu = rng.normal(0.0, signal_sd, n)
+    return mu[:, None] + rng.normal(0.0, noise_sd, (n, d))
+
+
+def test_icc_recovers_known_variance_components():
+    # ICC's definition on this generator: signal_var / (signal_var + noise_var).
+    x = _draw_matrix(n=400, d=5, signal_sd=1.0, noise_sd=0.25, seed=7)
+    true = 1.0**2 / (1.0**2 + 0.25**2)
+    out = es.icc_reliability(x, n_boot=200)
+    assert out["valid"] is True
+    assert out["icc"] == pytest.approx(true, abs=0.02)
+    assert out["noise_sd"] == pytest.approx(0.25, rel=0.1)
+    assert out["signal_sd"] == pytest.approx(1.0, rel=0.1)
+    assert out["n_variants"] == 400 and out["n_draws"] == 5
+
+
+def test_icc_matches_the_two_draw_reliability_at_d_equals_two():
+    """The new estimator GENERALISES the committed one rather than replacing it.
+
+    At d=2 the ICC(1,1) algebra reduces to `1 - Var(a-b)/2 / ((Var(a)+Var(b))/2)`; the only
+    difference is MSW's n(d-1) degrees of freedom, an O(1/n) effect. If this ever drifts, the
+    two-draw numbers already published in Process/mutation-scoring-consistency.md and the new
+    D-draw numbers would no longer be on the same scale.
+    """
+    for seed in (0, 1, 2, 3):
+        x = _draw_matrix(n=300, d=2, signal_sd=1.0, noise_sd=0.4, seed=seed)
+        old = es.reliability(x[:, 0], x[:, 1], n_boot=50)
+        new = es.icc_reliability(x, n_boot=50)
+        assert new["icc"] == pytest.approx(old["reliability"], abs=2e-3)
+
+
+def test_icc_is_one_for_identical_draws_and_never_calls_pure_noise_stable():
+    same = np.tile(np.linspace(0.0, 1.0, 50)[:, None], (1, 4))
+    assert es.icc_reliability(same, n_boot=50)["icc"] == pytest.approx(1.0)
+
+    # No shared per-variant signal at all: every draw is independent noise. The point estimate
+    # scatters around zero and can land slightly positive, so what must hold is not `valid is
+    # False` but that the interval refuses it: a near-zero ICC is never reported as usable.
+    for seed in (5, 6, 7):
+        out = es.icc_reliability(np.random.default_rng(seed).normal(size=(200, 4)), n_boot=100)
+        assert abs(out["icc"]) < 0.06
+        assert out["stable"] is False
+        assert "reason" in out
+
+
+def test_icc_f_interval_brackets_the_estimate_and_narrows_with_more_draws():
+    narrow = es.icc_reliability(_draw_matrix(n=300, d=8, noise_sd=0.5, seed=11), n_boot=100)
+    wide = es.icc_reliability(_draw_matrix(n=300, d=2, noise_sd=0.5, seed=11), n_boot=100)
+    for out in (narrow, wide):
+        lo, hi = out["icc_ci95_f"]
+        assert lo < out["icc"] < hi
+    assert (narrow["icc_ci95_f"][1] - narrow["icc_ci95_f"][0]) < (wide["icc_ci95_f"][1] - wide["icc_ci95_f"][0])
+
+
+def test_draw_jackknife_needs_three_draws_and_finds_the_odd_draw_out():
+    two = es.icc_reliability(_draw_matrix(n=100, d=2, seed=3), n_boot=50)
+    assert two["draw_jackknife"]["valid"] is False
+
+    # Draw 2 is noisier than the rest; dropping it should give the HIGHEST leave-one-out ICC.
+    x = _draw_matrix(n=300, d=5, noise_sd=0.2, seed=4)
+    x[:, 2] += np.random.default_rng(99).normal(0.0, 0.8, x.shape[0])
+    loo = es.icc_reliability(x, n_boot=100)["draw_jackknife"]["icc_leave_one_out"]
+    assert np.argmax(loo) == 2
+    assert loo[2] > max(v for j, v in enumerate(loo) if j != 2)
+
+
+def test_icc_treats_a_systematically_offset_draw_as_noise_not_as_signal():
+    """One order-set sitting at a different level is absorbed into MSW, so the ICC goes DOWN.
+
+    ICC(1,1) has no draw main effect, which makes it conservative for a retention rule — the
+    direction a decision rule can tolerate. A two-way model would be needed to separate this
+    from per-variant noise, and D=5 cannot support one.
+    """
+    x = _draw_matrix(n=300, d=5, noise_sd=0.2, seed=8)
+    before = es.icc_reliability(x, n_boot=100)["icc"]
+    x[:, 0] += 0.5
+    after = es.icc_reliability(x, n_boot=100)["icc"]
+    assert after < before
+
+
+def test_naive_variant_and_draw_bootstrap_would_be_anticonservative():
+    """Why `icc_reliability` does NOT resample draw columns with replacement.
+
+    Duplicated columns contribute no within-variant spread, so the bootstrap MSW is attenuated
+    by ~(d-1)/d and the resulting ICC distribution sits ABOVE the point estimate. Its lower
+    bound would then clear a threshold the data does not actually support. Locked in as a test
+    because the Row C design note originally called for exactly this resampling scheme.
+    """
+    x = _draw_matrix(n=300, d=5, noise_sd=0.3, seed=12)
+    point = es.icc_reliability(x, n_boot=100)["icc"]
+    rng = np.random.default_rng(1)
+    naive = [es._icc_point(x[:, rng.integers(0, 5, size=5)])["icc"] for _ in range(300)]
+    # Duplication can only remove within-variant spread, so the naive distribution is bounded
+    # BELOW by the point estimate (hit exactly when the resample happens to be a permutation)
+    # and centred above it. Any percentile lower bound taken from it is therefore >= the
+    # estimate, which is not an interval at all.
+    assert min(naive) >= point - 1e-12
+    assert np.median(naive) > point
+    assert np.percentile(naive, 2.5) >= point
+
+
+def test_icc_is_deterministic_for_a_fixed_seed_and_rejects_malformed_input():
+    x = _draw_matrix(n=120, d=4, seed=2)
+    assert (
+        es.icc_reliability(x, n_boot=100)["icc_ci95_boot_variants"]
+        == (es.icc_reliability(x, n_boot=100)["icc_ci95_boot_variants"])
+    )
+    assert es.icc_reliability(np.zeros((2, 4)), n_boot=10)["valid"] is False  # n too small
+    with pytest.raises(ValueError):
+        es.icc_reliability([1.0, 2.0, 3.0])  # 1-D
+    with pytest.raises(ValueError):
+        es.icc_reliability(np.zeros((10, 1)))  # single draw
+    with pytest.raises(ValueError):
+        es.icc_reliability([[1.0, 2.0], [3.0, np.nan], [1.0, 1.0]])
+
+
+# ---------------------------------------------------------------------------
 # Dependence-aware uncertainty
 # ---------------------------------------------------------------------------
 def test_block_bootstrap_accepts_list_groups_and_counts_distinct_pairs():

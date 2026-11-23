@@ -421,3 +421,154 @@ def reliability_decomposition(x_a: Sequence[float], x_b: Sequence[float], groups
     if len(dev_a) >= 3:
         out["within_group"] = reliability(dev_a, dev_b)
     return out
+
+
+# ---------------------------------------------------------------------------
+# Reliability from D >= 3 decoding draws (one-way random-effects ICC)
+# ---------------------------------------------------------------------------
+def _icc_point(x: np.ndarray, alpha: float = 0.05) -> Dict:
+    """ICC(1,1) and its variance components from a balanced (n_variants, n_draws) matrix."""
+    n, d = x.shape
+    row_means = x.mean(axis=1)
+    grand = float(row_means.mean())
+    ms_between = float(d * np.sum((row_means - grand) ** 2) / (n - 1))
+    ms_within = float(np.sum((x - row_means[:, None]) ** 2) / (n * (d - 1)))
+    out: Dict = {
+        "n_variants": n,
+        "n_draws": d,
+        "ms_between": ms_between,
+        "ms_within": ms_within,
+        "noise_var": ms_within,
+        "signal_var": (ms_between - ms_within) / d,
+    }
+    out["observed_var"] = out["signal_var"] + out["noise_var"]
+    out["noise_sd"] = math.sqrt(max(out["noise_var"], 0.0))
+    out["signal_sd"] = math.sqrt(max(out["signal_var"], 0.0))
+    denom = ms_between + (d - 1) * ms_within
+    if denom <= 0:
+        out.update(icc=float("nan"), valid=False, reason="both mean squares are zero (constant input)")
+        return out
+    out["icc"] = (ms_between - ms_within) / denom
+
+    # Exact interval under normality (Searle; Shrout & Fleiss ICC(1,1)). MSB carries n-1 df and
+    # MSW carries n(d-1) df, so this propagates sampling error in BOTH variance components --
+    # which is the thing the two-draw bootstrap could not do.
+    if ms_within > 0:
+        f_obs = ms_between / ms_within
+        df1, df2 = n - 1, n * (d - 1)
+        f_lo = f_obs / stats.f.ppf(1 - alpha / 2, df1, df2)
+        f_hi = f_obs * stats.f.ppf(1 - alpha / 2, df2, df1)
+        out["icc_ci95_f"] = [
+            float((f_lo - 1.0) / (f_lo + d - 1)),
+            float((f_hi - 1.0) / (f_hi + d - 1)),
+        ]
+    return out
+
+
+def icc_reliability(
+    x: Sequence[Sequence[float]],
+    n_boot: int = 1000,
+    seed: int = 20261117,
+    alpha: float = 0.05,
+) -> Dict:
+    """Test-retest reliability from D independent decoding draws, as one-way random-effects
+    ICC(1,1) over an `(n_variants, n_draws)` matrix.
+
+        MSB = d * sum_i (mean_i - grand)^2 / (n - 1)
+        MSW = sum_ij (x_ij - mean_i)^2 / (n * (d - 1))
+        ICC = (MSB - MSW) / (MSB + (d - 1) * MSW)
+
+    **Why this exists.** `reliability` takes exactly two replicates and bootstraps over
+    variants only, so its interval conditions on the two decoding-order sets that happened to
+    be drawn: it cannot see draw-level luck (ISSUES I-24). At D = 2 this function is the same
+    estimator -- the algebra reduces to `1 - Var(a-b)/2 / ((Var(a)+Var(b))/2)`, up to MSW using
+    n(d-1) rather than n-1 degrees of freedom -- so it generalises `reliability` rather than
+    replacing it. `reliability` is kept untouched: the committed two-draw artifacts must keep
+    reproducing their published numbers.
+
+    **Three intervals, because no single one covers both axes distribution-free.**
+
+    * `icc_ci95_f` (primary) is exact under normality and propagates error in both mean
+      squares, i.e. both the variant and the draw axis.
+    * `icc_ci95_boot_variants` resamples VARIANT rows with replacement, keeping all d columns.
+      Distribution-free on the axis with ~300 units; says nothing about the draw axis.
+    * `draw_jackknife` recomputes the ICC on each leave-one-draw-out subset. This is the
+      direct, distribution-free answer to "how much did the answer depend on which order-sets
+      we drew", and needs d >= 3.
+
+    The design note called for a nonparametric bootstrap over variants AND draws. That is not
+    implemented, deliberately: resampling d columns with replacement attenuates the bootstrap
+    MSW by a factor (d-1)/d in expectation (0.8 at d = 5, since duplicated columns contribute
+    no within-variant spread), which inflates the bootstrap ICC distribution and pushes its
+    LOWER bound up -- anti-conservative in exactly the direction that matters for a rule of
+    the form "retain iff the lower bound clears a threshold". The jackknife has no such bias.
+
+    **What ICC(1,1) assumes.** Draws are exchangeable, with a common error variance. A draw
+    that is systematically offset from the others is absorbed into MSW rather than modelled as
+    a draw main effect, so the ICC is biased DOWN by such an effect, not up -- conservative for
+    a retention rule. Detecting one needs a two-way model and more than a handful of draws.
+
+    A non-positive ICC is reported as invalid rather than clipped, matching `reliability`.
+    """
+    arr = np.asarray(x, dtype=float)
+    if arr.ndim != 2:
+        raise ValueError(f"expected a 2-D (n_variants, n_draws) matrix, got shape {arr.shape}")
+    n, d = arr.shape
+    if d < 2:
+        raise ValueError(f"need at least 2 draws, got {d}")
+    if n < 3:
+        return {"n_variants": n, "n_draws": d, "valid": False, "reason": f"n={n} too small for a variance estimate"}
+    if not np.isfinite(arr).all():
+        raise ValueError("input contains non-finite values")
+
+    out = _icc_point(arr, alpha=alpha)
+    if out.get("valid") is False:
+        return out
+    icc = out["icc"]
+    if icc <= 0:
+        out.update(
+            valid=False,
+            reason=(
+                f"icc={icc:.3f} <= 0: spread across draws is as large as spread across variants, "
+                "so no attenuation factor can be estimated"
+            ),
+        )
+        return out
+    out.update(valid=True, attenuation=math.sqrt(icc))
+
+    rng = np.random.default_rng(seed)
+    draws = []
+    for _ in range(n_boot):
+        idx = rng.integers(0, n, size=n)
+        p = _icc_point(arr[idx], alpha=alpha)
+        if p.get("icc") is not None and math.isfinite(p["icc"]):
+            draws.append(p["icc"])
+    if draws:
+        lo, hi = np.percentile(draws, [100 * alpha / 2, 100 * (1 - alpha / 2)])
+        out["icc_ci95_boot_variants"] = [float(lo), float(hi)]
+        out["n_boot_ok"] = len(draws)
+
+    if d >= 3:
+        loo = []
+        for j in range(d):
+            sub = _icc_point(np.delete(arr, j, axis=1), alpha=alpha)
+            loo.append(float(sub["icc"]) if math.isfinite(sub.get("icc", float("nan"))) else float("nan"))
+        finite = [v for v in loo if math.isfinite(v)]
+        out["draw_jackknife"] = {
+            "icc_leave_one_out": loo,
+            "min": min(finite) if finite else float("nan"),
+            "max": max(finite) if finite else float("nan"),
+            "spread": (max(finite) - min(finite)) if finite else float("nan"),
+            "kind": "leave-one-draw-out ICC (distribution-free draw-axis sensitivity)",
+        }
+    else:
+        out["draw_jackknife"] = {"valid": False, "reason": "needs d >= 3 draws"}
+
+    lo_f = out.get("icc_ci95_f", [float("nan")])[0]
+    if math.isfinite(lo_f) and lo_f <= 0:
+        out["reason"] = (
+            f"icc={icc:.3f} but its 95% F interval lower bound is {lo_f:.3f} <= 0 — "
+            "treat the attenuation factor as unusable, not as a correction"
+        )
+    out["stable"] = bool(math.isfinite(lo_f) and lo_f > 0)
+    return out
