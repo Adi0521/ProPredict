@@ -122,6 +122,10 @@ def screen(code: str) -> Dict:
         "chain_aa": sum(1 for r in chain if is_aa(r, standard=False)),
         "longest_frag": len(longest),
         "nonstandard": sorted(set(seq) - STANDARD),
+        # The longest fragment's one-letter sequence. For an eligible backbone n_fragments == 1,
+        # so this IS the whole chain -- `benchmark_score_reliability.py` builds its mutant panel
+        # from it rather than re-parsing the file.
+        "sequence": seq,
     }
     reasons: List[str] = []
     if "X-RAY" not in rec["method"].upper():
