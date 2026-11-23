@@ -63,11 +63,44 @@ assay family, no ProteinGym — so the backbone set can be chosen for diversity 
 what happens to have labels. This is the single biggest reason to run Study 1 first.
 
 ### Design
-- **Backbones: N = 16**, stratified by length, pre-registered as an explicit list before any
-  scoring: 8 small (≤ 80 aa, drawn from the 45 Tsuboyama PDBs, which already thread), 5 medium
-  (~150–250 aa), 3 large (~350–450 aa). Eligibility: X-ray, resolution ≤ 2.5 Å, single
-  gap-free chain. The medium/large entries need a curated list; it goes in this file before the
-  run, not after.
+- **Backbones: N = 16**, stratified by length, listed explicitly below. Every entry was
+  screened from the actual PDB file (method, resolution, model count, chain count, gap-free
+  fragment count, nonstandard residues) — nothing is asserted from memory. Eligibility:
+  X-ray, resolution ≤ 2.7 Å, single gap-free chain of standard residues.
+**The 16 backbones (pre-registered).** Lengths are the *structure chain* length, which is what
+Study 1 scores; for the Tsuboyama entries this differs from the DMS slice length (4G3O is a
+53-residue chain carrying a 47-residue DMS slice).
+
+| stratum | PDB | protein | L | res (Å) | fold |
+|---|---|---|--:|--:|---|
+| small | 4G3O | AMFR domain | 53 | 1.60 | — |
+| small | 1LP1 | — | 55 | 2.30 | — |
+| small | 1TUD | — | 60 | 1.77 | — |
+| small | 1I2T | — | 61 | 1.04 | — |
+| small | 1R69 | — | 63 | 2.00 | — |
+| small | 1TG0 | — | 66 | 0.97 | — |
+| small | 1F0M | — | 71 | 2.20 | — |
+| small | 3DKM | HECD1 domain | 79 | 1.60 | — |
+| medium | 1STN | staph nuclease | 136 | 1.70 | α/β |
+| medium | 1MBO | myoglobin | 153 | 1.60 | α |
+| medium | 1PPN | papain | 212 | 1.60 | α+β |
+| medium | 2PTN | trypsin | 223 | 1.55 | β |
+| medium | 1BTL | TEM-1 β-lactamase | 263 | 1.80 | α/β |
+| large | 5CPA | carboxypeptidase A | 307 | 1.54 | α/β |
+| large | 1AJ8 | citrate synthase | 371 | 1.90 | α |
+| large | 3GRS | glutathione reductase | 461 | 1.54 | α/β |
+
+The small stratum is drawn from the 11 Tsuboyama X-ray domains at ≤ 2.5 Å, and includes 4G3O
+and 3DKM for continuity with Row B. Screened alternates, equally clean, if a substitution is
+wanted: 5JRT (64, 1.53), 1ORC (64, 1.54), 1YU5 (67, 1.40); 7RSA 124, 3CHY 128, 1RX2 159,
+1L63 162, 4AKE 214, 2CGA 245, 2CBA 258; 1EZM 298, 1OMP 370, 1QLP 372.
+
+**Rejected by the screen**, recorded so the selection is auditable: 1EMA (GFP — 6 fragments,
+longest 64 of 225 aa, chain is gapped), 1STP (2.60 Å) and 1HTI (2.80 Å) over the cap at the
+time of screening, 8TLN (2 fragments, 316 of 318, chain `E`), 1A8I (4 fragments, longest 357
+of 813), 1GPB (823 aa, past the size target). Losing 1EMA cost the set its β-barrel; 2PTN and
+1BTL carry the β and α/β load instead.
+
 - **Variants: M = 100** single mutants per backbone, sampled uniformly over (position,
   non-WT amino acid) at a fixed seed. Plus WT.
 - **Draws: D = 5** (seeds 37, 38, 39, 40, 41 — distinct and nonzero).
@@ -89,12 +122,23 @@ Retain K=8 as the default iff **ICC(K=8) ≥ 0.95 on ≥ 90% of backbones with a
 lower bound ≥ 0.90**. Otherwise raise it. Separately report the minimum qualifying K per
 backbone, so the answer is a distribution rather than one number.
 
-### Cost
-Scales with sequence length as well as K, so the size-stratified set is not uniform:
-roughly 0.6 ks per small backbone, 1.7 ks per medium, 3.5 ks per large → **≈ 6–8 h** as a
-background run. Trim M or drop K=2 if that proves optimistic; the measured throughput figures
-behind this estimate are contaminated by host contention (see
-`Process/mutation-scoring-consistency.md` §6.5, §7) and should be treated as a lower bound.
+### Cost — measured, not extrapolated
+Throughput was measured directly on five of the chosen backbones with the model cache warm and
+the fixed cost amortised over 41 sequences, giving ≈ `0.0004·L + 0.004` s per sequence per
+decoding order:
+
+| L | 66 | 136 | 263 | 370 | 461 |
+|---|--:|--:|--:|--:|--:|
+| s/seq/order | 0.030 | 0.057 | 0.118 | 0.151 | 0.187 |
+
+At M=100, K-sum 30 and D=5 that is ≈ 7 min per small backbone, 14–30 min per medium, 34–47 min
+per large: **≈ 4.7 h total** (58 min + 105 min + 119 min). Single-threaded with no contention,
+so treat it as a floor — earlier wall-clock figures in this project were inflated by host
+contention and by a sleeping laptop (`Process/mutation-scoring-consistency.md` §6.5, §7).
+
+A first attempt at this measurement was discarded: at 5 sequences and K=2, model load and
+featurisation dominated so completely that the 66-residue backbone appeared *slower* than the
+263-residue one. Per-sequence throughput must be measured with the fixed cost amortised.
 
 ---
 
@@ -112,17 +156,62 @@ carries no PDB mapping (`DMS_score, DMS_score_bin, mutated_sequence, target_seq,
 DMS_id`); the Tsuboyama IDs simply embed theirs, which is why they are free. The 16
 non-Tsuboyama assays with ≥ 300 doubles span 12 families and 93–770 aa, but need curated
 UniProt→PDB mappings and gap-free domain-slice threading that mostly will not exist at those
-lengths. **Assay-family generalization remains open after this study** and is tracked as a
+lengths. Within Tsuboyama, the limit is structural method rather than labels: 45 assays clear
+the doubles bar, only 12 have a crystal structure (see below). **Assay-family generalization remains open after this study** and is tracked as a
 follow-up, not claimed by it.
+
+### Backbone provenance in this corpus — and why the strata exist
+
+All 45 candidates were screened from file. The methods are **not** uniform, which was not
+anticipated when this study was drafted:
+
+| method | count | what it is |
+|---|--:|---|
+| X-ray diffraction | **12** | one crystal-averaged structure, carries a resolution |
+| Solution NMR | **32** | an *ensemble* (9–50 models) consistent with NMR restraints; no resolution number |
+| Powder diffraction | **1** | 2O2W — microcrystalline powder, far lower information content |
+
+So **X-ray availability, not double-mutant count, is the binding constraint**: 45 assays have
+≥ 300 doubles but only 12 have a crystal structure. The original "expected yield 12–20 of 45"
+was wrong about the mechanism and right about the number only by luck.
+
+Resolution is the finest detail distinguishable, in Å, lower being better: ~1 Å resolves atoms,
+1.5–2.0 Å places side chains confidently, 2.5–3.0 Å gives a reliable backbone with
+increasingly modelled side chains. **The cap is set at ≤ 2.7 Å**, deliberately not the tidier
+2.5 Å: 3L1X is 2.60 Å and is one of Row B's three published domains, and excluding real data to
+keep a round number would break comparability for no physical reason. Resolution is recorded
+per domain so it can be checked afterwards as a covariate. Note that resolution error is a
+*fixed* property of a backbone — it adds no variance across draws, so it cannot affect a
+reliability estimate; it can only bias an association systematically.
+
+NMR entries are included as a **separate, pre-declared stratum, never pooled with X-ray.**
+ProteinMPNN needs only backbone coordinates and an NMR model 0 is a gap-free single chain, so
+they score without special handling; Row B's own code already records X-ray-only as "a SCOPE
+RESTRICTION… not a claim that NMR ensembles are unsuitable". Two caveats carried explicitly:
+model 0 is conventional but arbitrary, and the ensemble spread is information this design
+discards. Keeping the strata separate turns backbone provenance into its own generalization
+axis rather than a confound.
+
+2O2W (powder diffraction) is **excluded** from both strata; one assay, and the method is not
+comparable to either.
+
+**A latent fragility in Row B worth recording.** Its candidate list was
+`4G3O, 3DKM, 3L1X, 2BTT, 1PV0, 1V1C`, and the last three are all NMR — they were logged as
+"not evaluated — quota already filled" and so never screened. Had any of the first three
+failed, that study would have run on fewer than three domains. This does not affect its result.
 
 ### Design
 - **Domains: every Tsuboyama assay passing a pre-registered rule**, with the eligibility table
   dumped before any association is computed (the existing harness already does this):
   - ≥ 300 usable doubles (both constituent singles present, parseable, in range, WT letter
     matching `target_seq`);
-  - X-ray, resolution ≤ 2.5 Å, single gap-free chain containing `target_seq`;
-  - length ≤ 80.
-  Expected yield 12–20 of 45. **If more qualify than the compute budget allows, select among
+  - single gap-free chain containing `target_seq`, all standard residues;
+  - length ≤ 80;
+  - **primary stratum:** X-ray, resolution ≤ 2.7 Å → **12 domains**
+    (4G3O 1.60, 1LP1 2.30, 1I2T 1.04, 5JRT 1.53, 1TUD 1.77, 1R69 2.00, 1ORC 1.54, 1TG0 0.97,
+    1YU5 1.40, 1F0M 2.20, 3L1X 2.60, 3DKM 1.60);
+  - **secondary stratum:** solution NMR, model 0 → up to **32 domains**.
+  Expected total ≈ 44. **If more qualify than the compute budget allows, select among
   qualifiers at random under a recorded seed — not first-come.** Row B's three domains were
   chosen by a quota that stopped at 3, so the eligibility *ordering* picked them; that is a
   selection artifact and it is removed here.
@@ -136,7 +225,10 @@ follow-up, not claimed by it.
   now.
 - **Primary estimand: a random-effects meta-analysis across domains** on Fisher-z(ρ) —
   pooled mean, between-domain heterogeneity τ² and I², and a **95% prediction interval for a
-  new domain**. The prediction interval *is* the generalization claim; Row B's pooled CI is a
+  new domain**. Run **within each stratum separately**; the X-ray result is the headline and
+  the NMR result is reported beside it. A between-strata comparison is declared here as a
+  secondary question (does backbone provenance change the association?) and is not pooled into
+  the primary estimand. The prediction interval *is* the generalization claim; Row B's pooled CI is a
   statement about the three domains measured, not about the next protein, and with three
   domains τ² was not estimable at all.
 - Per-domain results are **descriptive**. With 12–20 domains, reading the best one as the
@@ -157,7 +249,9 @@ spanning zero means "it works on average over these domains and cannot be relied
 next one" — a likely outcome, and an acceptable one.
 
 ### Cost
-≈ 500 sequences × K=8 × D=5 per domain ≈ 0.8 ks plus bootstrap → **≈ 3.5–6 h** for 16 domains.
+≈ 500 sequences × K=8 × D=5 per domain. At the measured 0.030 s/seq/order for ~60-residue
+chains that is ≈ 0.6 ks per domain: **≈ 2 h for the 12 X-ray domains**, ≈ 7 h more if the full
+32-domain NMR stratum is run. Both are background runs; the NMR stratum can be split.
 
 ---
 
